@@ -1,0 +1,1492 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+<title>Phrase Pass</title>
+<script src="https://unpkg.com/peerjs@1.5.4/dist/peerjs.min.js"></script>
+<style>
+    :root {
+        --bg-primary: #0f0f1a;
+        --bg-secondary: #1a1a2e;
+        --bg-card: #16213e;
+        --accent: #e94560;
+        --accent-hover: #ff6b81;
+        --text-primary: #eee;
+        --text-secondary: #aaa;
+        --border: #2a2a4a;
+        --team-a: #5dade2;
+        --team-b: #ec7063;
+        --team-c: #2ecc71;
+        --team-d: #f39c12;
+        --team-atg: #95a5a6;
+    }
+    * { box-sizing: border-box; margin: 0; padding: 0; -webkit-tap-highlight-color: transparent; }
+    html, body {
+        width: 100%;
+        background: var(--bg-primary);
+        color: var(--text-primary);
+        font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+        overscroll-behavior: none;
+        touch-action: manipulation;
+    }
+    body {
+        display: flex;
+        flex-direction: column;
+        min-height: 100vh;
+        -webkit-overflow-scrolling: touch;
+    }
+    .app {
+        flex: 1;
+        display: flex;
+        flex-direction: column;
+        padding: 16px;
+        max-width: 640px;
+        margin: 0 auto;
+        width: 100%;
+    }
+    h1 {
+        text-align: center;
+        font-size: 2rem;
+        margin-bottom: 8px;
+        color: var(--accent);
+        letter-spacing: 1px;
+    }
+    .subtitle {
+        text-align: center;
+        color: var(--text-secondary);
+        margin-bottom: 20px;
+        font-size: 0.9rem;
+    }
+    .screen {
+        display: none;
+        flex: 1;
+        flex-direction: column;
+    }
+    .screen.active { display: flex; }
+    .panel {
+        background: var(--bg-card);
+        border: 1px solid var(--border);
+        border-radius: 12px;
+        padding: 20px;
+        margin-bottom: 16px;
+    }
+    .btn {
+        display: block;
+        width: 100%;
+        padding: 18px;
+        min-height: 60px;
+        background: var(--accent);
+        color: white;
+        border: none;
+        border-radius: 10px;
+        font-size: 1.2rem;
+        font-weight: bold;
+        cursor: pointer;
+        margin-top: 12px;
+        transition: background 0.15s, transform 0.05s;
+    }
+    .btn:active { transform: scale(0.98); }
+    .btn:hover { background: var(--accent-hover); }
+    .btn:disabled { background: #555; cursor: not-allowed; }
+    .btn.secondary { background: var(--bg-secondary); border: 1px solid var(--border); }
+    .btn.secondary:hover { background: var(--border); }
+    .btn.huge {
+        min-height: 120px;
+        font-size: 2rem;
+    }
+    .btn.got-it {
+        min-height: 100px;
+        font-size: 1.8rem;
+        background: #27ae60;
+    }
+    .btn.got-it:hover { background: #2ecc71; }
+    input[type="text"], input[type="number"], select {
+        width: 100%;
+        padding: 14px;
+        background: var(--bg-secondary);
+        color: var(--text-primary);
+        border: 1px solid var(--border);
+        border-radius: 8px;
+        font-size: 1.1rem;
+        margin-top: 6px;
+    }
+    label {
+        display: block;
+        margin-top: 12px;
+        color: var(--text-secondary);
+        font-size: 0.9rem;
+    }
+    .tabs {
+        display: flex;
+        gap: 8px;
+        margin-bottom: 16px;
+    }
+    .tab {
+        flex: 1;
+        padding: 14px;
+        background: var(--bg-secondary);
+        border: 1px solid var(--border);
+        border-radius: 8px;
+        text-align: center;
+        cursor: pointer;
+        font-weight: bold;
+    }
+    .tab.active {
+        background: var(--accent);
+        border-color: var(--accent);
+    }
+    .room-code {
+        text-align: center;
+        font-size: 3rem;
+        font-weight: bold;
+        letter-spacing: 8px;
+        color: var(--accent);
+        padding: 20px;
+        background: var(--bg-secondary);
+        border-radius: 12px;
+        margin: 16px 0;
+        font-family: 'Courier New', monospace;
+    }
+    .player-list {
+        list-style: none;
+    }
+    .player-list li {
+        padding: 12px;
+        background: var(--bg-secondary);
+        border-radius: 8px;
+        margin-bottom: 8px;
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+    }
+    .player-list li.team-a { border-left: 4px solid var(--team-a); }
+    .player-list li.team-b { border-left: 4px solid var(--team-b); }
+    .player-list li.team-c { border-left: 4px solid var(--team-c); }
+    .player-list li.team-d { border-left: 4px solid var(--team-d); }
+    .player-list li.team-atg { border-left: 4px solid var(--team-atg); }
+    .team-label-tag {
+        font-weight: bold;
+        padding: 2px 8px;
+        border-radius: 6px;
+        font-size: 0.8rem;
+    }
+    .team-label-tag.a { background: var(--team-a); color: #0f0f1a; }
+    .team-label-tag.b { background: var(--team-b); color: #0f0f1a; }
+    .team-label-tag.c { background: var(--team-c); color: #0f0f1a; }
+    .team-label-tag.d { background: var(--team-d); color: #0f0f1a; }
+    .team-label-tag.atg { background: var(--team-atg); color: #0f0f1a; }
+    .btn.atg-btn {
+        background: var(--team-atg);
+        color: #0f0f1a;
+    }
+    .btn.atg-btn:hover { background: #b0b7bb; }
+    .team-config-info {
+        margin-top: 10px;
+        padding: 10px;
+        background: var(--bg-secondary);
+        border-radius: 8px;
+        font-size: 0.9rem;
+        color: var(--text-secondary);
+        text-align: center;
+    }
+    .team-count-selector {
+        display: flex;
+        gap: 6px;
+        margin-top: 6px;
+    }
+    .team-count-selector .tc-btn {
+        flex: 1;
+        padding: 12px;
+        background: var(--bg-secondary);
+        border: 1px solid var(--border);
+        border-radius: 8px;
+        text-align: center;
+        cursor: pointer;
+        font-weight: bold;
+        color: var(--text-primary);
+    }
+    .team-count-selector .tc-btn.active {
+        background: var(--accent);
+        border-color: var(--accent);
+    }
+    .claim-header {
+        text-align: center;
+        font-size: 1.3rem;
+        color: var(--text-secondary);
+        margin-bottom: 6px;
+    }
+    .claim-counts {
+        display: flex;
+        justify-content: center;
+        gap: 8px;
+        flex-wrap: wrap;
+        margin: 10px 0;
+        font-size: 0.85rem;
+    }
+    .claim-counts span {
+        padding: 4px 10px;
+        border-radius: 6px;
+        background: var(--bg-secondary);
+    }
+    .slot-badge {
+        background: var(--accent);
+        color: white;
+        padding: 4px 10px;
+        border-radius: 12px;
+        font-size: 0.85rem;
+        font-weight: bold;
+    }
+    .big-number {
+        text-align: center;
+        font-size: 10rem;
+        font-weight: bold;
+        color: var(--accent);
+        margin: 20px 0;
+        line-height: 1;
+    }
+    .phrase-display {
+        flex: 1;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        padding: 20px;
+        text-align: center;
+        font-size: 4.5rem;
+        font-weight: bold;
+        line-height: 1.1;
+        text-transform: uppercase;
+        word-break: break-word;
+        hyphens: auto;
+    }
+    .waiting-screen {
+        flex: 1;
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        justify-content: center;
+        text-align: center;
+        padding: 20px;
+    }
+    .waiting-screen .current-player {
+        font-size: 2.5rem;
+        font-weight: bold;
+        margin: 20px 0;
+    }
+    .waiting-screen .hint {
+        color: var(--text-secondary);
+        font-size: 1.1rem;
+    }
+    .score-board {
+        display: flex;
+        justify-content: space-around;
+        align-items: center;
+        padding: 16px;
+        background: var(--bg-card);
+        border-radius: 12px;
+        margin-bottom: 16px;
+    }
+    .score-box {
+        text-align: center;
+        flex: 1;
+    }
+    .score-box .team-label {
+        font-size: 0.9rem;
+        color: var(--text-secondary);
+        text-transform: uppercase;
+    }
+    .score-box .score {
+        font-size: 3rem;
+        font-weight: bold;
+    }
+    .score-box.team-a .score { color: var(--team-a); }
+    .score-box.team-b .score { color: var(--team-b); }
+    .score-box.team-c .score { color: var(--team-c); }
+    .score-box.team-d .score { color: var(--team-d); }
+    .score-sep { font-size: 2rem; color: var(--text-secondary); padding: 0 10px; }
+
+    .theme-a .phrase-display { color: var(--team-a); }
+    .theme-b .phrase-display { color: var(--team-b); }
+    .theme-c .phrase-display { color: var(--team-c); }
+    .theme-d .phrase-display { color: var(--team-d); }
+    .theme-atg .phrase-display { color: var(--team-atg); }
+    .theme-a .waiting-screen .current-player { color: var(--team-a); }
+    .theme-b .waiting-screen .current-player { color: var(--team-b); }
+    .theme-c .waiting-screen .current-player { color: var(--team-c); }
+    .theme-d .waiting-screen .current-player { color: var(--team-d); }
+    .theme-atg .waiting-screen .current-player { color: var(--team-atg); }
+
+    .round-end-message {
+        text-align: center;
+        font-size: 2.5rem;
+        font-weight: bold;
+        margin: 30px 0;
+    }
+    .round-end-message.team-a { color: var(--team-a); }
+    .round-end-message.team-b { color: var(--team-b); }
+    .round-end-message.team-c { color: var(--team-c); }
+    .round-end-message.team-d { color: var(--team-d); }
+    .round-end-message.team-atg { color: var(--team-atg); }
+
+    .winner-screen {
+        text-align: center;
+        padding: 30px 10px;
+    }
+    .winner-screen h2 {
+        font-size: 3rem;
+        margin-bottom: 20px;
+    }
+
+    .status-line {
+        text-align: center;
+        color: var(--text-secondary);
+        padding: 8px;
+        font-size: 0.9rem;
+    }
+
+    .team-colors-preview {
+        display: flex;
+        gap: 8px;
+        margin-top: 8px;
+    }
+    .team-colors-preview .team-box {
+        flex: 1;
+        padding: 10px;
+        border-radius: 8px;
+        text-align: center;
+        font-weight: bold;
+    }
+    .team-colors-preview .team-box.a { background: var(--team-a); color: #0f0f1a; }
+    .team-colors-preview .team-box.b { background: var(--team-b); color: #0f0f1a; }
+
+    @media (max-width: 480px) {
+        .big-number { font-size: 8rem; }
+        .phrase-display { font-size: 3.5rem; }
+        h1 { font-size: 1.6rem; }
+    }
+    @media (max-height: 600px) {
+        .phrase-display { font-size: 3rem; }
+        .big-number { font-size: 6rem; }
+    }
+
+    .back-link {
+        display: block;
+        text-align: center;
+        color: var(--text-secondary);
+        text-decoration: none;
+        padding: 10px;
+        font-size: 0.85rem;
+    }
+    .back-link:hover { color: var(--accent); }
+    .error-msg {
+        color: var(--accent);
+        text-align: center;
+        padding: 10px;
+        font-size: 0.9rem;
+    }
+    #mute-toggle {
+        position: fixed;
+        top: 12px;
+        right: 12px;
+        width: 44px;
+        height: 44px;
+        border-radius: 50%;
+        border: none;
+        background: rgba(0, 0, 0, 0.45);
+        color: #fff;
+        font-size: 1.35rem;
+        line-height: 1;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        cursor: pointer;
+        z-index: 1000;
+        padding: 0;
+        -webkit-tap-highlight-color: transparent;
+    }
+    #mute-toggle:active { background: rgba(0, 0, 0, 0.65); }
+</style>
+</head>
+<body>
+<button id="mute-toggle" type="button" onclick="toggleMute()" aria-label="Toggle sound">🔇</button>
+<div class="app">
+    <h1>📱 Phrase Pass</h1>
+
+    <!-- ============ ENTRY SCREEN ============ -->
+    <div id="screen-entry" class="screen active">
+        <div class="tabs">
+            <div id="tab-create" class="tab active" onclick="switchTab('create')">Create Game</div>
+            <div id="tab-join" class="tab" onclick="switchTab('join')">Join Game</div>
+        </div>
+        <div class="panel" id="panel-create">
+            <p class="subtitle">Host a new game on this device.</p>
+            <label>Your name</label>
+            <input type="text" id="host-name" placeholder="Host" maxlength="16">
+            <button class="btn" onclick="createGame()">Create Game</button>
+        </div>
+        <div class="panel" id="panel-join" style="display:none;">
+            <p class="subtitle">Enter the 6-character room code.</p>
+            <label>Room code</label>
+            <input type="text" id="room-code-input" placeholder="ABC123" maxlength="6" style="text-transform:uppercase; letter-spacing:4px; text-align:center; font-size:1.5rem;">
+            <label>Your name</label>
+            <input type="text" id="guest-name" placeholder="Player" maxlength="16">
+            <button class="btn" onclick="joinGame()">Join</button>
+        </div>
+        <div id="entry-status" class="status-line"></div>
+        <a href="../../index.html" class="back-link">← Back to Arcade</a>
+    </div>
+
+    <!-- ============ LOBBY SCREEN ============ -->
+    <div id="screen-lobby" class="screen">
+        <div class="panel" id="lobby-host-panel" style="display:none;">
+            <p class="subtitle">Share this code with players:</p>
+            <div class="room-code" id="lobby-room-code">------</div>
+        </div>
+        <div class="panel">
+            <h3 style="margin-bottom:10px;">Players (<span id="player-count">0</span>)</h3>
+            <ul class="player-list" id="lobby-players"></ul>
+        </div>
+        <div class="panel" id="lobby-settings" style="display:none;">
+            <h3 style="margin-bottom:10px;">Settings</h3>
+            <label>Number of teams</label>
+            <div class="team-count-selector" id="team-count-selector">
+                <div class="tc-btn" data-n="1" onclick="setTeamCount(1)">1</div>
+                <div class="tc-btn active" data-n="2" onclick="setTeamCount(2)">2</div>
+                <div class="tc-btn" data-n="3" onclick="setTeamCount(3)">3</div>
+                <div class="tc-btn" data-n="4" onclick="setTeamCount(4)">4</div>
+            </div>
+            <div class="team-config-info" id="team-config-info">Add players to see team breakdown</div>
+            <label>Score to win</label>
+            <input type="number" id="setting-score" value="7" min="1" max="20">
+            <label>Round minimum seconds</label>
+            <input type="number" id="setting-min" value="45" min="15" max="180">
+            <label>Round maximum seconds</label>
+            <input type="number" id="setting-max" value="75" min="15" max="240">
+            <button class="btn" id="btn-start-selection" onclick="hostStartSelection()">Start Turn Selection</button>
+        </div>
+        <div id="lobby-guest-status" class="status-line" style="display:none;">Connected! Waiting for host to start...</div>
+    </div>
+
+    <!-- ============ SELECTION SCREEN ============ -->
+    <div id="screen-selection" class="screen">
+        <p class="subtitle">Tap CLAIM to take the next turn slot!</p>
+        <div class="claim-header" id="selection-header">Slot 1</div>
+        <div class="big-number" id="selection-slot">1</div>
+        <div class="claim-counts" id="selection-counts"></div>
+        <div id="selection-my-status" class="status-line"></div>
+        <button class="btn huge" id="btn-claim" onclick="claimSlot()">CLAIM</button>
+        <button class="btn atg-btn" id="btn-claim-atg" style="display:none;" onclick="claimATG()">All-Time Guesser</button>
+        <button class="btn secondary" id="btn-enable-reclaim" style="display:none;" onclick="enableReclaim()">Enable another claim</button>
+        <div class="panel" style="margin-top:16px;">
+            <h3 style="margin-bottom:10px;">Turn Order</h3>
+            <ul class="player-list" id="selection-players"></ul>
+        </div>
+    </div>
+
+    <!-- ============ REVEAL (turn order before game start) ============ -->
+    <div id="screen-reveal" class="screen">
+        <div class="panel">
+            <h3 style="text-align:center; margin-bottom:10px;">Turn Order & Teams</h3>
+            <ul class="player-list" id="reveal-players"></ul>
+        </div>
+        <button class="btn" id="btn-start-round" onclick="hostStartRound()" style="display:none;">Start Round</button>
+        <div id="reveal-guest-status" class="status-line" style="display:none;">Waiting for host to start the round...</div>
+    </div>
+
+    <!-- ============ PLAYING - current player ============ -->
+    <div id="screen-playing-current" class="screen">
+        <div class="score-board" id="pc-scoreboard"></div>
+        <div class="phrase-display" id="phrase-text">PHRASE</div>
+        <button class="btn got-it" onclick="gotIt()">GOT IT! Pass →</button>
+    </div>
+
+    <!-- ============ PLAYING - waiting ============ -->
+    <div id="screen-playing-wait" class="screen">
+        <div class="score-board" id="pw-scoreboard"></div>
+        <div class="waiting-screen">
+            <div class="hint">Now playing:</div>
+            <div class="current-player" id="wait-current-player">Player</div>
+            <div class="hint" id="wait-team-label">Team A</div>
+            <div class="hint" style="margin-top:30px;">Listen for the buzzer!</div>
+        </div>
+    </div>
+
+    <!-- ============ ROUND END ============ -->
+    <div id="screen-round-end" class="screen">
+        <div class="panel">
+            <div class="round-end-message" id="round-end-msg">BUZZ!</div>
+            <div class="score-board" id="re-scoreboard"></div>
+        </div>
+        <button class="btn" id="btn-next-round" onclick="hostStartRound()" style="display:none;">Next Round</button>
+        <div id="round-end-guest-status" class="status-line" style="display:none;">Waiting for host...</div>
+    </div>
+
+    <!-- ============ GAME END ============ -->
+    <div id="screen-game-end" class="screen">
+        <div class="winner-screen">
+            <h2 id="winner-title">Team A Wins! 🎉</h2>
+            <div class="score-board" id="ge-scoreboard"></div>
+        </div>
+        <button class="btn" id="btn-new-game" onclick="hostNewGame()" style="display:none;">New Game</button>
+        <a href="../../index.html" class="back-link">← Back to Arcade</a>
+    </div>
+</div>
+
+<script>
+// ============================================================
+// PHRASES
+// ============================================================
+const PHRASES = [
+    "break a leg","spill the beans","piece of cake","cold feet","hit the sack",
+    "bite the bullet","under the weather","burn the midnight oil","barking up the wrong tree",
+    "costs an arm and a leg","once in a blue moon","kill two birds with one stone",
+    "let the cat out of the bag","the ball is in your court","back to the drawing board",
+    "call it a day","curiosity killed the cat","cut to the chase","easy does it",
+    "get cold feet","give the benefit of the doubt","hit the nail on the head",
+    "it takes two to tango","jump on the bandwagon","no pain no gain","on the ball",
+    "pulling your leg","see eye to eye","speak of the devil","the best of both worlds",
+    "through thick and thin","time flies when you are having fun","to make a long story short",
+    "your guess is as good as mine","actions speak louder than words","beat around the bush",
+    "star wars","the godfather","jurassic park","the lion king","forrest gump",
+    "pulp fiction","the matrix","back to the future","toy story","finding nemo",
+    "the dark knight","titanic","the avengers","ghostbusters","jaws","rocky",
+    "the princess bride","home alone","the wizard of oz","indiana jones","men in black",
+    "inception","spider man","iron man","black panther","frozen","shrek","up",
+    "harry potter","lord of the rings","game of thrones","stranger things","the office",
+    "breaking bad","sesame street","mickey mouse","sponge bob","pokemon","mario kart",
+    "super smash bros","minecraft","fortnite","rock and roll","hip hop","taylor swift",
+    "beyonce","the beatles","elvis presley","michael jackson","saturday night live",
+    "rubber duck","shopping cart","washing machine","coffee table","tooth brush",
+    "alarm clock","paper clip","fire truck","school bus","traffic light","smoke alarm",
+    "pencil sharpener","vacuum cleaner","teddy bear","roller skates","hair dryer",
+    "cotton candy","bubble wrap","rocking chair","ice cube","door knob","light switch",
+    "picture frame","water bottle","bean bag","hula hoop","rubber band","jigsaw puzzle",
+    "jumping jacks","high five","rock paper scissors","hide and seek","duck duck goose",
+    "ring around the rosie","paper airplane","thumb war","staring contest","tag team",
+    "slow motion","belly flop","cannon ball","double dutch","musical chairs","piggy back",
+    "thumbs up","side eye","face palm","fist bump","cart wheel","snow angel",
+    "grand canyon","times square","eiffel tower","statue of liberty","golden gate bridge",
+    "mount everest","niagara falls","great wall of china","pyramids of giza","big ben",
+    "empire state building","leaning tower of pisa","central park","hollywood","las vegas",
+    "north pole","bermuda triangle","stone henge","mount rushmore","the sahara",
+    "polar bear","panda bear","honey bee","kangaroo","penguin","dolphin","octopus",
+    "great white shark","bald eagle","peacock","flamingo","hippopotamus","giraffe",
+    "rhinoceros","sea turtle","jelly fish","praying mantis","chameleon","koala",
+    "sloth","hedgehog","rainbow","thunderstorm","snow flake","full moon","shooting star",
+    "peanut butter","apple pie","chocolate chip cookie","hot dog","french fries",
+    "ice cream sundae","grilled cheese","banana split","birthday cake","pizza slice",
+    "pancakes","cotton candy","corn on the cob","macaroni and cheese","fried chicken",
+    "peanut butter and jelly","sushi roll","taco tuesday","cereal box","jelly bean",
+    "ginger bread man","bubble tea","root beer float","orange juice","hot chocolate",
+    "santa claus","easter bunny","tooth fairy","trick or treat","fire works","snow man",
+    "brain freeze","lemonade stand","treasure chest","pirate ship","haunted house",
+    "roller coaster","ferris wheel","bouncy castle","water slide","beach ball"
+];
+
+// ============================================================
+// STATE
+// ============================================================
+const state = {
+    phase: 'lobby',
+    players: [],
+    numTeams: 2,
+    teamSize: 0,
+    atgCount: 0,
+    atgClaimedCount: 0,
+    currentSelectionSlot: 1,
+    currentPlayerSlot: 0,
+    currentPhrase: '',
+    scores: [0, 0],
+    roundActive: false,
+    roundEndTime: 0,
+    scoreToWin: 7,
+    roundMinMs: 45000,
+    roundMaxMs: 75000,
+    losingTeam: -1,
+    lastRoundMessage: '',
+    winningTeam: -1,
+    passesThisRound: 0
+};
+
+const TEAM_COLORS = ['var(--team-a)', 'var(--team-b)', 'var(--team-c)', 'var(--team-d)'];
+const TEAM_LETTERS = ['A', 'B', 'C', 'D'];
+const TEAM_CLASS_SUFFIX = ['a', 'b', 'c', 'd'];
+
+function calcTeamConfig(numPlayers, numTeams) {
+    if (numTeams === 1) {
+        return { teamSize: numPlayers, atgCount: 0 };
+    }
+    return {
+        teamSize: Math.floor(numPlayers / numTeams),
+        atgCount: numPlayers % numTeams
+    };
+}
+function slotToTeam(slot, teamSize) {
+    return Math.floor((slot - 1) / teamSize);
+}
+function totalNumberedSlots() {
+    if (state.numTeams === 1) return state.players.length;
+    return state.teamSize * state.numTeams;
+}
+function teamLabelFor(player) {
+    if (!player) return '';
+    if (player.isATG) return 'All-Time Guesser';
+    return 'Team ' + TEAM_LETTERS[player.team];
+}
+function teamColorFor(player) {
+    if (!player) return 'var(--text-secondary)';
+    if (player.isATG) return 'var(--team-atg)';
+    return TEAM_COLORS[player.team] || 'var(--text-primary)';
+}
+function teamClassFor(player) {
+    if (!player) return '';
+    if (player.isATG) return 'atg';
+    return TEAM_CLASS_SUFFIX[player.team] || 'a';
+}
+
+let isHost = false;
+let soundMuted = true; // default muted; host flips to false on createGame()
+let peer = null;
+let roomCode = '';
+let myPeerId = '';
+let myName = '';
+let hostConn = null; // guest → host connection
+const guestConns = new Map(); // host: peerId → conn
+let phraseDeck = [];
+let timerInterval = null;
+let beepInterval = null;
+let audioCtx = null;
+
+// ============================================================
+// UI HELPERS
+// ============================================================
+function showScreen(id) {
+    document.querySelectorAll('.screen').forEach(s => s.classList.remove('active'));
+    document.getElementById(id).classList.add('active');
+}
+function switchTab(which) {
+    document.getElementById('tab-create').classList.toggle('active', which === 'create');
+    document.getElementById('tab-join').classList.toggle('active', which === 'join');
+    document.getElementById('panel-create').style.display = which === 'create' ? '' : 'none';
+    document.getElementById('panel-join').style.display = which === 'join' ? '' : 'none';
+}
+function setStatus(id, text) {
+    const el = document.getElementById(id);
+    if (el) el.textContent = text;
+}
+function genRoomCode() {
+    const chars = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
+    let s = '';
+    for (let i = 0; i < 6; i++) s += chars[Math.floor(Math.random() * chars.length)];
+    return s;
+}
+function shuffle(arr) {
+    const a = arr.slice();
+    for (let i = a.length - 1; i > 0; i--) {
+        const j = Math.floor(Math.random() * (i + 1));
+        [a[i], a[j]] = [a[j], a[i]];
+    }
+    return a;
+}
+
+// ============================================================
+// AUDIO (Web Audio API)
+// ============================================================
+function updateMuteButton() {
+    const btn = document.getElementById('mute-toggle');
+    if (btn) btn.textContent = soundMuted ? '🔇' : '🔊';
+}
+function toggleMute() {
+    soundMuted = !soundMuted;
+    if (!soundMuted) ensureAudio();
+    updateMuteButton();
+}
+function ensureAudio() {
+    if (!audioCtx) {
+        try { audioCtx = new (window.AudioContext || window.webkitAudioContext)(); }
+        catch (e) { console.warn('No audio context'); }
+    }
+    if (audioCtx && audioCtx.state === 'suspended') audioCtx.resume();
+}
+function playBeep(freq, duration, volume) {
+    if (soundMuted) return;
+    if (!audioCtx) return;
+    const osc = audioCtx.createOscillator();
+    const gain = audioCtx.createGain();
+    osc.type = 'square';
+    osc.frequency.value = freq;
+    gain.gain.value = volume;
+    osc.connect(gain);
+    gain.connect(audioCtx.destination);
+    osc.start();
+    gain.gain.exponentialRampToValueAtTime(0.0001, audioCtx.currentTime + duration);
+    osc.stop(audioCtx.currentTime + duration);
+}
+function playBuzzer() {
+    // Vibration is silent haptic feedback — always fire regardless of mute state
+    if (navigator.vibrate) navigator.vibrate([200, 100, 200, 100, 500]);
+    if (soundMuted) return;
+    ensureAudio();
+    if (!audioCtx) return;
+    // Low harsh buzz
+    const now = audioCtx.currentTime;
+    for (let i = 0; i < 3; i++) {
+        const osc = audioCtx.createOscillator();
+        const gain = audioCtx.createGain();
+        osc.type = 'sawtooth';
+        osc.frequency.value = 90;
+        gain.gain.setValueAtTime(0.4, now + i * 0.6);
+        gain.gain.exponentialRampToValueAtTime(0.0001, now + i * 0.6 + 0.5);
+        osc.connect(gain);
+        gain.connect(audioCtx.destination);
+        osc.start(now + i * 0.6);
+        osc.stop(now + i * 0.6 + 0.55);
+    }
+}
+
+// ============================================================
+// PEERJS - HOST
+// ============================================================
+function createGame() {
+    myName = (document.getElementById('host-name').value || 'Host').trim().slice(0, 16) || 'Host';
+    ensureAudio();
+    isHost = true;
+    soundMuted = false; // host defaults to sound ON
+    updateMuteButton();
+    roomCode = genRoomCode();
+    myPeerId = 'phrasepass-' + roomCode;
+    setStatus('entry-status', 'Creating room...');
+    peer = new Peer(myPeerId, { debug: 1 });
+    peer.on('open', id => {
+        state.players = [{ id: 'host', name: myName, slot: -1, team: -1, isATG: false }];
+        recalcTeamConfig();
+        showScreen('screen-lobby');
+        document.getElementById('lobby-host-panel').style.display = '';
+        document.getElementById('lobby-settings').style.display = '';
+        document.getElementById('lobby-room-code').textContent = roomCode;
+        renderLobby();
+    });
+    peer.on('connection', conn => {
+        conn.on('open', () => {
+            guestConns.set(conn.peer, conn);
+        });
+        conn.on('data', data => handleGuestMessage(conn, data));
+        conn.on('close', () => {
+            guestConns.delete(conn.peer);
+            removePlayerByPeerId(conn.peer);
+        });
+        conn.on('error', e => console.warn('conn error', e));
+    });
+    peer.on('error', err => {
+        console.error(err);
+        setStatus('entry-status', 'Error: ' + err.type);
+        if (err.type === 'unavailable-id') {
+            // Regenerate and retry
+            setTimeout(() => { peer.destroy(); createGame(); }, 500);
+        }
+    });
+}
+
+function handleGuestMessage(conn, msg) {
+    if (!isHost) return;
+    switch (msg.type) {
+        case 'join_lobby': {
+            const existing = state.players.find(p => p.id === conn.peer);
+            if (!existing) {
+                state.players.push({ id: conn.peer, name: msg.name || 'Player', slot: -1, team: -1, isATG: false });
+            } else {
+                existing.name = msg.name || existing.name;
+            }
+            recalcTeamConfig();
+            broadcastState();
+            renderLobby();
+            break;
+        }
+        case 'claim_slot': {
+            if (state.phase !== 'selection') return;
+            if (msg.slotNumber !== state.currentSelectionSlot) return;
+            const p = state.players.find(pl => pl.id === conn.peer);
+            if (!p || p.slot !== -1 || p.isATG) return;
+            if (p._claimLocked) return;
+            doClaimSlot(p);
+            break;
+        }
+        case 'claim_atg': {
+            if (state.phase !== 'selection') return;
+            const p = state.players.find(pl => pl.id === conn.peer);
+            if (!p || p.slot !== -1 || p.isATG) return;
+            if (p._claimLocked) return;
+            if (state.atgClaimedCount >= state.atgCount) return;
+            doClaimATG(p);
+            break;
+        }
+        case 'enable_reclaim': {
+            const p = state.players.find(pl => pl.id === conn.peer);
+            if (p) p._claimLocked = false;
+            broadcastState();
+            break;
+        }
+        case 'got_it': {
+            if (state.phase !== 'playing' || !state.roundActive) return;
+            const currentPlayer = getPlayerBySlot(state.currentPlayerSlot);
+            if (!currentPlayer || currentPlayer.id !== conn.peer) return;
+            advanceTurn();
+            break;
+        }
+    }
+}
+
+function recalcTeamConfig() {
+    const cfg = calcTeamConfig(state.players.length, state.numTeams);
+    state.teamSize = cfg.teamSize;
+    state.atgCount = cfg.atgCount;
+}
+
+function doClaimSlot(p) {
+    p.slot = state.currentSelectionSlot;
+    if (state.numTeams === 1) {
+        p.team = 0;
+    } else {
+        p.team = slotToTeam(state.currentSelectionSlot, state.teamSize);
+    }
+    p.isATG = false;
+    state.currentSelectionSlot++;
+    p._claimLocked = true;
+    checkSelectionComplete();
+    broadcastState();
+    renderSelection();
+    renderReveal();
+}
+
+function doClaimATG(p) {
+    p.slot = totalNumberedSlots() + state.atgClaimedCount + 1;
+    p.team = -1;
+    p.isATG = true;
+    state.atgClaimedCount++;
+    p._claimLocked = true;
+    checkSelectionComplete();
+    broadcastState();
+    renderSelection();
+    renderReveal();
+}
+
+function checkSelectionComplete() {
+    const numberedDone = state.currentSelectionSlot > totalNumberedSlots();
+    const atgDone = state.atgClaimedCount >= state.atgCount;
+    if (numberedDone && atgDone) {
+        state.phase = 'reveal';
+    }
+}
+
+function setTeamCount(n) {
+    if (!isHost) return;
+    if (state.phase !== 'lobby') return;
+    state.numTeams = n;
+    recalcTeamConfig();
+    document.querySelectorAll('#team-count-selector .tc-btn').forEach(btn => {
+        btn.classList.toggle('active', parseInt(btn.dataset.n) === n);
+    });
+    renderLobby();
+    broadcastState();
+}
+
+function removePlayerByPeerId(peerId) {
+    if (state.phase === 'lobby') {
+        state.players = state.players.filter(p => p.id !== peerId);
+        recalcTeamConfig();
+        broadcastState();
+        renderLobby();
+    } else if (state.phase === 'playing' && state.roundActive) {
+        // If it was their turn, auto-advance
+        const currentPlayer = getPlayerBySlot(state.currentPlayerSlot);
+        if (currentPlayer && currentPlayer.id === peerId) {
+            advanceTurn();
+        }
+    }
+}
+
+function hostStartSelection() {
+    if (state.players.length < 1) return;
+    if (state.numTeams > 1 && state.players.length < state.numTeams) return;
+    recalcTeamConfig();
+    state.phase = 'selection';
+    state.currentSelectionSlot = 1;
+    state.atgClaimedCount = 0;
+    state.scores = new Array(state.numTeams).fill(0);
+    state.scoreToWin = parseInt(document.getElementById('setting-score').value) || 7;
+    state.roundMinMs = (parseInt(document.getElementById('setting-min').value) || 45) * 1000;
+    state.roundMaxMs = (parseInt(document.getElementById('setting-max').value) || 75) * 1000;
+    if (state.roundMaxMs < state.roundMinMs) state.roundMaxMs = state.roundMinMs + 1000;
+    state.players.forEach(p => { p.slot = -1; p.team = -1; p.isATG = false; p._claimLocked = false; });
+    broadcastState();
+    showScreen('screen-selection');
+    renderSelection();
+}
+
+function hostStartRound() {
+    phraseDeck = phraseDeck.length > 10 ? phraseDeck : shuffle(PHRASES);
+    state.phase = 'playing';
+    state.roundActive = true;
+    state.passesThisRound = 0;
+    const totalSlots = state.players.length;
+    if (state.currentPlayerSlot < 1 || state.currentPlayerSlot > totalSlots) {
+        state.currentPlayerSlot = 1;
+    } else {
+        state.currentPlayerSlot = (state.currentPlayerSlot % totalSlots) + 1;
+    }
+    const duration = state.roundMinMs + Math.random() * (state.roundMaxMs - state.roundMinMs);
+    state.roundEndTime = Date.now() + duration;
+    const newPhrase = drawPhrase();
+    state.currentPhrase = newPhrase;
+    broadcastState();
+    sendPhraseToCurrentPlayer();
+    startHostTimer();
+    showHostPlayingScreen();
+}
+
+function drawPhrase() {
+    if (phraseDeck.length === 0) phraseDeck = shuffle(PHRASES);
+    return phraseDeck.pop();
+}
+
+function advanceTurn() {
+    state.passesThisRound = (state.passesThisRound || 0) + 1;
+    state.currentPlayerSlot = (state.currentPlayerSlot % state.players.length) + 1;
+    state.currentPhrase = drawPhrase();
+    broadcastState();
+    sendPhraseToCurrentPlayer();
+    showHostPlayingScreen();
+}
+
+function sendPhraseToCurrentPlayer() {
+    const currentPlayer = getPlayerBySlot(state.currentPlayerSlot);
+    if (!currentPlayer) return;
+    if (currentPlayer.id === 'host') {
+        // Host is the current player - just render
+        return;
+    }
+    const conn = guestConns.get(currentPlayer.id);
+    if (conn && conn.open) {
+        conn.send({ type: 'show_phrase', phrase: state.currentPhrase });
+    }
+}
+
+function startHostTimer() {
+    stopHostTimer();
+    timerInterval = setInterval(() => {
+        if (!state.roundActive) return;
+        const remaining = state.roundEndTime - Date.now();
+        if (remaining <= 0) {
+            endRound();
+            return;
+        }
+        // Beep during final 10 seconds (host only)
+        if (remaining < 10000) {
+            // Increasingly urgent beeps - use local scheduled beep
+            const interval = Math.max(200, remaining / 10);
+            // throttle via beepInterval
+        }
+    }, 100);
+    // Separate beep scheduler
+    beepInterval = setInterval(() => {
+        if (!state.roundActive) return;
+        const remaining = state.roundEndTime - Date.now();
+        if (remaining > 0 && remaining < 10000) {
+            ensureAudio();
+            // More urgent as time runs out
+            const pitch = 600 + (10000 - remaining) / 10;
+            playBeep(pitch, 0.08, 0.2);
+        }
+    }, 500);
+}
+
+function stopHostTimer() {
+    if (timerInterval) { clearInterval(timerInterval); timerInterval = null; }
+    if (beepInterval) { clearInterval(beepInterval); beepInterval = null; }
+}
+
+function endRound() {
+    state.roundActive = false;
+    stopHostTimer();
+    const currentPlayer = getPlayerBySlot(state.currentPlayerSlot);
+    state.losingTeam = -1;
+    state.winningTeam = -1;
+    let gameEnded = false;
+
+    if (state.numTeams === 1) {
+        state.lastRoundMessage = "Time's up! " + (state.passesThisRound || 0) + ' passes this round.';
+    } else if (currentPlayer && currentPlayer.isATG) {
+        state.lastRoundMessage = 'All-Time Guesser ' + currentPlayer.name + ' was holding the phone — no one scores!';
+    } else if (currentPlayer) {
+        const holderTeam = currentPlayer.team;
+        state.losingTeam = holderTeam;
+        for (let t = 0; t < state.numTeams; t++) {
+            if (t !== holderTeam) state.scores[t]++;
+        }
+        state.lastRoundMessage = currentPlayer.name + ' (Team ' + TEAM_LETTERS[holderTeam] + ') was holding. All other teams score!';
+        // Check win condition
+        for (let t = 0; t < state.numTeams; t++) {
+            if (state.scores[t] >= state.scoreToWin) {
+                state.winningTeam = t;
+                gameEnded = true;
+                break;
+            }
+        }
+    }
+
+    const msg = { type: 'round_end_buzz' };
+    broadcast(msg);
+    playBuzzer();
+
+    if (gameEnded) {
+        state.phase = 'game_end';
+    } else {
+        state.phase = 'round_end';
+    }
+    broadcastState();
+    renderRoundEnd();
+}
+
+function hostNewGame() {
+    state.phase = 'lobby';
+    state.scores = new Array(state.numTeams).fill(0);
+    state.currentPlayerSlot = 0;
+    state.atgClaimedCount = 0;
+    state.winningTeam = -1;
+    state.losingTeam = -1;
+    state.players.forEach(p => { p.slot = -1; p.team = -1; p.isATG = false; p._claimLocked = false; });
+    recalcTeamConfig();
+    phraseDeck = [];
+    broadcastState();
+    showScreen('screen-lobby');
+    document.getElementById('lobby-host-panel').style.display = '';
+    document.getElementById('lobby-settings').style.display = '';
+    renderLobby();
+}
+
+function broadcast(msg) {
+    guestConns.forEach(conn => {
+        if (conn.open) conn.send(msg);
+    });
+}
+function broadcastState() {
+    const clean = {
+        type: 'state_update',
+        state: {
+            phase: state.phase,
+            players: state.players.map(p => ({ id: p.id, name: p.name, slot: p.slot, team: p.team, isATG: !!p.isATG, claimLocked: !!p._claimLocked })),
+            numTeams: state.numTeams,
+            teamSize: state.teamSize,
+            atgCount: state.atgCount,
+            atgClaimedCount: state.atgClaimedCount,
+            currentSelectionSlot: state.currentSelectionSlot,
+            currentPlayerSlot: state.currentPlayerSlot,
+            scores: state.scores,
+            scoreToWin: state.scoreToWin,
+            losingTeam: state.losingTeam,
+            winningTeam: state.winningTeam,
+            lastRoundMessage: state.lastRoundMessage,
+            passesThisRound: state.passesThisRound
+        }
+    };
+    broadcast(clean);
+    // Also update host UI based on phase
+    updateUIFromState();
+}
+
+// ============================================================
+// PEERJS - GUEST
+// ============================================================
+function joinGame() {
+    const code = (document.getElementById('room-code-input').value || '').trim().toUpperCase();
+    if (code.length !== 6) { setStatus('entry-status', 'Enter a 6-character room code'); return; }
+    myName = (document.getElementById('guest-name').value || 'Player').trim().slice(0, 16) || 'Player';
+    ensureAudio();
+    isHost = false;
+    roomCode = code;
+    setStatus('entry-status', 'Connecting...');
+    peer = new Peer({ debug: 1 });
+    peer.on('open', id => {
+        myPeerId = id;
+        hostConn = peer.connect('phrasepass-' + code, { reliable: true });
+        hostConn.on('open', () => {
+            setStatus('entry-status', 'Connected!');
+            hostConn.send({ type: 'join_lobby', name: myName });
+            showScreen('screen-lobby');
+            document.getElementById('lobby-guest-status').style.display = '';
+        });
+        hostConn.on('data', data => handleHostMessage(data));
+        hostConn.on('close', () => {
+            setStatus('entry-status', 'Disconnected from host');
+            showScreen('screen-entry');
+        });
+        hostConn.on('error', e => {
+            setStatus('entry-status', 'Connection error');
+        });
+    });
+    peer.on('error', err => {
+        console.error(err);
+        setStatus('entry-status', 'Error: ' + err.type);
+    });
+}
+
+let guestCurrentPhrase = '';
+function handleHostMessage(msg) {
+    switch (msg.type) {
+        case 'state_update':
+            Object.assign(state, msg.state);
+            updateUIFromState();
+            break;
+        case 'show_phrase':
+            guestCurrentPhrase = msg.phrase;
+            document.getElementById('phrase-text').textContent = msg.phrase.toUpperCase();
+            break;
+        case 'round_end_buzz':
+            playBuzzer();
+            break;
+    }
+}
+
+// ============================================================
+// ACTIONS (from UI)
+// ============================================================
+function claimSlot() {
+    ensureAudio();
+    if (isHost) {
+        const hostPlayer = state.players.find(p => p.id === 'host');
+        if (!hostPlayer || hostPlayer.slot !== -1 || hostPlayer.isATG || hostPlayer._claimLocked) return;
+        if (state.phase !== 'selection') return;
+        if (state.currentSelectionSlot > totalNumberedSlots()) return;
+        doClaimSlot(hostPlayer);
+    } else {
+        if (hostConn && hostConn.open) {
+            hostConn.send({ type: 'claim_slot', slotNumber: state.currentSelectionSlot });
+        }
+    }
+}
+function claimATG() {
+    ensureAudio();
+    if (isHost) {
+        const hostPlayer = state.players.find(p => p.id === 'host');
+        if (!hostPlayer || hostPlayer.slot !== -1 || hostPlayer.isATG || hostPlayer._claimLocked) return;
+        if (state.phase !== 'selection') return;
+        if (state.atgClaimedCount >= state.atgCount) return;
+        doClaimATG(hostPlayer);
+    } else {
+        if (hostConn && hostConn.open) {
+            hostConn.send({ type: 'claim_atg' });
+        }
+    }
+}
+function enableReclaim() {
+    if (isHost) {
+        const hostPlayer = state.players.find(p => p.id === 'host');
+        if (hostPlayer) hostPlayer._claimLocked = false;
+        broadcastState();
+        renderSelection();
+    } else {
+        if (hostConn && hostConn.open) hostConn.send({ type: 'enable_reclaim' });
+    }
+}
+function gotIt() {
+    if (isHost) {
+        const currentPlayer = getPlayerBySlot(state.currentPlayerSlot);
+        if (currentPlayer && currentPlayer.id === 'host' && state.roundActive) {
+            advanceTurn();
+        }
+    } else {
+        if (hostConn && hostConn.open) hostConn.send({ type: 'got_it' });
+    }
+}
+
+// ============================================================
+// HELPERS
+// ============================================================
+function getPlayerBySlot(slot) {
+    return state.players.find(p => p.slot === slot);
+}
+function getMyPlayer() {
+    if (isHost) return state.players.find(p => p.id === 'host');
+    return state.players.find(p => p.id === myPeerId);
+}
+
+// ============================================================
+// RENDERING
+// ============================================================
+function renderLobby() {
+    const list = document.getElementById('lobby-players');
+    list.innerHTML = '';
+    state.players.forEach(p => {
+        const li = document.createElement('li');
+        li.textContent = p.name + (p.id === 'host' ? ' (Host)' : '');
+        list.appendChild(li);
+    });
+    document.getElementById('player-count').textContent = state.players.length;
+    const btn = document.getElementById('btn-start-selection');
+    if (btn) {
+        if (state.numTeams === 1) {
+            btn.disabled = state.players.length < 1;
+        } else {
+            btn.disabled = state.players.length < state.numTeams;
+        }
+    }
+    // Team count selector highlight
+    document.querySelectorAll('#team-count-selector .tc-btn').forEach(b => {
+        b.classList.toggle('active', parseInt(b.dataset.n) === state.numTeams);
+    });
+    // Team config info
+    const info = document.getElementById('team-config-info');
+    if (info) {
+        const N = state.players.length;
+        if (N === 0) {
+            info.textContent = 'Waiting for players...';
+        } else if (state.numTeams === 1) {
+            info.textContent = N + ' players, cooperative mode (no scoring)';
+        } else {
+            const cfg = calcTeamConfig(N, state.numTeams);
+            let text = N + ' players, ' + state.numTeams + ' teams: ' + cfg.teamSize + ' per team';
+            if (cfg.atgCount > 0) text += ', ' + cfg.atgCount + ' All-Time Guesser' + (cfg.atgCount > 1 ? 's' : '');
+            if (cfg.teamSize === 0) text += ' — need more players!';
+            info.textContent = text;
+        }
+    }
+}
+
+function renderSelection() {
+    const totalSlots = totalNumberedSlots();
+    const numberedDone = state.currentSelectionSlot > totalSlots;
+    const atgDone = state.atgClaimedCount >= state.atgCount;
+    const allDone = numberedDone && atgDone;
+
+    const slotEl = document.getElementById('selection-slot');
+    const headerEl = document.getElementById('selection-header');
+    if (allDone) {
+        slotEl.textContent = '✓';
+        headerEl.textContent = 'All assigned!';
+    } else if (numberedDone) {
+        slotEl.textContent = '★';
+        headerEl.textContent = 'All-Time Guesser remaining';
+    } else {
+        slotEl.textContent = state.currentSelectionSlot;
+        if (state.numTeams === 1) {
+            headerEl.textContent = 'Slot ' + state.currentSelectionSlot;
+        } else {
+            const teamIdx = slotToTeam(state.currentSelectionSlot, state.teamSize);
+            headerEl.innerHTML = 'Slot ' + state.currentSelectionSlot + ' — <span class="team-label-tag ' + TEAM_CLASS_SUFFIX[teamIdx] + '">Team ' + TEAM_LETTERS[teamIdx] + '</span>';
+        }
+    }
+
+    // Counts
+    const countsEl = document.getElementById('selection-counts');
+    countsEl.innerHTML = '';
+    if (state.numTeams > 1) {
+        for (let t = 0; t < state.numTeams; t++) {
+            const claimed = state.players.filter(p => p.team === t && !p.isATG && p.slot !== -1).length;
+            const span = document.createElement('span');
+            span.innerHTML = '<span class="team-label-tag ' + TEAM_CLASS_SUFFIX[t] + '">Team ' + TEAM_LETTERS[t] + '</span> ' + claimed + '/' + state.teamSize;
+            countsEl.appendChild(span);
+        }
+        if (state.atgCount > 0) {
+            const span = document.createElement('span');
+            span.innerHTML = '<span class="team-label-tag atg">ATG</span> ' + state.atgClaimedCount + '/' + state.atgCount;
+            countsEl.appendChild(span);
+        }
+    } else {
+        const claimed = state.players.filter(p => p.slot !== -1).length;
+        const span = document.createElement('span');
+        span.textContent = claimed + '/' + state.players.length + ' assigned';
+        countsEl.appendChild(span);
+    }
+
+    const me = getMyPlayer();
+    const claimBtn = document.getElementById('btn-claim');
+    const atgBtn = document.getElementById('btn-claim-atg');
+    const reclaimBtn = document.getElementById('btn-enable-reclaim');
+    const statusEl = document.getElementById('selection-my-status');
+
+    claimBtn.style.display = 'none';
+    atgBtn.style.display = 'none';
+    reclaimBtn.style.display = 'none';
+
+    if (me) {
+        if (allDone) {
+            statusEl.textContent = 'All players assigned!';
+        } else if (me.slot !== -1) {
+            if (me.isATG) {
+                statusEl.innerHTML = 'You are an <span class="team-label-tag atg">All-Time Guesser</span>';
+            } else {
+                const lbl = state.numTeams === 1 ? ('Player ' + me.slot) : ('Player ' + me.slot + ' — Team ' + TEAM_LETTERS[me.team]);
+                statusEl.textContent = 'You are ' + lbl;
+            }
+        } else {
+            const locked = me.claimLocked || me._claimLocked;
+            if (locked) {
+                reclaimBtn.style.display = '';
+                statusEl.textContent = 'Tap "Enable another claim" to claim next';
+            } else {
+                if (!numberedDone) claimBtn.style.display = '';
+                if (!atgDone) atgBtn.style.display = '';
+                statusEl.textContent = '';
+            }
+        }
+    }
+
+    // Player list
+    const listEl = document.getElementById('selection-players');
+    listEl.innerHTML = '';
+    const sorted = state.players.slice().filter(p => p.slot !== -1).sort((a, b) => a.slot - b.slot);
+    sorted.forEach(p => {
+        const li = document.createElement('li');
+        li.className = 'team-' + teamClassFor(p);
+        const badge = p.isATG ? '<span class="team-label-tag atg">ATG</span>' : '<span class="slot-badge">' + p.slot + '</span>';
+        const teamTag = (!p.isATG && state.numTeams > 1) ? ' <span class="team-label-tag ' + TEAM_CLASS_SUFFIX[p.team] + '">' + TEAM_LETTERS[p.team] + '</span>' : '';
+        li.innerHTML = badge + ' <span style="margin-left:10px;">' + escapeHtml(p.name) + '</span>' + teamTag;
+        listEl.appendChild(li);
+    });
+}
+
+function renderReveal() {
+    if (state.phase !== 'reveal') return;
+    showScreen('screen-reveal');
+    const list = document.getElementById('reveal-players');
+    list.innerHTML = '';
+    const sorted = state.players.slice().sort((a, b) => a.slot - b.slot);
+    sorted.forEach(p => {
+        const li = document.createElement('li');
+        li.className = 'team-' + teamClassFor(p);
+        const badge = p.isATG ? '<span class="team-label-tag atg">ATG</span>' : '<span class="slot-badge">' + p.slot + '</span>';
+        const labelText = p.isATG ? 'All-Time Guesser' : (state.numTeams === 1 ? 'Player' : 'Team ' + TEAM_LETTERS[p.team]);
+        li.innerHTML = '<span>' + badge + ' <span style="margin-left:10px;">' + escapeHtml(p.name) + '</span></span><span style="color:' + teamColorFor(p) + ';font-weight:bold;">' + labelText + '</span>';
+        list.appendChild(li);
+    });
+    document.getElementById('btn-start-round').style.display = isHost ? '' : 'none';
+    document.getElementById('reveal-guest-status').style.display = isHost ? 'none' : '';
+}
+
+function buildScoreboard(containerId) {
+    const el = document.getElementById(containerId);
+    if (!el) return;
+    el.innerHTML = '';
+    if (state.numTeams === 1) {
+        const box = document.createElement('div');
+        box.className = 'score-box';
+        box.innerHTML = '<div class="team-label">Passes this round</div><div class="score">' + (state.passesThisRound || 0) + '</div>';
+        el.appendChild(box);
+        return;
+    }
+    for (let t = 0; t < state.numTeams; t++) {
+        if (t > 0) {
+            const sep = document.createElement('div');
+            sep.className = 'score-sep';
+            sep.textContent = '—';
+            el.appendChild(sep);
+        }
+        const box = document.createElement('div');
+        box.className = 'score-box team-' + TEAM_CLASS_SUFFIX[t];
+        box.innerHTML = '<div class="team-label">Team ' + TEAM_LETTERS[t] + '</div><div class="score">' + (state.scores[t] || 0) + '</div>';
+        el.appendChild(box);
+    }
+}
+
+function showHostPlayingScreen() {
+    const me = getMyPlayer();
+    if (!me) return;
+    const currentPlayer = getPlayerBySlot(state.currentPlayerSlot);
+    if (!currentPlayer) return;
+    const body = document.body;
+    body.classList.remove('theme-a', 'theme-b', 'theme-c', 'theme-d', 'theme-atg');
+    body.classList.add('theme-' + teamClassFor(currentPlayer));
+    if (currentPlayer.id === me.id) {
+        document.getElementById('phrase-text').textContent = (state.currentPhrase || '').toUpperCase();
+        buildScoreboard('pc-scoreboard');
+        showScreen('screen-playing-current');
+    } else {
+        document.getElementById('wait-current-player').textContent = currentPlayer.name;
+        document.getElementById('wait-team-label').textContent = teamLabelFor(currentPlayer);
+        buildScoreboard('pw-scoreboard');
+        showScreen('screen-playing-wait');
+    }
+}
+
+function renderRoundEnd() {
+    if (state.phase === 'round_end') {
+        showScreen('screen-round-end');
+        const msgEl = document.getElementById('round-end-msg');
+        msgEl.className = 'round-end-message';
+        if (state.numTeams === 1) {
+            msgEl.textContent = "Time's up! " + (state.passesThisRound || 0) + ' passes.';
+        } else if (state.losingTeam === -1) {
+            // ATG was holding
+            msgEl.textContent = state.lastRoundMessage || 'All-Time Guesser held it — no score!';
+            msgEl.classList.add('team-atg');
+        } else {
+            const losing = state.losingTeam;
+            msgEl.textContent = 'BUZZ! Team ' + TEAM_LETTERS[losing] + ' was holding — other teams score!';
+            msgEl.classList.add('team-' + TEAM_CLASS_SUFFIX[losing]);
+        }
+        buildScoreboard('re-scoreboard');
+        document.getElementById('btn-next-round').style.display = isHost ? '' : 'none';
+        document.getElementById('round-end-guest-status').style.display = isHost ? 'none' : '';
+    } else if (state.phase === 'game_end') {
+        showScreen('screen-game-end');
+        const win = state.winningTeam;
+        const title = document.getElementById('winner-title');
+        if (win >= 0) {
+            title.textContent = 'Team ' + TEAM_LETTERS[win] + ' Wins! 🎉';
+            title.style.color = TEAM_COLORS[win];
+        } else {
+            title.textContent = 'Game Over';
+            title.style.color = 'var(--text-primary)';
+        }
+        buildScoreboard('ge-scoreboard');
+        document.getElementById('btn-new-game').style.display = isHost ? '' : 'none';
+    }
+}
+
+function updateUIFromState() {
+    switch (state.phase) {
+        case 'lobby':
+            showScreen('screen-lobby');
+            if (isHost) {
+                document.getElementById('lobby-host-panel').style.display = '';
+                document.getElementById('lobby-settings').style.display = '';
+            } else {
+                document.getElementById('lobby-host-panel').style.display = 'none';
+                document.getElementById('lobby-settings').style.display = 'none';
+                document.getElementById('lobby-guest-status').style.display = '';
+            }
+            renderLobby();
+            break;
+        case 'selection':
+            showScreen('screen-selection');
+            renderSelection();
+            break;
+        case 'reveal':
+            renderReveal();
+            break;
+        case 'playing':
+            showHostPlayingScreen();
+            break;
+        case 'round_end':
+        case 'game_end':
+            renderRoundEnd();
+            break;
+    }
+}
+
+function escapeHtml(s) {
+    return String(s).replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+}
+
+// Prevent accidental zoom/scroll on iOS
+document.addEventListener('gesturestart', e => e.preventDefault());
+document.addEventListener('touchstart', ensureAudio, { once: true });
+document.addEventListener('click', ensureAudio, { once: true });
+
+// Auto-uppercase room code input
+document.getElementById('room-code-input').addEventListener('input', e => {
+    e.target.value = e.target.value.toUpperCase();
+});
+</script>
+</body>
+</html>

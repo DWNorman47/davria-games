@@ -1,0 +1,173 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Tic-Tac-Toe - Game Arcade</title>
+    <link rel="stylesheet" href="../../css/style.css">
+    <style>
+        .game-container {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            padding: 1rem 2rem 2rem;
+        }
+
+        .game-container h1 {
+            font-size: 2rem;
+            margin-bottom: 0.5rem;
+        }
+
+        .status {
+            color: var(--text-secondary);
+            font-size: 1.1rem;
+            margin-bottom: 1rem;
+            min-height: 1.5em;
+        }
+
+        .status .highlight {
+            color: var(--accent);
+            font-weight: 700;
+        }
+
+        .board {
+            display: grid;
+            grid-template-columns: repeat(3, 120px);
+            grid-template-rows: repeat(3, 120px);
+            gap: 6px;
+        }
+
+        .cell {
+            background: var(--bg-card);
+            border: 1px solid var(--border);
+            border-radius: 8px;
+            font-size: 2.5rem;
+            font-weight: 700;
+            color: var(--text-primary);
+            cursor: pointer;
+            transition: background 0.15s, border-color 0.15s;
+        }
+
+        .cell:hover:not(.taken) {
+            background: var(--bg-secondary);
+            border-color: var(--accent);
+        }
+
+        .cell.x { color: #4ecca3; }
+        .cell.o { color: #e94560; }
+
+        .cell.win {
+            background: rgba(233, 69, 96, 0.15);
+            border-color: var(--accent);
+        }
+
+        .restart-btn {
+            margin-top: 1.5rem;
+            padding: 0.6rem 1.5rem;
+            background: var(--accent);
+            color: #fff;
+            border: none;
+            border-radius: 8px;
+            font-size: 1rem;
+            font-weight: 600;
+            cursor: pointer;
+            transition: background 0.2s;
+        }
+
+        .restart-btn:hover {
+            background: var(--accent-hover);
+        }
+
+        @media (max-width: 500px) {
+            .board {
+                grid-template-columns: repeat(3, 90px);
+                grid-template-rows: repeat(3, 90px);
+            }
+
+            .cell {
+                font-size: 2rem;
+            }
+        }
+    </style>
+</head>
+<body>
+    <a href="../../index.html" class="back-link">&larr; Back to Arcade</a>
+
+    <div class="game-container">
+        <h1>Tic-Tac-Toe</h1>
+        <div class="status" id="status">
+            <span class="highlight">X</span>'s turn
+        </div>
+        <div class="board" id="board"></div>
+        <button class="restart-btn" id="restart">Restart</button>
+    </div>
+
+    <script>
+        const boardEl = document.getElementById('board');
+        const statusEl = document.getElementById('status');
+        const restartBtn = document.getElementById('restart');
+
+        const WINS = [
+            [0,1,2],[3,4,5],[6,7,8],
+            [0,3,6],[1,4,7],[2,5,8],
+            [0,4,8],[2,4,6]
+        ];
+
+        let board, turn, done;
+
+        function init() {
+            board = Array(9).fill('');
+            turn = 'X';
+            done = false;
+            statusEl.innerHTML = `<span class="highlight">X</span>'s turn`;
+            render();
+        }
+
+        function render() {
+            boardEl.innerHTML = '';
+            board.forEach((val, i) => {
+                const cell = document.createElement('button');
+                cell.className = 'cell';
+                if (val) {
+                    cell.textContent = val;
+                    cell.classList.add(val.toLowerCase(), 'taken');
+                }
+                cell.addEventListener('click', () => play(i));
+                boardEl.appendChild(cell);
+            });
+        }
+
+        function play(i) {
+            if (done || board[i]) return;
+            board[i] = turn;
+
+            const winLine = checkWin(turn);
+            if (winLine) {
+                done = true;
+                statusEl.innerHTML = `<span class="highlight">${turn}</span> wins!`;
+                render();
+                winLine.forEach(idx => boardEl.children[idx].classList.add('win'));
+                return;
+            }
+
+            if (board.every(c => c)) {
+                done = true;
+                statusEl.textContent = "It's a draw!";
+                render();
+                return;
+            }
+
+            turn = turn === 'X' ? 'O' : 'X';
+            statusEl.innerHTML = `<span class="highlight">${turn}</span>'s turn`;
+            render();
+        }
+
+        function checkWin(player) {
+            return WINS.find(line => line.every(i => board[i] === player)) || null;
+        }
+
+        restartBtn.addEventListener('click', init);
+        init();
+    </script>
+</body>
+</html>

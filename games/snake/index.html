@@ -1,0 +1,228 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Snake - Game Arcade</title>
+    <link rel="stylesheet" href="../../css/style.css">
+    <style>
+        .game-container {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            padding: 1rem 2rem 2rem;
+        }
+
+        .game-container h1 {
+            font-size: 2rem;
+            margin-bottom: 0.25rem;
+        }
+
+        .score {
+            color: var(--text-secondary);
+            font-size: 1.1rem;
+            margin-bottom: 1rem;
+        }
+
+        .score span {
+            color: var(--accent);
+            font-weight: 700;
+        }
+
+        canvas {
+            border: 2px solid var(--border);
+            border-radius: 8px;
+            background: #111;
+        }
+
+        .controls-hint {
+            color: var(--text-secondary);
+            font-size: 0.85rem;
+            margin-top: 1rem;
+        }
+
+        .mobile-controls {
+            display: none;
+            gap: 0.5rem;
+            margin-top: 1rem;
+        }
+
+        .mobile-controls button {
+            width: 56px;
+            height: 56px;
+            font-size: 1.5rem;
+            background: var(--bg-card);
+            border: 1px solid var(--border);
+            border-radius: 8px;
+            color: var(--text-primary);
+            cursor: pointer;
+            touch-action: manipulation;
+        }
+
+        .mobile-controls button:active {
+            background: var(--accent);
+        }
+
+        .dpad {
+            display: grid;
+            grid-template-columns: repeat(3, 56px);
+            grid-template-rows: repeat(3, 56px);
+            gap: 4px;
+        }
+
+        .dpad button:nth-child(1) { grid-column: 2; grid-row: 1; }
+        .dpad button:nth-child(2) { grid-column: 1; grid-row: 2; }
+        .dpad button:nth-child(3) { grid-column: 3; grid-row: 2; }
+        .dpad button:nth-child(4) { grid-column: 2; grid-row: 3; }
+
+        @media (max-width: 600px) {
+            .mobile-controls { display: flex; justify-content: center; }
+            .controls-hint { display: none; }
+        }
+    </style>
+</head>
+<body>
+    <a href="../../index.html" class="back-link">&larr; Back to Arcade</a>
+
+    <div class="game-container">
+        <h1>Snake</h1>
+        <div class="score">Score: <span id="score">0</span></div>
+        <canvas id="game" width="400" height="400"></canvas>
+        <p class="controls-hint">Arrow keys or WASD to move. Press any key to start.</p>
+
+        <div class="mobile-controls">
+            <div class="dpad">
+                <button id="btn-up">&#9650;</button>
+                <button id="btn-left">&#9664;</button>
+                <button id="btn-right">&#9654;</button>
+                <button id="btn-down">&#9660;</button>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        const canvas = document.getElementById('game');
+        const ctx = canvas.getContext('2d');
+        const scoreEl = document.getElementById('score');
+
+        const GRID = 20;
+        const TILE = canvas.width / GRID;
+
+        let snake, direction, nextDirection, food, score, running, gameOver;
+
+        function init() {
+            snake = [{ x: 10, y: 10 }];
+            direction = { x: 1, y: 0 };
+            nextDirection = { x: 1, y: 0 };
+            score = 0;
+            running = false;
+            gameOver = false;
+            scoreEl.textContent = '0';
+            placeFood();
+            draw();
+        }
+
+        function placeFood() {
+            do {
+                food = {
+                    x: Math.floor(Math.random() * GRID),
+                    y: Math.floor(Math.random() * GRID)
+                };
+            } while (snake.some(s => s.x === food.x && s.y === food.y));
+        }
+
+        function update() {
+            if (!running || gameOver) return;
+
+            direction = nextDirection;
+            const head = { x: snake[0].x + direction.x, y: snake[0].y + direction.y };
+
+            if (head.x < 0 || head.x >= GRID || head.y < 0 || head.y >= GRID ||
+                snake.some(s => s.x === head.x && s.y === head.y)) {
+                gameOver = true;
+                draw();
+                return;
+            }
+
+            snake.unshift(head);
+
+            if (head.x === food.x && head.y === food.y) {
+                score++;
+                scoreEl.textContent = score;
+                placeFood();
+            } else {
+                snake.pop();
+            }
+
+            draw();
+        }
+
+        function draw() {
+            ctx.fillStyle = '#111';
+            ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+            // Food
+            ctx.fillStyle = '#e94560';
+            ctx.beginPath();
+            ctx.arc(food.x * TILE + TILE / 2, food.y * TILE + TILE / 2, TILE / 2.5, 0, Math.PI * 2);
+            ctx.fill();
+
+            // Snake
+            snake.forEach((seg, i) => {
+                ctx.fillStyle = i === 0 ? '#4ecca3' : '#36b08a';
+                ctx.fillRect(seg.x * TILE + 1, seg.y * TILE + 1, TILE - 2, TILE - 2);
+            });
+
+            if (gameOver) {
+                ctx.fillStyle = 'rgba(0, 0, 0, 0.6)';
+                ctx.fillRect(0, 0, canvas.width, canvas.height);
+                ctx.fillStyle = '#fff';
+                ctx.font = 'bold 32px system-ui';
+                ctx.textAlign = 'center';
+                ctx.fillText('Game Over', canvas.width / 2, canvas.height / 2 - 10);
+                ctx.font = '18px system-ui';
+                ctx.fillText('Press any key to restart', canvas.width / 2, canvas.height / 2 + 20);
+            }
+
+            if (!running && !gameOver) {
+                ctx.fillStyle = 'rgba(0, 0, 0, 0.4)';
+                ctx.fillRect(0, 0, canvas.width, canvas.height);
+                ctx.fillStyle = '#fff';
+                ctx.font = '18px system-ui';
+                ctx.textAlign = 'center';
+                ctx.fillText('Press any key to start', canvas.width / 2, canvas.height / 2);
+            }
+        }
+
+        function setDirection(x, y) {
+            if (direction.x === -x && direction.y === -y) return;
+            nextDirection = { x, y };
+            if (!running && !gameOver) {
+                running = true;
+            }
+        }
+
+        document.addEventListener('keydown', (e) => {
+            if (gameOver) { init(); return; }
+
+            switch (e.key) {
+                case 'ArrowUp': case 'w': case 'W': e.preventDefault(); setDirection(0, -1); break;
+                case 'ArrowDown': case 's': case 'S': e.preventDefault(); setDirection(0, 1); break;
+                case 'ArrowLeft': case 'a': case 'A': e.preventDefault(); setDirection(-1, 0); break;
+                case 'ArrowRight': case 'd': case 'D': e.preventDefault(); setDirection(1, 0); break;
+                default:
+                    if (!running) running = true;
+            }
+        });
+
+        // Mobile controls
+        document.getElementById('btn-up').addEventListener('click', () => { if (gameOver) init(); setDirection(0, -1); });
+        document.getElementById('btn-down').addEventListener('click', () => { if (gameOver) init(); setDirection(0, 1); });
+        document.getElementById('btn-left').addEventListener('click', () => { if (gameOver) init(); setDirection(-1, 0); });
+        document.getElementById('btn-right').addEventListener('click', () => { if (gameOver) init(); setDirection(1, 0); });
+
+        init();
+        setInterval(update, 120);
+    </script>
+</body>
+</html>
