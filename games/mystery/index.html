@@ -1647,7 +1647,7 @@ function handleGuestMessage(conn, msg) {
                 if (!room || !room.suspectId) return;
                 const suspect = SCENARIO.suspects.find(s => s.id === room.suspectId);
                 if (!suspect) return;
-                const pool = getAvailableQuestions(suspect.id);
+                const pool = getAvailableQuestions(suspect.id, player);
                 const qidx = msg.questionIndex;
                 if (qidx < 0 || qidx >= pool.length) return;
                 const qa = pool[qidx];
@@ -1662,7 +1662,7 @@ function handleGuestMessage(conn, msg) {
                 if (!suspectId) return;
                 const suspect = SCENARIO.suspects.find(s => s.id === suspectId);
                 if (!suspect) return;
-                const pool = getAvailableQuestions(suspect.id);
+                const pool = getAvailableQuestions(suspect.id, player);
                 const qidx = msg.questionIndex;
                 if (qidx < 0 || qidx >= pool.length) return;
                 const qa = pool[qidx];
@@ -2382,7 +2382,7 @@ function buildPlayerActionsHtml(me, room, forHost) {
             html += '<div class="panel">';
             html += '<h3>Ask ' + escapeHtml(suspect.name) + '</h3>';
             html += '<div class="question-menu">';
-            const pool = getAvailableQuestions(suspect.id);
+            const pool = getAvailableQuestions(suspect.id, me);
             const askFn = forHost ? 'hostPlayerAskQuestion' : 'askQuestion';
             const skipFn = forHost ? 'hostPlayerSkipQuestion' : 'skipQuestion';
             pool.forEach((qa, idx) => {
@@ -2920,7 +2920,7 @@ function hostPlayerAskQuestion(idx) {
         if (!room || !room.suspectId) return;
         const suspect = SCENARIO.suspects.find(s => s.id === room.suspectId);
         if (!suspect) return;
-        const pool = getAvailableQuestions(suspect.id);
+        const pool = getAvailableQuestions(suspect.id, player);
         if (idx < 0 || idx >= pool.length) return;
         const qa = pool[idx];
         state.questionLog.push({
@@ -2934,7 +2934,7 @@ function hostPlayerAskQuestion(idx) {
         if (!suspectId) return;
         const suspect = SCENARIO.suspects.find(s => s.id === suspectId);
         if (!suspect) return;
-        const pool = getAvailableQuestions(suspect.id);
+        const pool = getAvailableQuestions(suspect.id, player);
         if (idx < 0 || idx >= pool.length) return;
         const qa = pool[idx];
         state.questionLog.push({
@@ -3028,12 +3028,28 @@ function hostPlayerSubmitAccusation() {
 // ============================================================
 // CONDITIONAL QUESTION FILTERING
 // ============================================================
-function getAvailableQuestions(suspectId) {
+function getAvailableQuestions(suspectId, player) {
     const pool = SCENARIO.questions[suspectId] || [];
     return pool.filter(qa => {
         if (!qa.requires || qa.requires.length === 0) return true;
-        return qa.requires.every(reqId => state.discoveredHotspots.includes(reqId));
+        return qa.requires.every(reqId => playerKnowsHotspot(player, reqId));
     });
+}
+
+function playerKnowsHotspot(player, hotspotKey) {
+    // hotspotKey is like 'library_decanter' → roomId='library', hotspotId='decanter'
+    const parts = hotspotKey.split('_');
+    const roomId = parts[0];
+    const hotspotId = parts.slice(1).join('_');
+    // Player found it privately?
+    if (player && player.privateClues && player.privateClues.some(c => c.roomId === roomId && c.hotspotId === hotspotId)) {
+        return true;
+    }
+    // It's on the public board?
+    if (state.publicClues && state.publicClues.some(c => c.roomId === roomId && c.hotspotId === hotspotId)) {
+        return true;
+    }
+    return false;
 }
 
 // ============================================================
@@ -3329,7 +3345,7 @@ function buildFinalQuestioningHtml(me, forHost) {
         if (selectedSuspectId) {
             const suspect = SCENARIO.suspects.find(s => s.id === selectedSuspectId);
             if (suspect) {
-                const pool = getAvailableQuestions(suspect.id);
+                const pool = getAvailableQuestions(suspect.id, me);
                 const askFn = forHost ? 'hostPlayerAskFinalQuestion' : 'askFinalQuestion';
                 const skipFn = forHost ? 'hostPlayerSkipQuestion' : 'skipQuestion';
                 html += '<div class="panel"><h3>Ask ' + escapeHtml(suspect.name) + '</h3>';
