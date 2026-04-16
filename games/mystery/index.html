@@ -1765,10 +1765,17 @@ function handleGuestMessage(conn, msg) {
             player.submitted = true;
             broadcastState();
             renderAll();
-            // If everyone submitted, finish early.
             if (state.players.every(p => p.submitted || p.disconnected)) {
                 finishAccusation();
             }
+            return;
+        }
+        case 'spend_coins': {
+            if (!player) return;
+            if (state.phase !== 'room' && state.phase !== 'final_questioning') return;
+            processSpendCoins(player, msg.action);
+            broadcastState();
+            renderAll();
             return;
         }
     }
@@ -2438,10 +2445,22 @@ function buildPlayerActionsHtml(me, room, forHost) {
     html += '<button class="btn ' + (me.ready ? 'success' : '') + '" onclick="' + readyFn + '()">' +
         (me.ready ? '✓ Ready to Leave' : 'Ready to Leave →') + '</button>';
 
-    // Coin shop (optional)
-    html += '<details class="collapsible"><summary>🪙 Coin Shop — balance: ' + me.coins + '</summary>' +
-        '<div style="color:var(--text-secondary); margin:8px 0; font-size:0.85rem;">Spend coins during exploration (coming in a future update).</div>' +
-        '</details>';
+    // Coin shop
+    html += '<details class="collapsible"><summary>🪙 Coin Shop — balance: ' + me.coins + '</summary>';
+    html += '<div style="display:flex;flex-direction:column;gap:6px;margin-top:8px">';
+
+    // Unlock Hint (5 coins) - get a random clue you haven't found yet
+    const hintDisabled = me.coins < 5 ? ' disabled' : '';
+    const hintFn = forHost ? 'hostPlayerSpendCoins(\'hint\')' : 'spendCoins(\'hint\')';
+    html += '<button class="btn secondary small"' + hintDisabled + ' onclick="' + hintFn + '">🔎 Unlock Hint — 5 🪙<br><span style="font-size:0.75rem;color:var(--text-secondary)">Get a random clue you haven\'t found</span></button>';
+
+    // Eavesdrop (8 coins) - peek at a rival's private clue
+    const otherPlayers = state.players.filter(p => p.id !== me.id && p.privateClues && p.privateClues.some(c => !c.shared));
+    const eavesDisabled = (me.coins < 8 || otherPlayers.length === 0) ? ' disabled' : '';
+    const eavesFn = forHost ? 'hostPlayerSpendCoins(\'eavesdrop\')' : 'spendCoins(\'eavesdrop\')';
+    html += '<button class="btn secondary small"' + eavesDisabled + ' onclick="' + eavesFn + '">🕵️ Eavesdrop — 8 🪙<br><span style="font-size:0.75rem;color:var(--text-secondary)">Steal a rival\'s private clue into your notebook</span></button>';
+
+    html += '</div></details>';
 
     return html;
 }
@@ -2960,6 +2979,77 @@ function hostPlayerSkipQuestion() {
         if (state.finalAsked[player.id]) return;
         state.finalAsked[player.id] = '_skipped';
     }
+    broadcastState();
+    renderAll();
+}
+
+// ============================================================
+// COIN SPENDING
+// ============================================================
+
+function processSpendCoins(player, action) {
+    if (action === 'hint') {
+        if (player.coins < 5) return;
+        // Find a clue this player hasn't discovered yet
+        const allHotspots = [];
+        SCENARIO.rooms.forEach(room => {
+            room.hotspots.forEach(hs => {
+                const alreadyHas = player.privateClues.some(c => c.roomId === room.id && c.hotspotId === hs.id);
+                if (!alreadyHas) {
+                    allHotspots.push({ roomId: room.id, hotspotId: hs.id, clue: hs.clue });
+                }
+            });
+        });
+        if (allHotspots.length === 0) return;
+        player.coins -= 5;
+        const pick = allHotspots[Math.floor(Math.random() * allHotspots.length)];
+        player.privateClues.push({
+            roomId: pick.roomId, hotspotId: pick.hotspotId,
+            clueText: pick.clue, shared: false
+        });
+        // Also track in discoveredHotspots
+        const hsKey = pick.roomId + '_' + pick.hotspotId;
+        if (!state.discoveredHotspots.includes(hsKey)) {
+            state.discoveredHotspots.push(hsKey);
+        }
+    } else if (action === 'eavesdrop') {
+        if (player.coins < 8) return;
+        // Find another player with at least one unshared private clue
+        const rivals = state.players.filter(p =>
+            p.id !== player.id && p.privateClues && p.privateClues.some(c => !c.shared)
+        );
+        if (rivals.length === 0) return;
+        const rival = rivals[Math.floor(Math.random() * rivals.length)];
+        const unshared = rival.privateClues.filter(c => !c.shared);
+        if (unshared.length === 0) return;
+        const stolen = unshared[Math.floor(Math.random() * unshared.length)];
+        player.coins -= 8;
+        // Add to the eavesdropper's notebook (if they don't already have it)
+        const alreadyHas = player.privateClues.some(c =>
+            c.roomId === stolen.roomId && c.hotspotId === stolen.hotspotId
+        );
+        if (!alreadyHas) {
+            player.privateClues.push({
+                roomId: stolen.roomId, hotspotId: stolen.hotspotId,
+                clueText: stolen.clueText, shared: false
+            });
+        }
+    }
+}
+
+// Guest sends spend action to host
+function spendCoins(action) {
+    if (!connections.length) return;
+    connections[0].conn.send({ type: 'spend_coins', action: action });
+}
+
+// Host-as-player spends coins locally
+function hostPlayerSpendCoins(action) {
+    if (!isHost || !hostIsPlayer) return;
+    const player = state.players.find(p => p.id === myPeerId);
+    if (!player) return;
+    if (state.phase !== 'room' && state.phase !== 'final_questioning') return;
+    processSpendCoins(player, action);
     broadcastState();
     renderAll();
 }
