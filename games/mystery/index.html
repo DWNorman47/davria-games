@@ -723,6 +723,60 @@
         border: 2px solid var(--accent);
     }
 
+    /* Game clock on TV */
+    .game-clock {
+        position: fixed;
+        top: 12px;
+        left: 12px;
+        background: rgba(0,0,0,0.7);
+        border: 1px solid var(--border);
+        border-radius: 8px;
+        padding: 6px 14px;
+        font-family: 'Courier New', monospace;
+        font-weight: 800;
+        font-size: 1.3rem;
+        color: var(--text-primary);
+        z-index: 999;
+    }
+    .game-clock.warning { color: #f1c40f; border-color: #f1c40f; }
+    .game-clock.urgent { color: #e74c3c; border-color: #e74c3c; animation: pulse-red 1s ease-in-out infinite; }
+    @keyframes pulse-red {
+        0%, 100% { opacity: 1; }
+        50% { opacity: 0.5; }
+    }
+
+    /* Vote modal */
+    .vote-overlay {
+        position: fixed;
+        top: 0; left: 0; right: 0; bottom: 0;
+        background: rgba(0,0,0,0.75);
+        z-index: 1002;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+    }
+    .vote-box {
+        background: var(--bg-card);
+        border: 2px solid var(--accent);
+        border-radius: 14px;
+        padding: 24px;
+        max-width: 400px;
+        width: 90%;
+        text-align: center;
+    }
+    .vote-box h3 { color: #e8c77a; margin-bottom: 12px; }
+    .vote-box .vote-timer { color: var(--text-secondary); font-size: 0.9rem; margin-bottom: 14px; }
+    .vote-box .vote-actions { display: flex; gap: 10px; justify-content: center; }
+    .vote-box .vote-actions .btn { width: auto; min-width: 100px; }
+
+    /* Suspect tag in room picker */
+    .room-tile .suspect-tag {
+        font-size: 0.78rem;
+        color: #e8c77a;
+        margin-top: 4px;
+        font-style: italic;
+    }
+
     /* Cast-only helpers */
     body.cast-view .hide-on-tv { display: none !important; }
     body:not(.cast-view) .tv-only { display: none !important; }
@@ -740,6 +794,8 @@
 <body>
 <button id="mute-toggle" type="button" onclick="toggleMute()" aria-label="Toggle sound">🔇</button>
 <div id="notification-container"></div>
+<div id="game-clock" class="game-clock" style="display:none;">45:00</div>
+<div id="vote-overlay" style="display:none;"></div>
 
 <div class="app">
     <div class="mystery-header">
@@ -888,6 +944,29 @@
             <div class="room-map" id="leader-room-map"></div>
         </div>
         <div id="leader-pick-host-player-ui" style="display:none;"></div>
+    </div>
+
+    <!-- ================= FINAL QUESTIONING ================= -->
+    <div id="screen-final-questioning" class="screen">
+        <div class="panel">
+            <h2 style="text-align:center; font-family:Georgia,serif; color:#e8c77a;">Final Questioning</h2>
+            <div class="status-line">All rooms explored. One last round of questions before the accusation.</div>
+        </div>
+        <div class="panel">
+            <h3>Choose a Suspect to Question</h3>
+            <div class="suspect-lineup" id="final-q-suspect-grid"></div>
+        </div>
+        <div id="final-q-question-panel" style="display:none;"></div>
+        <div class="transcript" id="final-q-transcript" style="display:none;">
+            <h3>Final Questioning Transcript</h3>
+            <div id="final-q-transcript-list"></div>
+        </div>
+        <div class="player-strip" id="final-q-player-strip"></div>
+        <div id="final-q-phone-actions" class="hide-on-tv" style="margin-top:10px;"></div>
+        <details class="host-player-controls" id="final-q-host-controls" style="display:none;" open>
+            <summary>Your Controls</summary>
+            <div class="hpc-body" id="final-q-host-actions"></div>
+        </details>
     </div>
 
     <!-- ================= ACCUSATION ================= -->
@@ -1071,46 +1150,80 @@ const SCENARIO = {
             ]
         }
     ],
-    // Canned Q&A per suspect. One question is "correct alibi" per suspect. Vivian has contradictions.
+    // Canned Q&A per suspect. Each question has an optional `requires` array of hotspot IDs
+    // (format: 'roomId_hotspotId') that must be in state.discoveredHotspots before the question appears.
     questions: {
         eleanor: [
             { q: "Where were you at 10:30 PM?", a: "In the Drawing Room. Three guests sat with me. I never left." },
-            { q: "Did you hear anything unusual?", a: "A faint crash from the Library around 10:30. I assumed the cat knocked a glass." },
             { q: "What was your relationship with the victim?", a: "We were... distant. I knew of his affair. I had not decided yet what to do about it." },
-            { q: "Who do you think did it?", a: "That woman. Vivian. She sinks her claws in and they don't come out." },
-            { q: "What were you wearing?", a: "A black velvet gown. Not a thread out of place — I haven't left the Drawing Room." },
             { q: "When did you last see Lord Alistair alive?", a: "At 9:45 PM. He excused himself to the Study. Said he had a 'private matter' to settle." },
-            { q: "Do you know who benefits from his death?", a: "I do, primarily. But I assure you I don't need the money." }
+            { q: "Who do you think did it?", a: "That woman. Vivian. She sinks her claws in and they don't come out." },
+            { q: "Did you hear anything unusual?", a: "A faint crash from the Library around 10:30. I assumed the cat knocked a glass.",
+              requires: ['library_decanter'] },
+            { q: "What were you wearing?", a: "A black velvet gown. Not a thread out of place — I haven't left the Drawing Room.",
+              requires: ['drawing_fabric'] },
+            { q: "Do you know who benefits from his death?", a: "I do, primarily. But I assure you I don't need the money.",
+              requires: ['study_will'] },
+            { q: "Three wine glasses were found in the Drawing Room. One has your lipstick.", a: "Of course. I was hosting. I drank wine with guests — it's hardly incriminating.",
+              requires: ['drawing_wine'] },
+            { q: "The seating chart puts you in the Drawing Room until 10:15. What happened after?", a: "I stayed. The guests left one by one. I remained until the commotion.",
+              requires: ['drawing_seating'] }
         ],
         montgomery: [
             { q: "Where were you at 10:30 PM?", a: "In the Study. Alistair asked me to witness the new will. He was alive when I left around 10:20." },
-            { q: "Did you hear anything unusual?", a: "Muffled voices from the Library around 10:25. A woman's voice, arguing." },
             { q: "What was your relationship with the victim?", a: "Oldest friends. Yes, I was being cut from the will — but I'd already made peace with it." },
-            { q: "Who do you think did it?", a: "Someone with more to lose than I did, and less patience." },
-            { q: "What were you wearing?", a: "Dinner jacket, white shirt. I never changed all evening." },
             { q: "When did you last see Lord Alistair alive?", a: "At 10:20 PM in the Study. I left to play piano in the Drawing Room briefly." },
-            { q: "That threatening note bearing your initials — explain.", a: "I never wrote it. It's typed. Anyone could have typed 'J.M.'. Someone is framing me." },
-            { q: "Did you drink tonight?", a: "A small whiskey in the Study, yes. I always do when we meet." }
+            { q: "Who do you think did it?", a: "Someone with more to lose than I did, and less patience." },
+            { q: "Did you hear anything unusual?", a: "Muffled voices from the Library around 10:25. A woman's voice, arguing.",
+              requires: ['library_decanter'] },
+            { q: "What were you wearing?", a: "Dinner jacket, white shirt. I never changed all evening." },
+            { q: "That threatening note bearing your initials — explain.", a: "I never wrote it. It's typed. Anyone could have typed 'J.M.'. Someone is framing me.",
+              requires: ['study_note'] },
+            { q: "Did you drink tonight?", a: "A small whiskey in the Study, yes. I always do when we meet.",
+              requires: ['study_whiskey'] },
+            { q: "Only you and Alistair knew the safe combination. Why was it open?", a: "He opened it himself to retrieve the will draft. I didn't touch it.",
+              requires: ['study_safe'] },
+            { q: "The new will removes you as beneficiary. Quite the motive.", a: "I knew about the change weeks ago. If I wanted to stop it, I wouldn't have waited until tonight.",
+              requires: ['study_will'] }
         ],
         ash: [
             { q: "Where were you at 10:30 PM?", a: "In the Kitchen, finishing the washing-up. Alone — my usual routine." },
-            { q: "Did you hear anything unusual?", a: "A door slammed — the back door. I thought a gust of wind. It wasn't the wind." },
             { q: "What was your relationship with the victim?", a: "Loyal servant of thirty years. He was a hard man but a fair one." },
-            { q: "Who do you think did it?", a: "I couldn't possibly speculate, sir." },
-            { q: "What were you wearing?", a: "Standard black tails. I changed my boots — caught mud somehow." },
             { q: "When did you last see Lord Alistair alive?", a: "At 10:10 PM. I brought him a brandy in the Library. He was alive and well." },
-            { q: "The pantry inventory looks... altered.", a: "A bookkeeping error, sir. I'll correct it." },
-            { q: "Why were your boots muddy?", a: "I stepped out to shut the garden gate. The wind had blown it open. Only briefly." }
+            { q: "Who do you think did it?", a: "I couldn't possibly speculate, sir." },
+            { q: "Did you hear anything unusual?", a: "A door slammed — the back door. I thought a gust of wind. It wasn't the wind.",
+              requires: ['kitchen_backdoor'] },
+            { q: "What were you wearing?", a: "Standard black tails. I changed my boots — caught mud somehow.",
+              requires: ['kitchen_boot'] },
+            { q: "The pantry inventory looks... altered.", a: "A bookkeeping error, sir. I'll correct it.",
+              requires: ['kitchen_pantry'] },
+            { q: "Why were your boots muddy?", a: "I stepped out to shut the garden gate. The wind had blown it open. Only briefly.",
+              requires: ['kitchen_boot'] },
+            { q: "You insist you locked the back door at 9 PM, yet it was found open.", a: "Someone else must have opened it after me. I locked it — I'm certain.",
+              requires: ['kitchen_backdoor'] },
+            { q: "A receipt for a silk scarf delivered to Miss Crane was found in the Kitchen.", a: "Deliveries come through the Kitchen, sir. I sign for all parcels. That proves nothing.",
+              requires: ['kitchen_receipt'] }
         ],
         vivian: [
             { q: "Where were you at 10:30 PM?", a: "In the Garden. Taking some air. The rain had stopped." },
-            { q: "Did you hear anything unusual?", a: "No. Nothing at all. The Garden is very quiet." },
             { q: "What was your relationship with the victim?", a: "We were... close. Very close. He cared for me deeply." },
-            { q: "Who do you think did it?", a: "The wife. She knew. Women always know." },
-            { q: "What were you wearing?", a: "My red silk gown. Alistair bought it for me. It's perfectly intact, I assure you." },
             { q: "When did you last see Lord Alistair alive?", a: "At dinner. I left the Drawing Room early — I had a headache." },
-            { q: "A silk scrap was found in the Library. Red. Like your dress.", a: "I... have never been in the Library tonight. That must belong to someone else." },
-            { q: "Gloves monogrammed 'V.C.' were found wet in the Garden.", a: "Those are old. Not mine. I don't own garden gloves." }
+            { q: "Who do you think did it?", a: "The wife. She knew. Women always know." },
+            { q: "Did you hear anything unusual?", a: "No. Nothing at all. The Garden is very quiet." },
+            { q: "What were you wearing?", a: "My red silk gown. Alistair bought it for me. It's perfectly intact, I assure you.",
+              requires: ['drawing_fabric'] },
+            { q: "A silk scrap was found in the Library. Red. Like your dress.", a: "I... have never been in the Library tonight. That must belong to someone else.",
+              requires: ['library_carpet'] },
+            { q: "Gloves monogrammed 'V.C.' were found wet in the Garden.", a: "Those are old. Not mine. I don't own garden gloves.",
+              requires: ['garden_gloves'] },
+            { q: "There are heeled footprints leading from the Library window to the garden gate.", a: "Many women wear heels. That proves nothing.",
+              requires: ['garden_prints'] },
+            { q: "I found a fragment of red silk on the rosebush near the Library window.", a: "I... the wind must have carried it. I was nowhere near the Library window.",
+              requires: ['garden_scarf'] },
+            { q: "Alistair's note says 'it ends tonight.' He was breaking up with you?", a: "He... he wouldn't. He loved me. You're twisting his words.",
+              requires: ['study_book'] },
+            { q: "The letter on his desk reads: 'Vivian, I can't continue this.'", a: "That letter... he was writing to me? I didn't know. I swear I didn't know tonight.",
+              requires: ['library_letter'] }
         ]
     },
     truth: {
@@ -1125,20 +1238,31 @@ const SCENARIO = {
 // STATE
 // ============================================================
 const state = {
-    phase: 'lobby', // lobby, intro, room, ready_check, minigame, leader_pick, accusation, results
+    phase: 'lobby', // lobby, intro, room, ready_check, minigame, leader_pick, final_questioning, accusation, results
     players: [],    // {id, name, color, coins, privateClues:[{roomId,hotspotId,clueText,shared}], ready, submitted, accusation}
     currentRoomId: null,
     visitedRoomIds: [],
     publicClues: [], // {roomId, hotspotId, text, fromPlayerId, fromPlayerName}
-    askQueue: [],    // player indices in order
-    currentAskerIdx: -1,
     questionLog: [], // {askerId, askerName, suspectId, q, a}
-    askedThisRoom: {}, // playerId -> true (has asked or skipped this room)
+    askedThisRoom: {}, // playerId -> true (has asked or skipped this room visit)
     minigame: null,  // {type:'tap', startTime, endTime, tapCounts:{playerId:n}, placements:[]}
     leaderId: null,
     accusationEndTime: 0,
     accusations: {}, // playerId -> {culpritId, weaponId, locationId}
-    maxRooms: 5      // after all 5 rooms visited (or host can end) move to accusation
+    maxRooms: 5,     // after all 5 rooms visited (or host can end) move to accusation
+    // Global hotspot discovery tracker (for conditional questions)
+    discoveredHotspots: [], // array of 'roomId_hotspotId' strings
+    // Game clock (45 minutes)
+    gameStartTime: 0,
+    gameTimeLimit: 45 * 60 * 1000,
+    // Accusation vote system
+    accusationCalled: false,
+    accusationBlocked: false,
+    accusationVote: null, // {callerId, votes:{playerId:'yes'|'no'}, startTime, timeout:30000}
+    // Final questioning phase
+    finalQuestioningDone: false,
+    finalAsked: {}, // playerId -> suspectId (which suspect they asked in final phase)
+    finalSelectedSuspect: {} // playerId -> suspectId (which suspect they're viewing)
 };
 
 // Palette for player colors (up to 12)
@@ -1165,6 +1289,8 @@ let audioCtx = null;
 let minigameTickInterval = null;
 let accusationTickInterval = null;
 let readyTimeoutHandle = null;
+let gameClockInterval = null;
+let accusationVoteTimer = null;
 
 // ============================================================
 // UI HELPERS
@@ -1485,6 +1611,11 @@ function handleGuestMessage(conn, msg) {
             player.privateClues.push({
                 roomId: room.id, hotspotId: hs.id, text: hs.clue, shared: false
             });
+            // Track global discovery
+            const hsKey = room.id + '_' + hs.id;
+            if (!state.discoveredHotspots.includes(hsKey)) {
+                state.discoveredHotspots.push(hsKey);
+            }
             broadcastState();
             renderAll();
             return;
@@ -1508,49 +1639,82 @@ function handleGuestMessage(conn, msg) {
         }
         case 'ask_question': {
             if (!player) return;
-            if (state.phase !== 'room') return;
-            const askerIdx = state.askQueue[state.currentAskerIdx];
-            if (askerIdx == null) return;
-            const currentAsker = state.players[askerIdx];
-            if (!currentAsker || currentAsker.id !== player.id) return;
-            const room = SCENARIO.rooms.find(r => r.id === state.currentRoomId);
-            if (!room || !room.suspectId) return;
-            const suspect = SCENARIO.suspects.find(s => s.id === room.suspectId);
-            if (!suspect) return;
-            const pool = SCENARIO.questions[suspect.id] || [];
-            const qidx = msg.questionIndex;
-            if (qidx < 0 || qidx >= pool.length) return;
-            const qa = pool[qidx];
-            state.questionLog.push({
-                askerId: player.id, askerName: player.name,
-                suspectId: suspect.id, q: qa.q, a: qa.a, roomId: room.id
-            });
-            state.askedThisRoom[player.id] = true;
-            advanceAskQueue();
+            if (state.phase !== 'room' && state.phase !== 'final_questioning') return;
+            // Free-form: any player who hasn't asked yet can ask
+            if (state.phase === 'room') {
+                if (state.askedThisRoom[player.id]) return; // already asked
+                const room = SCENARIO.rooms.find(r => r.id === state.currentRoomId);
+                if (!room || !room.suspectId) return;
+                const suspect = SCENARIO.suspects.find(s => s.id === room.suspectId);
+                if (!suspect) return;
+                const pool = getAvailableQuestions(suspect.id);
+                const qidx = msg.questionIndex;
+                if (qidx < 0 || qidx >= pool.length) return;
+                const qa = pool[qidx];
+                state.questionLog.push({
+                    askerId: player.id, askerName: player.name,
+                    suspectId: suspect.id, q: qa.q, a: qa.a, roomId: room.id
+                });
+                state.askedThisRoom[player.id] = true;
+            } else if (state.phase === 'final_questioning') {
+                if (state.finalAsked[player.id]) return; // already asked in final
+                const suspectId = msg.suspectId;
+                if (!suspectId) return;
+                const suspect = SCENARIO.suspects.find(s => s.id === suspectId);
+                if (!suspect) return;
+                const pool = getAvailableQuestions(suspect.id);
+                const qidx = msg.questionIndex;
+                if (qidx < 0 || qidx >= pool.length) return;
+                const qa = pool[qidx];
+                state.questionLog.push({
+                    askerId: player.id, askerName: player.name,
+                    suspectId: suspect.id, q: qa.q, a: qa.a, roomId: 'final'
+                });
+                state.finalAsked[player.id] = suspectId;
+            }
             broadcastState();
             renderAll();
             return;
         }
         case 'skip_question': {
             if (!player) return;
-            if (state.phase !== 'room') return;
-            const askerIdx = state.askQueue[state.currentAskerIdx];
-            if (askerIdx == null) return;
-            const currentAsker = state.players[askerIdx];
-            if (!currentAsker || currentAsker.id !== player.id) return;
-            state.askedThisRoom[player.id] = true;
-            advanceAskQueue();
+            if (state.phase === 'room') {
+                if (state.askedThisRoom[player.id]) return;
+                state.askedThisRoom[player.id] = true;
+            } else if (state.phase === 'final_questioning') {
+                if (state.finalAsked[player.id]) return;
+                state.finalAsked[player.id] = '_skipped';
+            }
             broadcastState();
             renderAll();
             return;
         }
+        case 'select_final_suspect': {
+            if (!player) return;
+            if (state.phase !== 'final_questioning') return;
+            state.finalSelectedSuspect[player.id] = msg.suspectId || null;
+            broadcastState();
+            renderAll();
+            return;
+        }
+        case 'accusation_vote_response': {
+            if (!player) return;
+            if (!state.accusationVote) return;
+            if (player.id === state.accusationVote.callerId) return; // caller doesn't vote
+            state.accusationVote.votes[player.id] = msg.vote; // 'yes' or 'no'
+            broadcastState();
+            renderAll();
+            checkAccusationVoteResult();
+            return;
+        }
         case 'toggle_ready': {
             if (!player) return;
-            if (state.phase !== 'room') return;
+            if (state.phase !== 'room' && state.phase !== 'final_questioning') return;
             player.ready = !player.ready;
             broadcastState();
             renderAll();
-            checkAllReady();
+            if (state.phase === 'room') checkAllReady();
+            else if (state.phase === 'final_questioning') checkFinalQuestioningReady();
             return;
         }
         case 'tap_minigame': {
@@ -1576,6 +1740,14 @@ function handleGuestMessage(conn, msg) {
             }
             player.coins -= cost;
             enterRoom(targetRoom.id);
+            return;
+        }
+        case 'call_accusation': {
+            if (!player) return;
+            if (state.phase !== 'leader_pick') return;
+            if (state.leaderId !== player.id) return;
+            if (state.accusationBlocked) return;
+            startAccusationVote(player.id);
             return;
         }
         case 'submit_accusation': {
@@ -1631,6 +1803,16 @@ function handleHostMessage(msg) {
         case 'notification':
             showNotification(msg.message || '', msg.level || 'info');
             return;
+        case 'accusation_vote_prompt':
+            showAccusationVotePrompt(msg.callerName);
+            return;
+        case 'accusation_vote_result':
+            hideAccusationVotePrompt();
+            showNotification(msg.message || '', msg.passed ? 'info' : 'warning');
+            return;
+        case 'game_clock_update':
+            updateGameClockDisplay(msg.remaining);
+            return;
         case 'error':
             setStatus('entry-status', msg.message || 'Error');
             showScreen('screen-entry');
@@ -1655,8 +1837,6 @@ function broadcastState() {
         currentRoomId: state.currentRoomId,
         visitedRoomIds: state.visitedRoomIds,
         publicClues: state.publicClues,
-        askQueue: state.askQueue,
-        currentAskerIdx: state.currentAskerIdx,
         questionLog: state.questionLog,
         askedThisRoom: state.askedThisRoom,
         minigame: state.minigame ? {
@@ -1670,7 +1850,16 @@ function broadcastState() {
         leaderId: state.leaderId,
         accusationEndTime: state.accusationEndTime,
         accusations: state.accusations,
-        maxRooms: state.maxRooms
+        maxRooms: state.maxRooms,
+        discoveredHotspots: state.discoveredHotspots,
+        gameStartTime: state.gameStartTime,
+        gameTimeLimit: state.gameTimeLimit,
+        accusationCalled: state.accusationCalled,
+        accusationBlocked: state.accusationBlocked,
+        accusationVote: state.accusationVote,
+        finalQuestioningDone: state.finalQuestioningDone,
+        finalAsked: state.finalAsked,
+        finalSelectedSuspect: state.finalSelectedSuspect
     };
     broadcast({ type: 'state_update', state: clean });
 }
@@ -1704,6 +1893,13 @@ function hostStartGame() {
     state.minigame = null;
     state.leaderId = null;
     state.accusations = {};
+    state.discoveredHotspots = [];
+    state.accusationCalled = false;
+    state.accusationBlocked = false;
+    state.accusationVote = null;
+    state.finalQuestioningDone = false;
+    state.finalAsked = {};
+    state.finalSelectedSuspect = {};
     state.phase = 'intro';
     broadcastState();
     renderAll();
@@ -1712,11 +1908,11 @@ function hostStartGame() {
 function hostBeginInvestigation() {
     if (!isHost) return;
     if (state.phase !== 'intro') return;
+    // Start the 45-minute game clock
+    state.gameStartTime = Date.now();
+    startGameClock();
     // Pick random first room (prefer Library — where the body is)
     const firstRoomId = 'library';
-    // Random ask order for first room
-    state.askQueue = shuffledIndices(state.players.length);
-    state.currentAskerIdx = 0;
     enterRoom(firstRoomId);
 }
 
@@ -1726,19 +1922,9 @@ function enterRoom(roomId) {
     if (!state.visitedRoomIds.includes(roomId)) state.visitedRoomIds.push(roomId);
     state.askedThisRoom = {};
     state.players.forEach(p => { p.ready = false; });
-    // If the suspect is here, set up ask queue; otherwise queue is empty
-    const room = SCENARIO.rooms.find(r => r.id === roomId);
-    if (room && room.suspectId && state.players.length > 0) {
-        state.currentAskerIdx = 0;
-        // askQueue was set previously (random on first room; winner-first after minigame)
-        // Ensure askQueue length matches player count
-        if (!state.askQueue || state.askQueue.length !== state.players.length) {
-            state.askQueue = shuffledIndices(state.players.length);
-        }
-    } else {
-        state.currentAskerIdx = -1;
-        state.askQueue = [];
-    }
+    // Reset accusation blocking after entering a new room
+    state.accusationBlocked = false;
+    state.accusationCalled = false;
     // Clear any leftover ready timer
     if (readyTimeoutHandle) { clearTimeout(readyTimeoutHandle); readyTimeoutHandle = null; }
     // 2-minute auto-advance timer
@@ -1750,25 +1936,6 @@ function enterRoom(roomId) {
     }, 2 * 60 * 1000);
     broadcastState();
     renderAll();
-}
-
-function advanceAskQueue() {
-    if (state.currentAskerIdx < 0) return;
-    state.currentAskerIdx++;
-    if (state.currentAskerIdx >= state.askQueue.length) {
-        // Everyone asked or skipped
-        state.currentAskerIdx = -1;
-    }
-}
-
-function shuffledIndices(n) {
-    const a = [];
-    for (let i = 0; i < n; i++) a.push(i);
-    for (let i = a.length - 1; i > 0; i--) {
-        const j = Math.floor(Math.random() * (i + 1));
-        [a[i], a[j]] = [a[j], a[i]];
-    }
-    return a;
 }
 
 function checkAllReady() {
@@ -1783,8 +1950,14 @@ function checkAllReady() {
 
 function beginMinigameOrAccusation() {
     if (readyTimeoutHandle) { clearTimeout(readyTimeoutHandle); readyTimeoutHandle = null; }
-    // If we've visited all rooms, go to accusation
-    if (state.visitedRoomIds.length >= state.maxRooms || state.visitedRoomIds.length >= SCENARIO.rooms.length) {
+    // If we've visited all rooms AND haven't done final questioning yet, do that first
+    if ((state.visitedRoomIds.length >= state.maxRooms || state.visitedRoomIds.length >= SCENARIO.rooms.length)
+        && !state.finalQuestioningDone) {
+        startFinalQuestioning();
+        return;
+    }
+    // If final questioning is done, go to accusation
+    if (state.finalQuestioningDone) {
         startAccusation();
         return;
     }
@@ -1853,20 +2026,19 @@ function finishMinigame() {
         if (!p) return;
         p.coins += coinByPlacement(i);
     });
-    // Winner becomes leader & first asker next round
+    // Winner becomes leader (sole advantage: picks next room)
     const winnerId = entries[0] ? entries[0].id : null;
     state.leaderId = winnerId;
-    // set askQueue with winner first, then others in taps-descending order
-    const winnerList = entries.filter(e => e.id).map(e => state.players.findIndex(p => p.id === e.id)).filter(i => i >= 0);
-    state.askQueue = winnerList;
-    state.currentAskerIdx = 0;
 
     broadcastState();
     renderAll();
 
     // After 3 seconds showing results, go to leader pick
     setTimeout(() => {
-        if (state.visitedRoomIds.length >= state.maxRooms || state.visitedRoomIds.length >= SCENARIO.rooms.length) {
+        if ((state.visitedRoomIds.length >= state.maxRooms || state.visitedRoomIds.length >= SCENARIO.rooms.length)
+            && !state.finalQuestioningDone) {
+            startFinalQuestioning();
+        } else if (state.finalQuestioningDone) {
             startAccusation();
         } else {
             startLeaderPick();
@@ -1934,6 +2106,9 @@ function finishAccusation() {
 
 function hostNewGame() {
     if (!isHost) return;
+    if (gameClockInterval) { clearInterval(gameClockInterval); gameClockInterval = null; }
+    if (accusationVoteTimer) { clearTimeout(accusationVoteTimer); accusationVoteTimer = null; }
+    document.getElementById('game-clock').style.display = 'none';
     state.phase = 'lobby';
     state.currentRoomId = null;
     state.visitedRoomIds = [];
@@ -1943,8 +2118,14 @@ function hostNewGame() {
     state.minigame = null;
     state.leaderId = null;
     state.accusations = {};
-    state.askQueue = [];
-    state.currentAskerIdx = -1;
+    state.discoveredHotspots = [];
+    state.gameStartTime = 0;
+    state.accusationCalled = false;
+    state.accusationBlocked = false;
+    state.accusationVote = null;
+    state.finalQuestioningDone = false;
+    state.finalAsked = {};
+    state.finalSelectedSuspect = {};
     // Keep connected guest players, reset their state
     if (hostIsPlayer) {
         // Keep host player (index 0) and connected guests
@@ -1966,12 +2147,18 @@ function hostNewGame() {
 // ============================================================
 function renderAll() {
     updateMuteButton();
+    // Update game clock display if running
+    if (state.gameStartTime > 0 && state.phase !== 'lobby' && state.phase !== 'intro' && state.phase !== 'results') {
+        const remaining = Math.max(0, state.gameTimeLimit - (Date.now() - state.gameStartTime));
+        updateGameClockDisplay(remaining);
+    }
     switch (state.phase) {
         case 'lobby': showScreen('screen-lobby'); renderLobby(); break;
         case 'intro': showScreen('screen-intro'); renderIntro(); break;
         case 'room': showScreen('screen-room'); renderRoom(); break;
         case 'minigame': showScreen('screen-minigame'); renderMinigame(); break;
         case 'leader_pick': showScreen('screen-leader-pick'); renderLeaderPick(); break;
+        case 'final_questioning': showScreen('screen-final-questioning'); renderFinalQuestioning(); break;
         case 'accusation': showScreen('screen-accusation'); renderAccusation(); break;
         case 'results': showScreen('screen-results'); renderResults(); break;
     }
@@ -2117,7 +2304,7 @@ function renderRoom() {
 
     // Questioning transcript (TV)
     const transcriptLogs = state.questionLog.filter(q => q.roomId === room.id);
-    const showTranscript = transcriptLogs.length > 0 || (room.suspectId && state.currentAskerIdx >= 0);
+    const showTranscript = transcriptLogs.length > 0 || (room.suspectId != null);
     const trEl = document.getElementById('room-transcript-tv');
     const trList = document.getElementById('room-transcript-list-tv');
     if (trEl) trEl.style.display = showTranscript ? '' : 'none';
@@ -2132,24 +2319,13 @@ function renderRoom() {
                 '<div class="a">' + escapeHtml(q.a) + '</div>';
             trList.appendChild(block);
         });
-        if (state.currentAskerIdx >= 0 && room.suspectId) {
-            const askerIdx = state.askQueue[state.currentAskerIdx];
-            const asker = state.players[askerIdx];
-            if (asker) {
-                const block = document.createElement('div');
-                block.className = 'qa-block';
-                block.style.borderLeft = '3px solid #e8c77a';
-                block.innerHTML = '<div class="asker" style="color:#e8c77a;">🎤 ' + escapeHtml(asker.name) + ' is asking...</div>';
-                trList.appendChild(block);
-            }
-        }
     }
 
     // Phone-side transcript mirror
     const trPhone = document.getElementById('room-transcript-phone');
     const trPhoneList = document.getElementById('room-transcript-list-phone');
     if (!isHost && trPhone && trPhoneList) {
-        if (transcriptLogs.length > 0 || (room.suspectId && state.currentAskerIdx >= 0)) {
+        if (transcriptLogs.length > 0) {
             trPhone.style.display = '';
             trPhoneList.innerHTML = '';
             transcriptLogs.forEach(q => {
@@ -2181,20 +2357,17 @@ function renderPlayerStrip() {
     const strip = document.getElementById('room-player-strip');
     if (!strip) return;
     strip.innerHTML = '';
-    const currentAskerId = (state.currentAskerIdx >= 0 && state.askQueue[state.currentAskerIdx] != null)
-        ? (state.players[state.askQueue[state.currentAskerIdx]] && state.players[state.askQueue[state.currentAskerIdx]].id)
-        : null;
     state.players.forEach(p => {
         const chip = document.createElement('div');
         chip.className = 'player-chip';
         if (p.ready) chip.classList.add('ready');
-        if (p.id === currentAskerId) chip.classList.add('asking');
+        const hasAsked = !!state.askedThisRoom[p.id];
         chip.innerHTML =
             '<span class="player-dot" style="background:' + p.color + '"></span>' +
             '<span>' + escapeHtml(p.name) + '</span>' +
             '<span class="coin">🪙 ' + p.coins + '</span>' +
             '<span class="ready-dot" title="ready"></span>' +
-            (p.id === currentAskerId ? '<span style="color:#e8c77a;">🎤</span>' : '');
+            (hasAsked ? '<span style="color:var(--text-secondary); font-size:0.75rem;">asked</span>' : '');
         strip.appendChild(chip);
     });
 }
@@ -2202,26 +2375,24 @@ function renderPlayerStrip() {
 function buildPlayerActionsHtml(me, room, forHost) {
     let html = '';
 
-    // Question menu (if my turn)
-    if (state.currentAskerIdx >= 0 && room.suspectId) {
-        const askerIdx = state.askQueue[state.currentAskerIdx];
-        const asker = state.players[askerIdx];
-        if (asker && asker.id === me.id) {
-            const suspect = SCENARIO.suspects.find(s => s.id === room.suspectId);
+    // Question menu — free-form: any player who hasn't asked yet can ask
+    if (room.suspectId && !state.askedThisRoom[me.id]) {
+        const suspect = SCENARIO.suspects.find(s => s.id === room.suspectId);
+        if (suspect) {
             html += '<div class="panel">';
-            html += '<h3>🎤 Ask ' + escapeHtml(suspect.name) + '</h3>';
+            html += '<h3>Ask ' + escapeHtml(suspect.name) + '</h3>';
             html += '<div class="question-menu">';
-            const pool = SCENARIO.questions[suspect.id] || [];
+            const pool = getAvailableQuestions(suspect.id);
             const askFn = forHost ? 'hostPlayerAskQuestion' : 'askQuestion';
             const skipFn = forHost ? 'hostPlayerSkipQuestion' : 'skipQuestion';
             pool.forEach((qa, idx) => {
                 html += '<button class="btn secondary" onclick="' + askFn + '(' + idx + ')">' + escapeHtml(qa.q) + '</button>';
             });
-            html += '<button class="btn small" onclick="' + skipFn + '()">Skip my turn</button>';
+            html += '<button class="btn small" onclick="' + skipFn + '()">Skip question</button>';
             html += '</div></div>';
-        } else if (asker) {
-            html += '<div class="panel"><div class="status-line">🎤 ' + escapeHtml(asker.name) + ' is questioning ' + escapeHtml(SCENARIO.suspects.find(s => s.id === room.suspectId).name) + '...</div></div>';
         }
+    } else if (room.suspectId && state.askedThisRoom[me.id]) {
+        html += '<div class="panel"><div class="status-line">You have already asked your question in this room.</div></div>';
     }
 
     // Hotspots (for host-as-player — they need their own clickable hotspots since TV ones are display-only)
@@ -2433,11 +2604,10 @@ function renderLeaderPick() {
     const statusEl = document.getElementById('leader-pick-status');
     const me = getMyPlayer();
     const leader = state.players.find(p => p.id === state.leaderId);
+    const isLeader = (me && me.id === state.leaderId) || (isHost && hostIsPlayer && state.leaderId === myPeerId);
     if (statusEl) {
         if (leader) {
-            if (me && me.id === leader.id) {
-                statusEl.innerHTML = '<strong>You won the tap race!</strong> Pick the next room.';
-            } else if (isHost && hostIsPlayer && leader.id === myPeerId) {
+            if (isLeader) {
                 statusEl.innerHTML = '<strong>You won the tap race!</strong> Pick the next room.';
             } else {
                 statusEl.textContent = leader.name + ' is choosing the next room...';
@@ -2455,15 +2625,21 @@ function renderLeaderPick() {
         if (r.id === state.currentRoomId) tile.classList.add('current');
         const cost = visited ? 2 : 0;
         let html = '<div class="icon">' + r.icon + '</div><div>' + escapeHtml(r.name) + '</div>';
+        // Show suspect in room
+        if (r.suspectId) {
+            const suspect = SCENARIO.suspects.find(s => s.id === r.suspectId);
+            if (suspect) {
+                html += '<div class="suspect-tag">' + suspect.icon + ' ' + escapeHtml(suspect.name) + '</div>';
+            }
+        }
         if (visited) html += '<div class="cost">Revisit: 2 🪙</div>';
         tile.innerHTML = html;
         // Only leader can click (on phone or host-as-player)
-        if (me && me.id === state.leaderId) {
-            if (me.coins < cost) {
+        if (isLeader) {
+            if (me && me.coins < cost) {
                 tile.style.opacity = '0.4';
                 tile.onclick = () => showNotification('Not enough coins!', 'warning');
             } else {
-                const pickFn = (isHost && hostIsPlayer) ? 'hostPlayerPickRoom' : 'pickRoom';
                 tile.onclick = () => { if (isHost && hostIsPlayer) hostPlayerPickRoom(r.id); else pickRoom(r.id); };
             }
         } else if (isHost && !hostIsPlayer) {
@@ -2474,6 +2650,24 @@ function renderLeaderPick() {
         }
         container.appendChild(tile);
     });
+
+    // "Call for Accusation" button for leader
+    const hostPlayerUI = document.getElementById('leader-pick-host-player-ui');
+    if (hostPlayerUI) {
+        if (isHost && hostIsPlayer && isLeader && !state.accusationBlocked) {
+            hostPlayerUI.style.display = '';
+            hostPlayerUI.innerHTML = '<button class="btn" style="background:#a03030; margin-top:14px;" onclick="hostPlayerCallAccusation()">Call for Accusation</button>';
+        } else {
+            hostPlayerUI.style.display = 'none';
+            hostPlayerUI.innerHTML = '';
+        }
+    }
+    // For non-host leader (phone), add the button to the status area
+    if (!isHost && isLeader && !state.accusationBlocked) {
+        if (statusEl) {
+            statusEl.innerHTML += '<br><button class="btn" style="background:#a03030; margin-top:10px;" onclick="callAccusation()">Call for Accusation</button>';
+        }
+    }
 }
 
 // ============================================================
@@ -2628,6 +2822,10 @@ function askQuestion(idx) {
     if (!hostConn || !hostConn.open) return;
     hostConn.send({ type: 'ask_question', questionIndex: idx });
 }
+function askQuestionWithSuspect(idx, suspectId) {
+    if (!hostConn || !hostConn.open) return;
+    hostConn.send({ type: 'ask_question', questionIndex: idx, suspectId });
+}
 function skipQuestion() {
     if (!hostConn || !hostConn.open) return;
     hostConn.send({ type: 'skip_question' });
@@ -2688,6 +2886,10 @@ function hostPlayerInspect(roomId, hotspotId) {
     if (!hs) return;
     if (player.privateClues.some(c => c.roomId === room.id && c.hotspotId === hs.id)) return;
     player.privateClues.push({ roomId: room.id, hotspotId: hs.id, text: hs.clue, shared: false });
+    const hsKey = room.id + '_' + hs.id;
+    if (!state.discoveredHotspots.includes(hsKey)) {
+        state.discoveredHotspots.push(hsKey);
+    }
     broadcastState();
     renderAll();
 }
@@ -2711,24 +2913,38 @@ function hostPlayerShareClue(roomId, hotspotId) {
 function hostPlayerAskQuestion(idx) {
     if (!isHost || !hostIsPlayer) return;
     const player = state.players.find(p => p.id === myPeerId);
-    if (!player || state.phase !== 'room') return;
-    const askerIdx = state.askQueue[state.currentAskerIdx];
-    if (askerIdx == null) return;
-    const currentAsker = state.players[askerIdx];
-    if (!currentAsker || currentAsker.id !== player.id) return;
-    const room = SCENARIO.rooms.find(r => r.id === state.currentRoomId);
-    if (!room || !room.suspectId) return;
-    const suspect = SCENARIO.suspects.find(s => s.id === room.suspectId);
-    if (!suspect) return;
-    const pool = SCENARIO.questions[suspect.id] || [];
-    if (idx < 0 || idx >= pool.length) return;
-    const qa = pool[idx];
-    state.questionLog.push({
-        askerId: player.id, askerName: player.name,
-        suspectId: suspect.id, q: qa.q, a: qa.a, roomId: room.id
-    });
-    state.askedThisRoom[player.id] = true;
-    advanceAskQueue();
+    if (!player) return;
+    if (state.phase === 'room') {
+        if (state.askedThisRoom[player.id]) return;
+        const room = SCENARIO.rooms.find(r => r.id === state.currentRoomId);
+        if (!room || !room.suspectId) return;
+        const suspect = SCENARIO.suspects.find(s => s.id === room.suspectId);
+        if (!suspect) return;
+        const pool = getAvailableQuestions(suspect.id);
+        if (idx < 0 || idx >= pool.length) return;
+        const qa = pool[idx];
+        state.questionLog.push({
+            askerId: player.id, askerName: player.name,
+            suspectId: suspect.id, q: qa.q, a: qa.a, roomId: room.id
+        });
+        state.askedThisRoom[player.id] = true;
+    } else if (state.phase === 'final_questioning') {
+        if (state.finalAsked[player.id]) return;
+        const suspectId = state.finalSelectedSuspect[player.id];
+        if (!suspectId) return;
+        const suspect = SCENARIO.suspects.find(s => s.id === suspectId);
+        if (!suspect) return;
+        const pool = getAvailableQuestions(suspect.id);
+        if (idx < 0 || idx >= pool.length) return;
+        const qa = pool[idx];
+        state.questionLog.push({
+            askerId: player.id, askerName: player.name,
+            suspectId: suspect.id, q: qa.q, a: qa.a, roomId: 'final'
+        });
+        state.finalAsked[player.id] = suspectId;
+    } else {
+        return;
+    }
     broadcastState();
     renderAll();
 }
@@ -2736,13 +2952,14 @@ function hostPlayerAskQuestion(idx) {
 function hostPlayerSkipQuestion() {
     if (!isHost || !hostIsPlayer) return;
     const player = state.players.find(p => p.id === myPeerId);
-    if (!player || state.phase !== 'room') return;
-    const askerIdx = state.askQueue[state.currentAskerIdx];
-    if (askerIdx == null) return;
-    const currentAsker = state.players[askerIdx];
-    if (!currentAsker || currentAsker.id !== player.id) return;
-    state.askedThisRoom[player.id] = true;
-    advanceAskQueue();
+    if (!player) return;
+    if (state.phase === 'room') {
+        if (state.askedThisRoom[player.id]) return;
+        state.askedThisRoom[player.id] = true;
+    } else if (state.phase === 'final_questioning') {
+        if (state.finalAsked[player.id]) return;
+        state.finalAsked[player.id] = '_skipped';
+    }
     broadcastState();
     renderAll();
 }
@@ -2807,6 +3024,388 @@ function hostPlayerSubmitAccusation() {
         finishAccusation();
     }
 }
+
+// ============================================================
+// CONDITIONAL QUESTION FILTERING
+// ============================================================
+function getAvailableQuestions(suspectId) {
+    const pool = SCENARIO.questions[suspectId] || [];
+    return pool.filter(qa => {
+        if (!qa.requires || qa.requires.length === 0) return true;
+        return qa.requires.every(reqId => state.discoveredHotspots.includes(reqId));
+    });
+}
+
+// ============================================================
+// GAME CLOCK (45 minutes)
+// ============================================================
+function startGameClock() {
+    if (!isHost) return;
+    if (gameClockInterval) clearInterval(gameClockInterval);
+    let warned5 = false;
+    let warned1 = false;
+    gameClockInterval = setInterval(() => {
+        if (state.gameStartTime <= 0) return;
+        const elapsed = Date.now() - state.gameStartTime;
+        const remaining = Math.max(0, state.gameTimeLimit - elapsed);
+        // Broadcast clock to all guests
+        broadcast({ type: 'game_clock_update', remaining });
+        updateGameClockDisplay(remaining);
+        // Warnings
+        if (remaining <= 5 * 60 * 1000 && remaining > 60 * 1000 && !warned5) {
+            warned5 = true;
+            broadcast({ type: 'notification', message: '5 minutes remaining!', level: 'warning' });
+            showNotification('5 minutes remaining!', 'warning', 5000);
+        }
+        if (remaining <= 60 * 1000 && !warned1) {
+            warned1 = true;
+            broadcast({ type: 'notification', message: '1 minute! Make your accusations!', level: 'warning' });
+            showNotification('1 minute! Make your accusations!', 'warning', 5000);
+        }
+        // Time's up — force accusation
+        if (remaining <= 0) {
+            clearInterval(gameClockInterval);
+            gameClockInterval = null;
+            if (state.phase !== 'accusation' && state.phase !== 'results') {
+                broadcast({ type: 'notification', message: 'Time is up! Making accusations now!', level: 'warning' });
+                showNotification('Time is up! Making accusations now!', 'warning', 5000);
+                startAccusation();
+            }
+        }
+    }, 1000);
+}
+
+function updateGameClockDisplay(remaining) {
+    const el = document.getElementById('game-clock');
+    if (!el) return;
+    if (state.gameStartTime <= 0 || state.phase === 'lobby' || state.phase === 'intro' || state.phase === 'results') {
+        el.style.display = 'none';
+        return;
+    }
+    el.style.display = '';
+    const totalSecs = Math.ceil(remaining / 1000);
+    const mins = Math.floor(totalSecs / 60);
+    const secs = totalSecs % 60;
+    el.textContent = String(mins).padStart(2, '0') + ':' + String(secs).padStart(2, '0');
+    el.className = 'game-clock';
+    if (remaining <= 60 * 1000) {
+        el.classList.add('urgent');
+    } else if (remaining <= 5 * 60 * 1000) {
+        el.classList.add('warning');
+    }
+}
+
+// ============================================================
+// ACCUSATION VOTE SYSTEM
+// ============================================================
+function startAccusationVote(callerId) {
+    if (!isHost) return;
+    state.accusationCalled = true;
+    state.accusationVote = {
+        callerId: callerId,
+        votes: {},
+        startTime: Date.now(),
+        timeout: 30000
+    };
+    const caller = state.players.find(p => p.id === callerId);
+    const callerName = caller ? caller.name : 'The leader';
+    // Notify all guests
+    broadcast({ type: 'accusation_vote_prompt', callerName });
+    // Show on TV
+    showNotification(callerName + ' has called for accusation! Voting...', 'info', 5000);
+    broadcastState();
+    renderAll();
+    // Timeout: anyone who hasn't voted counts as No
+    if (accusationVoteTimer) clearTimeout(accusationVoteTimer);
+    accusationVoteTimer = setTimeout(() => {
+        checkAccusationVoteResult(true);
+    }, 30000);
+}
+
+function checkAccusationVoteResult(forceFinish) {
+    if (!state.accusationVote) return;
+    const otherPlayers = state.players.filter(p => p.id !== state.accusationVote.callerId && !p.disconnected);
+    const totalOthers = otherPlayers.length;
+    const yesCount = otherPlayers.filter(p => state.accusationVote.votes[p.id] === 'yes').length;
+    const noCount = otherPlayers.filter(p => state.accusationVote.votes[p.id] === 'no').length;
+    const votedCount = yesCount + noCount;
+    const needed = Math.ceil(totalOthers / 2);
+
+    // Check if vote already decided
+    if (yesCount >= needed) {
+        // Vote passes
+        if (accusationVoteTimer) { clearTimeout(accusationVoteTimer); accusationVoteTimer = null; }
+        state.accusationVote = null;
+        broadcast({ type: 'accusation_vote_result', passed: true, message: 'Vote passed! Moving to accusation.' });
+        showNotification('Vote passed! Moving to accusation.', 'info');
+        hideAccusationVotePrompt();
+        // Check if final questioning needed first
+        if (!state.finalQuestioningDone &&
+            (state.visitedRoomIds.length >= state.maxRooms || state.visitedRoomIds.length >= SCENARIO.rooms.length)) {
+            startFinalQuestioning();
+        } else {
+            startAccusation();
+        }
+        return;
+    }
+
+    if (noCount > totalOthers - needed || forceFinish) {
+        // Vote fails (or timed out)
+        if (accusationVoteTimer) { clearTimeout(accusationVoteTimer); accusationVoteTimer = null; }
+        state.accusationVote = null;
+        state.accusationBlocked = true; // can't call again until after next room
+        broadcast({ type: 'accusation_vote_result', passed: false, message: 'Vote failed. Continue investigating.' });
+        showNotification('Vote failed. Continue investigating.', 'warning');
+        hideAccusationVotePrompt();
+        broadcastState();
+        renderAll();
+        return;
+    }
+    // Still waiting for more votes
+}
+
+function showAccusationVotePrompt(callerName) {
+    const overlay = document.getElementById('vote-overlay');
+    if (!overlay) return;
+    // Don't show to host-as-player if they are the caller
+    const me = getMyPlayer();
+    if (me && state.accusationVote && me.id === state.accusationVote.callerId) return;
+    overlay.style.display = '';
+    overlay.innerHTML = '<div class="vote-box">' +
+        '<h3>Accusation Vote</h3>' +
+        '<p>' + escapeHtml(callerName) + ' wants to end the investigation. Ready to accuse?</p>' +
+        '<div class="vote-timer">30 seconds to vote</div>' +
+        '<div class="vote-actions">' +
+        '<button class="btn success" onclick="voteAccusation(\'yes\')">Yes</button>' +
+        '<button class="btn" onclick="voteAccusation(\'no\')">No</button>' +
+        '</div></div>';
+}
+
+function hideAccusationVotePrompt() {
+    const overlay = document.getElementById('vote-overlay');
+    if (overlay) {
+        overlay.style.display = 'none';
+        overlay.innerHTML = '';
+    }
+}
+
+function voteAccusation(vote) {
+    if (isHost && hostIsPlayer) {
+        // Host-as-player votes locally
+        const player = state.players.find(p => p.id === myPeerId);
+        if (!player || !state.accusationVote) return;
+        if (player.id === state.accusationVote.callerId) return;
+        state.accusationVote.votes[player.id] = vote;
+        hideAccusationVotePrompt();
+        broadcastState();
+        renderAll();
+        checkAccusationVoteResult();
+    } else if (hostConn && hostConn.open) {
+        hostConn.send({ type: 'accusation_vote_response', vote });
+        hideAccusationVotePrompt();
+    }
+}
+
+function callAccusation() {
+    // Guest leader calls for accusation
+    if (!hostConn || !hostConn.open) return;
+    hostConn.send({ type: 'call_accusation' });
+}
+
+function hostPlayerCallAccusation() {
+    if (!isHost || !hostIsPlayer) return;
+    if (state.phase !== 'leader_pick') return;
+    if (state.leaderId !== myPeerId) return;
+    if (state.accusationBlocked) return;
+    startAccusationVote(myPeerId);
+}
+
+// ============================================================
+// FINAL QUESTIONING PHASE
+// ============================================================
+function startFinalQuestioning() {
+    state.phase = 'final_questioning';
+    state.finalAsked = {};
+    state.finalSelectedSuspect = {};
+    state.players.forEach(p => { p.ready = false; });
+    broadcastState();
+    renderAll();
+}
+
+function renderFinalQuestioning() {
+    const me = getMyPlayer();
+
+    // Suspect grid (TV + everyone)
+    const grid = document.getElementById('final-q-suspect-grid');
+    if (grid) {
+        grid.innerHTML = '';
+        SCENARIO.suspects.forEach(s => {
+            const card = document.createElement('div');
+            card.className = 'suspect-card';
+            card.style.cursor = 'pointer';
+            card.innerHTML =
+                '<div class="portrait" style="margin:0 auto;">' + s.icon + '</div>' +
+                '<div class="name">' + escapeHtml(s.name) + '</div>';
+            grid.appendChild(card);
+        });
+    }
+
+    // Transcript
+    const finalLogs = state.questionLog.filter(q => q.roomId === 'final');
+    const trEl = document.getElementById('final-q-transcript');
+    const trList = document.getElementById('final-q-transcript-list');
+    if (trEl) trEl.style.display = finalLogs.length > 0 ? '' : 'none';
+    if (trList) {
+        trList.innerHTML = '';
+        finalLogs.forEach(q => {
+            const suspect = SCENARIO.suspects.find(s => s.id === q.suspectId);
+            const block = document.createElement('div');
+            block.className = 'qa-block';
+            block.innerHTML =
+                '<div class="asker">Asked by ' + escapeHtml(q.askerName) + ' to ' + escapeHtml(suspect ? suspect.name : q.suspectId) + '</div>' +
+                '<div class="q">' + escapeHtml(q.q) + '</div>' +
+                '<div class="a">' + escapeHtml(q.a) + '</div>';
+            trList.appendChild(block);
+        });
+    }
+
+    // Player strip
+    const strip = document.getElementById('final-q-player-strip');
+    if (strip) {
+        strip.innerHTML = '';
+        state.players.forEach(p => {
+            const chip = document.createElement('div');
+            chip.className = 'player-chip';
+            if (p.ready) chip.classList.add('ready');
+            const hasAsked = !!state.finalAsked[p.id];
+            chip.innerHTML =
+                '<span class="player-dot" style="background:' + p.color + '"></span>' +
+                '<span>' + escapeHtml(p.name) + '</span>' +
+                '<span class="ready-dot" title="ready"></span>' +
+                (hasAsked ? '<span style="color:var(--text-secondary); font-size:0.75rem;">done</span>' : '');
+            strip.appendChild(chip);
+        });
+    }
+
+    // Phone actions
+    const phoneActions = document.getElementById('final-q-phone-actions');
+    if (phoneActions && !isHost) {
+        if (!me) { phoneActions.innerHTML = ''; return; }
+        phoneActions.innerHTML = buildFinalQuestioningHtml(me, false);
+    } else if (phoneActions) {
+        phoneActions.innerHTML = '';
+    }
+
+    // Host-as-player controls
+    const hostPanel = document.getElementById('final-q-host-controls');
+    const hostActions = document.getElementById('final-q-host-actions');
+    if (hostPanel && hostActions && isHost && hostIsPlayer && me) {
+        hostPanel.style.display = '';
+        hostActions.innerHTML = buildFinalQuestioningHtml(me, true);
+    } else if (hostPanel) {
+        hostPanel.style.display = 'none';
+    }
+}
+
+function buildFinalQuestioningHtml(me, forHost) {
+    let html = '';
+    const hasAsked = !!state.finalAsked[me.id];
+
+    if (hasAsked) {
+        html += '<div class="panel"><div class="status-line">You have asked your final question.</div></div>';
+    } else {
+        // Suspect selector
+        const selectedSuspectId = state.finalSelectedSuspect[me.id];
+        html += '<div class="panel"><h3>Select a Suspect</h3><div class="choice-grid">';
+        SCENARIO.suspects.forEach(s => {
+            const selected = selectedSuspectId === s.id;
+            const selectFn = forHost ? 'hostPlayerSelectFinalSuspect' : 'selectFinalSuspect';
+            html += '<button class="choice-btn' + (selected ? ' selected' : '') + '" onclick="' + selectFn + '(\'' + s.id + '\')">' +
+                '<span class="icon">' + s.icon + '</span>' + escapeHtml(s.name) + '</button>';
+        });
+        html += '</div></div>';
+
+        // Question menu if suspect selected
+        if (selectedSuspectId) {
+            const suspect = SCENARIO.suspects.find(s => s.id === selectedSuspectId);
+            if (suspect) {
+                const pool = getAvailableQuestions(suspect.id);
+                const askFn = forHost ? 'hostPlayerAskFinalQuestion' : 'askFinalQuestion';
+                const skipFn = forHost ? 'hostPlayerSkipQuestion' : 'skipQuestion';
+                html += '<div class="panel"><h3>Ask ' + escapeHtml(suspect.name) + '</h3>';
+                html += '<div class="question-menu">';
+                pool.forEach((qa, idx) => {
+                    html += '<button class="btn secondary" onclick="' + askFn + '(' + idx + ')">' + escapeHtml(qa.q) + '</button>';
+                });
+                html += '<button class="btn small" onclick="' + skipFn + '()">Skip question</button>';
+                html += '</div></div>';
+            }
+        }
+    }
+
+    // Ready button
+    const readyFn = forHost ? 'hostPlayerFinalReady' : 'finalReady';
+    html += '<button class="btn ' + (me.ready ? 'success' : '') + '" onclick="' + readyFn + '()">' +
+        (me.ready ? 'Ready for Accusation' : 'Ready for Accusation') + '</button>';
+
+    return html;
+}
+
+// Guest final questioning actions
+function selectFinalSuspect(suspectId) {
+    if (!hostConn || !hostConn.open) return;
+    hostConn.send({ type: 'select_final_suspect', suspectId });
+}
+
+function askFinalQuestion(idx) {
+    if (!hostConn || !hostConn.open) return;
+    const me = getMyPlayer();
+    if (!me) return;
+    const suspectId = state.finalSelectedSuspect[me.id];
+    hostConn.send({ type: 'ask_question', questionIndex: idx, suspectId });
+}
+
+function finalReady() {
+    if (!hostConn || !hostConn.open) return;
+    hostConn.send({ type: 'toggle_ready' });
+}
+
+// Host-as-player final questioning actions
+function hostPlayerSelectFinalSuspect(suspectId) {
+    if (!isHost || !hostIsPlayer) return;
+    state.finalSelectedSuspect[myPeerId] = suspectId;
+    broadcastState();
+    renderAll();
+}
+
+function hostPlayerAskFinalQuestion(idx) {
+    // Reuse hostPlayerAskQuestion — it now handles final_questioning phase
+    hostPlayerAskQuestion(idx);
+}
+
+function hostPlayerFinalReady() {
+    if (!isHost || !hostIsPlayer) return;
+    const player = state.players.find(p => p.id === myPeerId);
+    if (!player) return;
+    player.ready = !player.ready;
+    broadcastState();
+    renderAll();
+    checkFinalQuestioningReady();
+}
+
+function checkFinalQuestioningReady() {
+    if (!isHost) return;
+    if (state.phase !== 'final_questioning') return;
+    const alive = state.players.filter(p => !p.disconnected);
+    if (alive.length === 0) return;
+    if (alive.every(p => p.ready)) {
+        state.finalQuestioningDone = true;
+        startAccusation();
+    }
+}
+
+// Also handle toggle_ready in final_questioning for guests
+// (We need to update the toggle_ready handler in handleGuestMessage)
 
 // ============================================================
 // Boot
