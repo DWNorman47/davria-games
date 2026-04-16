@@ -278,6 +278,13 @@
             color: #fff;
         }
 
+        /* Generic selected state for toggle-button rows (role pickers, etc.) */
+        .btn.selected {
+            background: var(--accent);
+            border-color: var(--accent);
+            color: #fff;
+        }
+
         /* Player count selector */
         .player-count-bar {
             display: flex;
@@ -610,6 +617,145 @@
                 max-width: 500px;
             }
         }
+        /* Cast / Viewer shared-display view */
+        body.cast-view .game-wrapper {
+            max-width: 100%;
+            flex-direction: row-reverse;
+            align-items: flex-start;
+            padding: 0.5rem 1rem 1rem;
+            gap: 1.25rem;
+        }
+        body.cast-view canvas {
+            width: 820px;
+            height: 780px;
+            max-width: 70vw;
+            max-height: 82vh;
+        }
+        body.cast-view .panel {
+            width: 340px;
+            max-height: 95vh;
+        }
+        body.cast-view .hide-in-cast,
+        body.cast-view .mode-bar {
+            display: none !important;
+        }
+        body.cast-view .cast-only {
+            display: block;
+        }
+        body:not(.cast-view) .cast-only {
+            display: none;
+        }
+        .cast-room-banner {
+            background: linear-gradient(135deg, rgba(40, 60, 90, 0.9), rgba(60, 90, 130, 0.9));
+            border: 1px solid var(--accent, #5dade2);
+            border-radius: 10px;
+            padding: 0.6rem 0.8rem;
+            text-align: center;
+            margin-bottom: 0.5rem;
+        }
+        .cast-room-banner .label {
+            font-size: 0.75rem;
+            text-transform: uppercase;
+            letter-spacing: 2px;
+            color: var(--text-secondary, #aaa);
+        }
+        .cast-room-banner .code {
+            font-family: monospace;
+            font-size: 1.8rem;
+            letter-spacing: 5px;
+            color: #f1c40f;
+            font-weight: 700;
+        }
+        .cast-turn-indicator {
+            border-radius: 10px;
+            padding: 0.7rem 0.5rem;
+            text-align: center;
+            margin-bottom: 0.5rem;
+            background: var(--bg-card, #2a2a3e);
+            border: 2px solid var(--border, #444);
+        }
+        .cast-turn-indicator .label {
+            font-size: 0.75rem;
+            text-transform: uppercase;
+            letter-spacing: 2px;
+            color: var(--text-secondary, #aaa);
+        }
+        .cast-turn-indicator .name {
+            font-size: 1.9rem;
+            font-weight: 800;
+            line-height: 1.1;
+            margin-top: 0.15rem;
+        }
+        .cast-turn-indicator .phase {
+            font-size: 0.85rem;
+            color: var(--text-secondary, #aaa);
+            margin-top: 0.25rem;
+        }
+        .cast-players-list {
+            display: flex;
+            flex-direction: column;
+            gap: 0.35rem;
+        }
+        .cast-player-row {
+            border: 1px solid var(--border, #444);
+            border-radius: 8px;
+            padding: 0.45rem 0.55rem;
+            background: var(--bg-card, #2a2a3e);
+            display: flex;
+            flex-direction: column;
+            gap: 0.2rem;
+        }
+        .cast-player-row.active {
+            border-color: #f1c40f;
+            background: rgba(241, 196, 15, 0.08);
+        }
+        .cast-player-row .top {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            gap: 0.5rem;
+        }
+        .cast-player-row .name {
+            font-weight: 700;
+            font-size: 0.95rem;
+        }
+        .cast-player-row .vp {
+            font-weight: 700;
+        }
+        .cast-player-row .stats {
+            font-size: 0.75rem;
+            color: var(--text-secondary, #aaa);
+            display: flex;
+            gap: 0.75rem;
+            flex-wrap: wrap;
+        }
+        .cast-player-row .badges {
+            font-size: 0.7rem;
+            color: #f1c40f;
+        }
+        .cast-player-row.disconnected .name::after {
+            content: " (disconnected)";
+            font-size: 0.7rem;
+            color: #e74c3c;
+            font-weight: 400;
+        }
+
+        /* Remote player view - ensure board scales reasonably on phones */
+        body.remote-player-view canvas {
+            max-width: 100%;
+            height: auto;
+        }
+        @media (max-width: 720px) {
+            body.remote-player-view .game-wrapper {
+                flex-direction: column;
+                align-items: center;
+            }
+            body.remote-player-view .panel {
+                width: 100%;
+                max-width: 500px;
+            }
+        }
+
         /* Notification toasts */
         .notification-container {
             position: fixed;
@@ -702,6 +848,21 @@
                 <button class="btn" id="save-btn" onclick="saveGame()">Save</button>
                 <button class="btn" id="load-btn" onclick="loadGame()" disabled>Load</button>
             </div>
+            <button class="btn hide-in-cast" id="replace-with-ai-btn" onclick="replaceCurrentPlayerWithAI()" style="display:none;font-size:0.8rem">Replace Current Player with AI</button>
+
+            <div class="cast-only cast-room-banner" id="cast-room-banner" style="display:none">
+                <div class="label">Room Code</div>
+                <div class="code" id="cast-room-code">------</div>
+            </div>
+            <div class="cast-only cast-turn-indicator" id="cast-turn-indicator" style="display:none">
+                <div class="label">Now playing</div>
+                <div class="name" id="cast-turn-name">Player 1</div>
+                <div class="phase" id="cast-turn-phase">Setup: Place a settlement</div>
+            </div>
+            <div class="cast-only" id="cast-players-section" style="display:none">
+                <h3>Players</h3>
+                <div class="cast-players-list" id="cast-players-list"></div>
+            </div>
 
             <div class="turn-info">
                 <h2 id="turn-label">Your Turn</h2>
@@ -713,15 +874,15 @@
                     <div class="die" id="die1">?</div>
                     <div class="die" id="die2">?</div>
                 </div>
-                <button class="btn primary" id="roll-btn" disabled>Roll Dice</button>
+                <button class="btn primary hide-in-cast" id="roll-btn" disabled>Roll Dice</button>
             </div>
 
-            <div>
+            <div class="hide-in-cast">
                 <h3 id="res-header">Your Resources</h3>
                 <div id="resources"></div>
             </div>
 
-            <div>
+            <div class="hide-in-cast">
                 <h3>Build</h3>
                 <div class="build-grid">
                     <button class="btn" id="build-road" disabled>Road <span class="cost">(1 Wood, 1 Brick)</span></button>
@@ -732,12 +893,12 @@
                 </div>
             </div>
 
-            <div id="dev-cards-wrapper" style="display:none">
+            <div id="dev-cards-wrapper" class="hide-in-cast" style="display:none">
                 <h3>Dev Cards</h3>
                 <div class="dev-cards-section" id="dev-cards-list"></div>
             </div>
 
-            <div>
+            <div class="hide-in-cast">
                 <h3>Trade</h3>
                 <div class="trade-row">
                     <select id="trade-give"></select>
@@ -750,12 +911,12 @@
                 <button class="btn" id="player-trade-btn" disabled style="margin-top:0.35rem">Propose Trade</button>
             </div>
 
-            <div style="display:flex;gap:0.5rem">
+            <div class="hide-in-cast" style="display:flex;gap:0.5rem">
                 <button class="btn" id="undo-turn-btn" disabled style="flex:1">Undo Build</button>
                 <button class="btn" id="end-turn-btn" disabled style="flex:1">End Turn</button>
             </div>
 
-            <div>
+            <div class="hide-in-cast">
                 <h3>Victory Points</h3>
                 <div id="score-rows"></div>
                 <div class="bonus-row" id="longest-road-row">
@@ -846,6 +1007,19 @@
         </div>
     </div>
 
+    <!-- Replace-With-AI Vote Modal -->
+    <div class="modal-overlay" id="vote-modal">
+        <div class="modal">
+            <h3 id="vote-title">Player Dropped</h3>
+            <div class="modal-info" id="vote-message">A player has disconnected.</div>
+            <div class="modal-info" id="vote-tally" style="font-size:0.8rem;color:var(--text-secondary)"></div>
+            <div style="display:flex;gap:0.5rem">
+                <button class="btn" id="vote-no">No</button>
+                <button class="btn primary" id="vote-yes">Yes</button>
+            </div>
+        </div>
+    </div>
+
     <!-- Online Multiplayer Modal -->
     <div class="modal-overlay" id="online-modal">
         <div class="modal">
@@ -866,17 +1040,48 @@
                         </select>
                     </label>
                 </div>
+                <div class="online-section">
+                    <div style="font-size:0.85rem;color:var(--text-secondary);margin-bottom:0.3rem">Your role:</div>
+                    <div style="display:flex;gap:0.35rem">
+                        <button class="btn selected" id="host-role-player" data-hostrole="player" style="flex:1">Host as Player</button>
+                        <button class="btn" id="host-role-cast" data-hostrole="cast" style="flex:1">Cast Mode (display only)</button>
+                    </div>
+                    <div style="font-size:0.75rem;color:var(--text-secondary);margin-top:0.25rem" id="host-role-desc">You play as Player 1. Other devices join as remote players.</div>
+                </div>
+                <div class="online-section">
+                    <div style="font-size:0.85rem;color:var(--text-secondary);margin-bottom:0.3rem">Room code:</div>
+                    <div style="display:flex;gap:0.35rem;align-items:center">
+                        <input type="text" id="custom-room-code" placeholder="Auto-generate" maxlength="12" style="flex:1;padding:0.45rem;background:var(--bg-card);border:1px solid var(--border);border-radius:6px;color:var(--text-primary);font-size:0.9rem;text-transform:uppercase;letter-spacing:1px">
+                    </div>
+                    <div style="font-size:0.75rem;color:var(--text-secondary);margin-top:0.25rem">Leave blank for a random code, or enter your own (e.g. <code>LIVINGROOM</code>) for a persistent TV bookmark.</div>
+                </div>
                 <button class="btn primary" id="create-game-btn" style="margin-top:0.5rem">Create Game</button>
             </div>
             <div class="online-tab-content" id="tab-content-join">
                 <div id="online-join-section" class="online-section">
                     <input type="text" id="room-code-input" placeholder="Enter room code" maxlength="6">
+                    <div style="font-size:0.85rem;color:var(--text-secondary);margin:0.5rem 0 0.3rem">Join as:</div>
+                    <div style="display:flex;gap:0.35rem;margin-bottom:0.5rem;flex-wrap:wrap">
+                        <button class="btn selected" id="join-role-player" data-joinrole="player" style="flex:1;min-width:30%">Play Remotely</button>
+                        <button class="btn" id="join-role-both" data-joinrole="both" style="flex:1;min-width:30%">Both</button>
+                        <button class="btn" id="join-role-viewer" data-joinrole="viewer" style="flex:1;min-width:30%">Show Board</button>
+                    </div>
+                    <div style="font-size:0.75rem;color:var(--text-secondary);margin-bottom:0.5rem;line-height:1.4">
+                        <b>Play Remotely</b>: phone-style, private panel only (pair with a TV casting the board).<br>
+                        <b>Both</b>: full online experience (board + private panel).<br>
+                        <b>Show Board</b>: viewer only, no player slot.
+                    </div>
                     <button class="btn" id="join-connect-btn">Connect</button>
                 </div>
             </div>
             <div id="online-lobby" style="display:none" class="online-section">
                 <div class="room-code-big" id="room-code-display"></div>
+                <div id="cast-join-url" style="display:none;font-size:0.75rem;color:var(--text-secondary);margin-top:0.5rem;padding:0.5rem;background:var(--bg-card);border-radius:6px;word-break:break-all">
+                    <div style="margin-bottom:0.25rem;font-weight:600;color:var(--text-primary)">📺 Cast to TV:</div>
+                    <div id="cast-join-url-value"></div>
+                </div>
                 <div id="lobby-players"></div>
+                <div id="lobby-viewers" style="font-size:0.85rem;color:var(--text-secondary);margin-top:0.35rem"></div>
                 <button class="btn primary" id="start-online-btn" disabled style="margin-top:0.5rem">Start Game</button>
             </div>
             <div id="online-status" style="margin-top:0.5rem;font-size:0.85rem;color:var(--text-secondary)"></div>
@@ -987,10 +1192,21 @@
     let onlineMode = false;
     let isHost = false;
     let peer = null;
-    let connections = []; // host: [{conn, playerIndex}], guest: [{conn, playerIndex:-1}]
+    // host: [{conn, playerIndex, role}], guest: [{conn, playerIndex, role}]
+    // role is one of 'player' | 'viewer'; for viewers playerIndex is -1
+    let connections = [];
     let localPlayerIndex = 0;
     let roomCode = '';
-    let lobbyPlayers = []; // names in lobby
+    let lobbyPlayers = []; // names in lobby (players only)
+    let lobbyViewerCount = 0; // viewers in lobby (host-tracked)
+
+    // Cast mode role tracking
+    // 'host-player' | 'host-cast' | 'player' | 'viewer'
+    let localRole = 'host-player';
+    let hostIsPlayer = true; // host occupies player slot 0 in normal mode
+    // Selected role during the Create/Join pre-connect UI
+    let pendingHostRole = 'player'; // 'player' or 'cast'
+    let pendingJoinRole = 'player'; // 'player' or 'viewer'
 
     // =================================================================
     // BOARD GENERATION
@@ -1207,7 +1423,8 @@
             playedKnights: 0,
             devCardBoughtThisTurn: false,
             devCardPlayedThisTurn: false,
-            disconnected: false
+            disconnected: false,
+            isBot: false
         };
     }
 
@@ -1236,7 +1453,8 @@
         discardQueue: [],
         roadBuildingRemaining: 0,
         previousPhase: 'play',
-        tradeTargetPlayer: 1
+        tradeTargetPlayer: 1,
+        pendingVote: null // { type: 'replace_with_ai', targetPlayer, votes: {pIdx: 'yes'|'no'}, initiator }
     };
 
     // Snake draft: for N players, order is 0,1,...,N-1,N-1,...,1,0
@@ -1253,13 +1471,24 @@
     }
 
     function isAITurn() {
-        if (!aiEnabled) return false;
-        if (state.phase === 'setup') return setupPlayer() === AI_PLAYER;
-        return state.currentPlayer === AI_PLAYER;
+        // In online mode, only the host runs AI logic
+        if (onlineMode && !isHost) return false;
+        if (state.phase === 'setup') {
+            return state.players[setupPlayer()]?.isBot === true;
+        }
+        return state.players[state.currentPlayer]?.isBot === true;
+    }
+
+    // Returns true if any player slot is currently bot-controlled
+    function anyBotActive() {
+        return state.players.some(p => p && p.isBot);
     }
 
     function isMyTurn() {
         if (onlineMode) {
+            // Cast host and viewers are never a "player" — never their turn
+            if (localRole === 'host-cast' || localRole === 'viewer') return false;
+            if (localPlayerIndex < 0) return false;
             if (state.phase === 'setup') return setupPlayer() === localPlayerIndex;
             return state.currentPlayer === localPlayerIndex;
         }
@@ -1267,9 +1496,23 @@
     }
 
     function isHumanControlled() {
-        if (onlineMode) return isMyTurn();
-        if (aiEnabled) return state.currentPlayer === HUMAN_PLAYER;
-        return true;
+        if (onlineMode) {
+            // Cast host / viewers never control the UI
+            if (localRole === 'host-cast' || localRole === 'viewer') return false;
+            if (!isMyTurn()) return false;
+            // If AI has taken over my slot (I'm disconnected & reconnecting shouldn't happen,
+            // but if my slot got flipped to bot, the bot drives it)
+            if (localPlayerIndex >= 0 && state.players[localPlayerIndex]?.isBot) return false;
+            return true;
+        }
+        // Local / AI modes: human controls if current player is not a bot
+        const curP = state.phase === 'setup' ? setupPlayer() : state.currentPlayer;
+        return !state.players[curP]?.isBot;
+    }
+
+    // True when the local role is a shared display (cast host or viewer)
+    function isDisplayRole() {
+        return onlineMode && (localRole === 'host-cast' || localRole === 'viewer');
     }
 
     function nextPlayer(current) {
@@ -1555,8 +1798,15 @@
 
     function startDiscard() {
         const p = state.discardQueue[0];
-        if (aiEnabled && p === AI_PLAYER) {
-            aiDiscard(p);
+        if (state.players[p]?.isBot) {
+            state.phase = 'discard';
+            setTimeout(() => {
+                aiDiscard(p);
+                if (onlineMode && isHost) broadcastState();
+                updateUI();
+                drawBoard();
+                checkBotActions();
+            }, AI_DELAY);
         } else if (onlineMode && p !== localPlayerIndex && !isHost) {
             // Wait for host to handle
             state.phase = 'discard';
@@ -1684,8 +1934,14 @@
     function startRobberMove(player) {
         state.phase = 'robber';
         state.robberPhasePlayer = player;
-        if (aiEnabled && player === AI_PLAYER) {
-            setTimeout(() => aiMoveRobber(), AI_DELAY);
+        if (state.players[player]?.isBot) {
+            setTimeout(() => {
+                aiMoveRobber();
+                if (onlineMode && isHost) broadcastState();
+                updateUI();
+                drawBoard();
+                checkBotActions();
+            }, AI_DELAY);
         } else if (onlineMode && isHost && player !== localPlayerIndex) {
             sendToPlayer(player, { type: 'show_robber_move', player });
             broadcastState();
@@ -1719,7 +1975,7 @@
         } else {
             // Multiple targets - need to pick
             state.robberStealTargets = targets;
-            if (aiEnabled && player === AI_PLAYER) {
+            if (state.players[player]?.isBot) {
                 // AI picks the richest target
                 let best = targets[0], bestRes = totalResources(targets[0]);
                 for (const t of targets) {
@@ -1842,7 +2098,7 @@
 
         if (card === 'roadbuilding') {
             log(`${PLAYER_NAMES[player]} played Road Building.`);
-            if (aiEnabled && player === AI_PLAYER) {
+            if (state.players[player]?.isBot) {
                 aiPlayRoadBuilding(player);
             } else {
                 state.roadBuildingRemaining = 2;
@@ -1857,7 +2113,7 @@
 
         if (card === 'yearofplenty') {
             log(`${PLAYER_NAMES[player]} played Year of Plenty.`);
-            if (aiEnabled && player === AI_PLAYER) {
+            if (state.players[player]?.isBot) {
                 aiPlayYearOfPlenty(player);
             } else if (onlineMode && isHost && player !== localPlayerIndex) {
                 sendToPlayer(player, { type: 'show_yop_modal', player });
@@ -1869,7 +2125,7 @@
 
         if (card === 'monopoly') {
             log(`${PLAYER_NAMES[player]} played Monopoly.`);
-            if (aiEnabled && player === AI_PLAYER) {
+            if (state.players[player]?.isBot) {
                 aiPlayMonopoly(player);
             } else if (onlineMode && isHost && player !== localPlayerIndex) {
                 sendToPlayer(player, { type: 'show_monopoly_modal', player });
@@ -2025,7 +2281,7 @@
         const get = {};
         RESOURCES.forEach(r => { give[r] = 0; get[r] = 0; });
 
-        const showOpponentRes = !aiEnabled && !onlineMode;
+        const showOpponentRes = !onlineMode && !state.players[targetPlayer]?.isBot;
 
         function renderOffer() {
             const pRes = state.players[proposer].resources;
@@ -2114,12 +2370,12 @@
                 return;
             }
 
-            if (aiEnabled && targetPlayer === AI_PLAYER) {
-                const accepted = aiEvaluateTrade(give, get, proposer);
+            if (state.players[targetPlayer]?.isBot) {
+                const accepted = aiEvaluateTrade(give, get, proposer, targetPlayer);
                 if (accepted) {
                     executePlayerTrade(proposer, targetPlayer, give, get);
                 } else {
-                    log(`AI rejected the trade offer.`);
+                    log(`${PLAYER_NAMES[targetPlayer]} rejected the trade offer.`);
                 }
             } else if (onlineMode && isHost) {
                 // Send proposal to the target player
@@ -2189,8 +2445,9 @@
         drawBoard();
     }
 
-    function aiEvaluateTrade(humanGives, humanGets, humanPlayer) {
-        const ai = AI_PLAYER;
+    function aiEvaluateTrade(humanGives, humanGets, humanPlayer, aiPlayerIdx) {
+        const ai = (aiPlayerIdx !== undefined) ? aiPlayerIdx : state.players.findIndex(p => p.isBot);
+        if (ai < 0) return false;
         const target = aiGetBuildTarget(ai);
         const neededResources = target.missing || {};
 
@@ -2217,7 +2474,14 @@
         const target = aiGetBuildTarget(player);
         if (!target.missing) return Promise.resolve(false);
 
-        const opponent = HUMAN_PLAYER;
+        // Pick a human (non-bot, connected) opponent to propose to
+        let opponent = -1;
+        for (let p = 0; p < numPlayers; p++) {
+            if (p === player) continue;
+            if (!state.players[p]?.isBot && !state.players[p]?.disconnected) { opponent = p; break; }
+        }
+        if (opponent < 0) return Promise.resolve(false);
+
         const give = {};
         const get = {};
         RESOURCES.forEach(r => { give[r] = 0; get[r] = 0; });
@@ -2250,6 +2514,17 @@
         const canAffordTrade = RESOURCES.every(r => state.players[opponent].resources[r] >= get[r]);
         if (!canAffordTrade) return Promise.resolve(false);
 
+        // In online mode, forward the modal to the remote human (or skip if they're elsewhere)
+        if (onlineMode && isHost) {
+            if (opponent === localPlayerIndex) {
+                // show locally on host
+            } else {
+                sendToPlayer(opponent, { type: 'show_trade_proposal', proposer: player, give, get });
+                // Can't await response synchronously; just return false so AI moves on
+                return Promise.resolve(false);
+            }
+        }
+
         return new Promise(resolve => {
             const modal = document.getElementById('trade-response-modal');
             const titleEl = document.getElementById('trade-response-title');
@@ -2257,11 +2532,11 @@
             const acceptBtn = document.getElementById('trade-response-accept');
             const rejectBtn = document.getElementById('trade-response-reject');
 
-            titleEl.textContent = `AI offers a trade`;
+            titleEl.textContent = `${PLAYER_NAMES[player]} offers a trade`;
 
             const giveList = RESOURCES.filter(r => give[r] > 0).map(r => `${give[r]} ${r}`);
             const getList = RESOURCES.filter(r => get[r] > 0).map(r => `${get[r]} ${r}`);
-            summaryEl.innerHTML = `AI gives you: <span class="get">${giveList.join(', ')}</span><br>AI wants: <span class="give">${getList.join(', ')}</span>`;
+            summaryEl.innerHTML = `${PLAYER_NAMES[player]} gives you: <span class="get">${giveList.join(', ')}</span><br>${PLAYER_NAMES[player]} wants: <span class="give">${getList.join(', ')}</span>`;
 
             acceptBtn.onclick = () => {
                 modal.classList.remove('active');
@@ -2271,7 +2546,7 @@
 
             rejectBtn.onclick = () => {
                 modal.classList.remove('active');
-                log(`You rejected AI's trade offer.`);
+                log(`You rejected ${PLAYER_NAMES[player]}'s trade offer.`);
                 resolve(false);
             };
 
@@ -2492,11 +2767,15 @@
         return new Promise(resolve => setTimeout(resolve, ms));
     }
 
-    async function aiPlaySetup() {
-        if (state.phase !== 'setup' || !isAITurn()) return;
+    async function aiPlaySetup(playerIndex) {
+        // Default to current setup player if not provided (back-compat)
+        if (playerIndex === undefined) playerIndex = setupPlayer();
+        if (state.phase !== 'setup') return;
+        if (!state.players[playerIndex]?.isBot) return;
+        if (setupPlayer() !== playerIndex) return;
         state.aiThinking = true;
 
-        const player = AI_PLAYER;
+        const player = playerIndex;
 
         await aiDelay(AI_DELAY);
         const validSettlements = getValidSettlementVertices(player, true);
@@ -2515,6 +2794,7 @@
         }
         state.setupStep = 'road';
         state.currentPlayer = player;
+        if (onlineMode && isHost) broadcastState();
         updateUI();
         drawBoard();
 
@@ -2541,27 +2821,39 @@
         state.setupStep = 'settlement';
         state.lastSettlementVertex = -1;
         state.aiThinking = false;
+        if (onlineMode && isHost) broadcastState();
         updateUI();
         drawBoard();
 
         if (state.phase === 'setup' && isAITurn()) {
-            setTimeout(() => aiPlaySetup(), AI_DELAY);
+            setTimeout(() => aiPlaySetup(setupPlayer()), AI_DELAY);
+        } else if (state.phase !== 'setup') {
+            checkBotActions();
         }
     }
 
-    async function aiPlayTurn() {
-        if (state.currentPlayer !== AI_PLAYER || state.phase === 'gameover') return;
+    async function aiPlayTurn(playerIndex) {
+        // Default to current player if not provided (back-compat)
+        if (playerIndex === undefined) playerIndex = state.currentPlayer;
+        if (state.currentPlayer !== playerIndex || state.phase === 'gameover') return;
+        if (!state.players[playerIndex]?.isBot) return;
         state.aiThinking = true;
+
+        const player = playerIndex;
+        const pName = PLAYER_NAMES[player] || `Player ${player + 1}`;
 
         if (state.phase === 'roll') {
             await aiDelay(AI_DELAY);
             const total = rollDice();
             die1El.textContent = state.dice[0];
             die2El.textContent = state.dice[1];
-            log(`AI rolled ${total} (${state.dice[0]} + ${state.dice[1]}).`);
+            log(`${pName} rolled ${total} (${state.dice[0]} + ${state.dice[1]}).`);
+            if (onlineMode && isHost) {
+                broadcastToAll({ type: 'dice_result', d1: state.dice[0], d2: state.dice[1] });
+            }
 
             if (total === 7) {
-                handleSeven(AI_PLAYER);
+                handleSeven(player);
                 await new Promise(resolve => {
                     const check = setInterval(() => {
                         if (state.phase === 'play' || state.phase === 'gameover') {
@@ -2574,6 +2866,7 @@
                 distributeResources(total);
                 state.phase = 'play';
             }
+            if (onlineMode && isHost) broadcastState();
             updateUI();
             drawBoard();
         }
@@ -2581,15 +2874,15 @@
         if (state.phase !== 'play') { state.aiThinking = false; return; }
 
         await aiDelay(AI_DELAY / 2);
-        const knightCount = state.players[AI_PLAYER].devCards.filter(c => c === 'knight').length;
-        if (knightCount > 0 && !state.players[AI_PLAYER].devCardPlayedThisTurn) {
+        const knightCount = state.players[player].devCards.filter(c => c === 'knight').length;
+        if (knightCount > 0 && !state.players[player].devCardPlayedThisTurn) {
             const robberOnOurHex = hexes[robberHex]?.vertexIndices.some(vi =>
-                vertices[vi].building?.player === AI_PLAYER
+                vertices[vi].building?.player === player
             );
-            const wantArmy = state.players[AI_PLAYER].playedKnights >= 2 ||
-                             (state.largestArmyPlayer !== AI_PLAYER && state.players[AI_PLAYER].playedKnights + 1 >= 3);
+            const wantArmy = state.players[player].playedKnights >= 2 ||
+                             (state.largestArmyPlayer !== player && state.players[player].playedKnights + 1 >= 3);
             if (robberOnOurHex || wantArmy) {
-                playDevCard(AI_PLAYER, 'knight');
+                playDevCard(player, 'knight');
                 await new Promise(resolve => {
                     const check = setInterval(() => {
                         if (state.phase === 'play' || state.phase === 'gameover') {
@@ -2598,6 +2891,7 @@
                         }
                     }, 100);
                 });
+                if (onlineMode && isHost) broadcastState();
                 updateUI();
                 drawBoard();
             }
@@ -2610,103 +2904,121 @@
 
         while (actionsTaken < MAX_ACTIONS && state.phase === 'play') {
             await aiDelay(AI_DELAY);
-            const target = aiGetBuildTarget(AI_PLAYER);
+            const target = aiGetBuildTarget(player);
 
             if (target.action === 'city') {
-                const valid = getValidCityVertices(AI_PLAYER);
+                const valid = getValidCityVertices(player);
                 let bestVi = valid[0], bestScore = -Infinity;
                 for (const vi of valid) {
-                    const s = scoreVertex(vi, AI_PLAYER, false);
+                    const s = scoreVertex(vi, player, false);
                     if (s > bestScore) { bestScore = s; bestVi = vi; }
                 }
-                spend(AI_PLAYER, 'city');
-                placeCity(bestVi, AI_PLAYER);
-                if (checkWinner()) { updateUI(); drawBoard(); state.aiThinking = false; return; }
+                spend(player, 'city');
+                placeCity(bestVi, player);
+                if (checkWinner()) { if (onlineMode && isHost) broadcastState(); updateUI(); drawBoard(); state.aiThinking = false; return; }
+                if (onlineMode && isHost) broadcastState();
                 updateUI(); drawBoard();
                 actionsTaken++;
                 continue;
             }
 
             if (target.action === 'settlement') {
-                const valid = getValidSettlementVertices(AI_PLAYER, false);
+                const valid = getValidSettlementVertices(player, false);
                 let bestVi = valid[0], bestScore = -Infinity;
                 for (const vi of valid) {
-                    const s = scoreVertex(vi, AI_PLAYER, false);
+                    const s = scoreVertex(vi, player, false);
                     if (s > bestScore) { bestScore = s; bestVi = vi; }
                 }
-                spend(AI_PLAYER, 'settlement');
-                placeSettlement(bestVi, AI_PLAYER);
-                if (checkWinner()) { updateUI(); drawBoard(); state.aiThinking = false; return; }
+                spend(player, 'settlement');
+                placeSettlement(bestVi, player);
+                if (checkWinner()) { if (onlineMode && isHost) broadcastState(); updateUI(); drawBoard(); state.aiThinking = false; return; }
+                if (onlineMode && isHost) broadcastState();
                 updateUI(); drawBoard();
                 actionsTaken++;
                 continue;
             }
 
             if (target.action === 'devcard') {
-                buyDevCard(AI_PLAYER);
-                if (checkWinner()) { updateUI(); drawBoard(); state.aiThinking = false; return; }
+                buyDevCard(player);
+                if (checkWinner()) { if (onlineMode && isHost) broadcastState(); updateUI(); drawBoard(); state.aiThinking = false; return; }
+                if (onlineMode && isHost) broadcastState();
                 updateUI(); drawBoard();
                 actionsTaken++;
                 continue;
             }
 
             if (target.action === 'road') {
-                const valid = getValidRoadEdges(AI_PLAYER, false, -1);
+                const valid = getValidRoadEdges(player, false, -1);
                 let bestEi = valid[0], bestEdgeScore = -Infinity;
                 for (const ei of valid) {
-                    const s = scoreEdge(ei, AI_PLAYER);
+                    const s = scoreEdge(ei, player);
                     if (s > bestEdgeScore) { bestEdgeScore = s; bestEi = ei; }
                 }
-                spend(AI_PLAYER, 'road');
-                placeRoad(bestEi, AI_PLAYER);
+                spend(player, 'road');
+                placeRoad(bestEi, player);
+                if (onlineMode && isHost) broadcastState();
                 updateUI(); drawBoard();
                 actionsTaken++;
                 continue;
             }
 
             if (target.action === 'save_for_city' || target.action === 'save_for_settlement') {
-                if (await aiProposeTrade(AI_PLAYER)) {
+                // Only offer trade to human opponents (skip bots/disconnected)
+                if (canProposeTradeToHuman(player) && await aiProposeTrade(player)) {
+                    if (onlineMode && isHost) broadcastState();
                     updateUI(); drawBoard();
                     actionsTaken++;
                     continue;
                 }
-                if (aiTryTrade(AI_PLAYER, target.missing)) {
+                if (aiTryTrade(player, target.missing)) {
+                    if (onlineMode && isHost) broadcastState();
                     updateUI(); drawBoard();
                     actionsTaken++;
                     continue;
                 }
             }
 
-            if (canAfford(AI_PLAYER, 'road') && getValidRoadEdges(AI_PLAYER, false, -1).length > 0) {
-                const valid = getValidRoadEdges(AI_PLAYER, false, -1);
+            if (canAfford(player, 'road') && getValidRoadEdges(player, false, -1).length > 0) {
+                const valid = getValidRoadEdges(player, false, -1);
                 let bestEi = valid[0], bestEdgeScore = -Infinity;
                 for (const ei of valid) {
-                    const s = scoreEdge(ei, AI_PLAYER);
+                    const s = scoreEdge(ei, player);
                     if (s > bestEdgeScore) { bestEdgeScore = s; bestEi = ei; }
                 }
-                spend(AI_PLAYER, 'road');
-                placeRoad(bestEi, AI_PLAYER);
+                spend(player, 'road');
+                placeRoad(bestEi, player);
+                if (onlineMode && isHost) broadcastState();
                 updateUI(); drawBoard();
                 actionsTaken++;
                 break;
             }
 
-            if (!state.players[AI_PLAYER].devCardPlayedThisTurn) {
-                const cards = state.players[AI_PLAYER].devCards;
-                if (cards.includes('roadbuilding') && getValidRoadEdges(AI_PLAYER, false, -1).length > 0) {
-                    playDevCard(AI_PLAYER, 'roadbuilding');
+            if (!state.players[player].devCardPlayedThisTurn) {
+                const cards = state.players[player].devCards;
+                if (cards.includes('roadbuilding') && getValidRoadEdges(player, false, -1).length > 0) {
+                    playDevCard(player, 'roadbuilding');
+                    if (onlineMode && isHost) broadcastState();
                     updateUI(); drawBoard();
                     actionsTaken++;
                     continue;
                 }
                 if (cards.includes('yearofplenty')) {
-                    playDevCard(AI_PLAYER, 'yearofplenty');
+                    playDevCard(player, 'yearofplenty');
+                    if (onlineMode && isHost) broadcastState();
                     updateUI(); drawBoard();
                     actionsTaken++;
                     continue;
                 }
-                if (cards.includes('monopoly') && totalResources(HUMAN_PLAYER) >= 3) {
-                    playDevCard(AI_PLAYER, 'monopoly');
+                // Best-victim opponent for monopoly
+                let bestOpp = -1, bestOppRes = 0;
+                for (let p = 0; p < numPlayers; p++) {
+                    if (p === player) continue;
+                    const tr = totalResources(p);
+                    if (tr > bestOppRes) { bestOppRes = tr; bestOpp = p; }
+                }
+                if (cards.includes('monopoly') && bestOppRes >= 3) {
+                    playDevCard(player, 'monopoly');
+                    if (onlineMode && isHost) broadcastState();
                     updateUI(); drawBoard();
                     actionsTaken++;
                     continue;
@@ -2718,14 +3030,127 @@
 
         await aiDelay(AI_DELAY);
         state.buildMode = null;
-        state.currentPlayer = HUMAN_PLAYER;
+        state.players[player].devCardBoughtThisTurn = false;
+        state.players[player].devCardPlayedThisTurn = false;
+        state.currentPlayer = nextPlayer(player);
         state.phase = 'roll';
-        state.players[AI_PLAYER].devCardBoughtThisTurn = false;
-        state.players[AI_PLAYER].devCardPlayedThisTurn = false;
         state.aiThinking = false;
-        log(`--- Your turn ---`);
+        log(`--- ${PLAYER_NAMES[state.currentPlayer]}'s turn ---`);
+        if (onlineMode && isHost) broadcastState();
         updateUI();
         drawBoard();
+
+        // If next player is also a bot, keep things rolling
+        checkBotActions();
+    }
+
+    // Helper: true if there's at least one non-bot, non-disconnected opponent the AI could trade with
+    function canProposeTradeToHuman(player) {
+        for (let p = 0; p < numPlayers; p++) {
+            if (p === player) continue;
+            if (!state.players[p]?.isBot && !state.players[p]?.disconnected) return true;
+        }
+        return false;
+    }
+
+    // Kick off AI action for the current player slot (or setup player) if they are a bot.
+    // Safe to call after any state change.
+    function checkBotActions() {
+        if (onlineMode && !isHost) return; // only host drives bots
+        if (state.phase === 'gameover') return;
+        if (state.aiThinking) return;
+
+        if (state.phase === 'setup') {
+            const sp = setupPlayer();
+            if (state.players[sp]?.isBot) {
+                setTimeout(() => aiPlaySetup(sp), AI_DELAY);
+            }
+            return;
+        }
+
+        // Handle mid-action phases for a bot whose turn is interrupted
+        const cp = state.currentPlayer;
+        const curIsBot = state.players[cp]?.isBot;
+
+        // Discard queue: the player at front of queue must discard
+        if (state.phase === 'discard' && state.discardQueue.length > 0) {
+            const dp = state.discardQueue[0];
+            if (state.players[dp]?.isBot) {
+                setTimeout(() => {
+                    aiDiscard(dp);
+                    if (onlineMode && isHost) broadcastState();
+                    updateUI();
+                    drawBoard();
+                    checkBotActions();
+                }, AI_DELAY);
+                return;
+            }
+        }
+
+        // Robber move for a bot
+        if (state.phase === 'robber' && state.players[state.robberPhasePlayer]?.isBot) {
+            setTimeout(() => {
+                aiMoveRobber();
+                if (onlineMode && isHost) broadcastState();
+                updateUI();
+                drawBoard();
+                checkBotActions();
+            }, AI_DELAY);
+            return;
+        }
+
+        // Bot in Year of Plenty / Monopoly phase (took over mid-card)
+        if (state.phase === 'yearofplenty' && curIsBot) {
+            setTimeout(() => {
+                aiPlayYearOfPlenty(cp);
+                state.phase = state.previousPhase || 'play';
+                if (onlineMode && isHost) broadcastState();
+                updateUI();
+                drawBoard();
+                checkBotActions();
+            }, AI_DELAY);
+            return;
+        }
+        if (state.phase === 'monopoly' && curIsBot) {
+            setTimeout(() => {
+                aiPlayMonopoly(cp);
+                state.phase = state.previousPhase || 'play';
+                if (onlineMode && isHost) broadcastState();
+                updateUI();
+                drawBoard();
+                checkBotActions();
+            }, AI_DELAY);
+            return;
+        }
+
+        if (state.phase === 'roadbuilding' && curIsBot) {
+            setTimeout(() => {
+                // Play out remaining road-building placements
+                for (let i = 0; i < state.roadBuildingRemaining; i++) {
+                    const valid = getValidRoadEdges(cp, false, -1);
+                    if (valid.length === 0) break;
+                    let bestEi = valid[0], bestScore = -Infinity;
+                    for (const ei of valid) {
+                        const s = scoreEdge(ei, cp);
+                        if (s > bestScore) { bestScore = s; bestEi = ei; }
+                    }
+                    placeRoad(bestEi, cp);
+                }
+                state.roadBuildingRemaining = 0;
+                state.phase = state.previousPhase || 'play';
+                state.buildMode = null;
+                if (onlineMode && isHost) broadcastState();
+                updateUI();
+                drawBoard();
+                checkBotActions();
+            }, AI_DELAY);
+            return;
+        }
+
+        // Normal play/roll: kick off bot turn
+        if ((state.phase === 'roll' || state.phase === 'play') && curIsBot) {
+            setTimeout(() => aiPlayTurn(cp), AI_DELAY);
+        }
     }
 
     // =================================================================
@@ -3015,7 +3440,7 @@
 
     canvas.addEventListener('click', (e) => {
         if (state.aiThinking) return;
-        if (aiEnabled && isAITurn()) return;
+        if (isAITurn()) return;
         if (onlineMode && !isMyTurn() && state.phase !== 'robber') return;
 
         const pos = getCanvasPos(e);
@@ -3085,7 +3510,7 @@
 
     function handleSetupClick(pos) {
         const player = setupPlayer();
-        if (aiEnabled && player === AI_PLAYER) return;
+        if (state.players[player]?.isBot) return;
         if (onlineMode && player !== localPlayerIndex) return;
 
         if (state.setupStep === 'settlement') {
@@ -3141,15 +3566,17 @@
             updateUI();
             drawBoard();
 
-            if (state.phase === 'setup' && aiEnabled && isAITurn()) {
-                setTimeout(() => aiPlaySetup(), AI_DELAY);
+            if (state.phase === 'setup' && isAITurn()) {
+                setTimeout(() => aiPlaySetup(setupPlayer()), AI_DELAY);
+            } else if (state.phase !== 'setup') {
+                checkBotActions();
             }
         }
     }
 
     function handleBuildClick(pos) {
         const player = state.currentPlayer;
-        if (aiEnabled && player === AI_PLAYER) return;
+        if (state.players[player]?.isBot) return;
         if (onlineMode && player !== localPlayerIndex) return;
 
         if (state.buildMode === 'settlement') {
@@ -3324,7 +3751,7 @@
         if (state.phase !== 'play') return;
         if (!isHumanControlled()) return;
         if (buildUndoStack.length === 0) return;
-        if (aiEnabled && state.currentPlayer !== HUMAN_PLAYER) return;
+        if (state.players[state.currentPlayer]?.isBot) return;
 
         if (onlineMode && !isHost) {
             sendToHost({ type: 'undo_build' });
@@ -3350,9 +3777,7 @@
         updateUI();
         drawBoard();
 
-        if (aiEnabled && state.currentPlayer === AI_PLAYER) {
-            setTimeout(() => aiPlayTurn(), AI_DELAY);
-        }
+        checkBotActions();
     }
 
     function undoLastBuild() {
@@ -3493,22 +3918,119 @@
         return `p${p+1}-color`;
     }
 
+    // Apply CSS classes / show-hide cast elements based on current role
+    function applyRoleView() {
+        const body = document.body;
+        const isCast = isDisplayRole();
+        body.classList.toggle('cast-view', isCast);
+        body.classList.toggle('remote-player-view', onlineMode && localRole === 'player');
+
+        // Toggle cast-only elements
+        const banner = document.getElementById('cast-room-banner');
+        const turnInd = document.getElementById('cast-turn-indicator');
+        const playersSec = document.getElementById('cast-players-section');
+        if (banner) banner.style.display = isCast ? '' : 'none';
+        if (turnInd) turnInd.style.display = isCast ? '' : 'none';
+        if (playersSec) playersSec.style.display = isCast ? '' : 'none';
+
+        // Hide the old turn-info header in cast mode (we have cast-turn-indicator instead)
+        const turnInfo = document.querySelector('.turn-info');
+        if (turnInfo) turnInfo.style.display = isCast ? 'none' : '';
+    }
+
+    // Build the public player list (used by cast/viewer)
+    function renderCastPlayerList() {
+        const listEl = document.getElementById('cast-players-list');
+        if (!listEl) return;
+        listEl.innerHTML = '';
+        const turnPlayer = state.phase === 'setup' ? setupPlayer() : state.currentPlayer;
+        for (let i = 0; i < numPlayers; i++) {
+            const p = state.players[i];
+            if (!p) continue;
+            const row = document.createElement('div');
+            row.className = 'cast-player-row';
+            if (i === turnPlayer) row.classList.add('active');
+            if (p.disconnected) row.classList.add('disconnected');
+            const vp = getVP(i);
+            const resCount = totalResources(i);
+            const devCount = p.devCards.length;
+            const badges = [];
+            if (state.longestRoadPlayer === i) badges.push('Longest Road');
+            if (state.largestArmyPlayer === i) badges.push(`Largest Army (${p.playedKnights})`);
+            const statusBadge = p.isBot ? ' <span title="AI-controlled">[AI]</span>'
+                              : p.disconnected ? ' <span title="Disconnected">[!]</span>'
+                              : '';
+            row.innerHTML = `
+                <div class="top">
+                    <span class="name" style="color:${PLAYER_COLORS[i]}">${PLAYER_NAMES[i]}${statusBadge}</span>
+                    <span class="vp" style="color:${PLAYER_COLORS[i]}">${vp} VP</span>
+                </div>
+                <div class="stats">
+                    <span>Resources: <strong>${resCount}</strong></span>
+                    <span>Dev cards: <strong>${devCount}</strong></span>
+                    <span>Knights: <strong>${p.playedKnights}</strong></span>
+                </div>
+                ${badges.length ? `<div class="badges">${badges.join(' &middot; ')}</div>` : ''}
+            `;
+            listEl.appendChild(row);
+        }
+    }
+
     function updateUI() {
         const p = state.currentPlayer;
         const pClass = getPlayerColorClass(p);
-        const isAI = aiEnabled && p === AI_PLAYER;
+        const isAI = state.players[p]?.isBot === true;
+        const castRole = isDisplayRole();
+
+        // Update vote modal display
+        updateVoteModalDisplay();
+
+        // Update cast-view DOM (if applicable)
+        if (castRole) {
+            const castCode = document.getElementById('cast-room-code');
+            if (castCode) castCode.textContent = roomCode || '------';
+            const turnP = state.phase === 'setup' ? setupPlayer() : state.currentPlayer;
+            const turnName = document.getElementById('cast-turn-name');
+            if (turnName) {
+                turnName.textContent = PLAYER_NAMES[turnP] || `Player ${turnP + 1}`;
+                turnName.style.color = PLAYER_COLORS[turnP] || '#eee';
+            }
+            const turnPhase = document.getElementById('cast-turn-phase');
+            if (turnPhase) {
+                let phaseStr = '';
+                if (state.phase === 'setup') phaseStr = `Setup: placing a ${state.setupStep}`;
+                else if (state.phase === 'roll') phaseStr = 'Rolling dice...';
+                else if (state.phase === 'play') phaseStr = 'Taking their turn';
+                else if (state.phase === 'robber') phaseStr = 'Moving the robber';
+                else if (state.phase === 'discard') phaseStr = 'Discarding resources';
+                else if (state.phase === 'roadbuilding') phaseStr = `Placing roads (${state.roadBuildingRemaining} left)`;
+                else if (state.phase === 'yearofplenty') phaseStr = 'Picking Year of Plenty resources';
+                else if (state.phase === 'monopoly') phaseStr = 'Choosing Monopoly resource';
+                else if (state.phase === 'gameover') phaseStr = 'Game over';
+                turnPhase.textContent = phaseStr;
+            }
+            renderCastPlayerList();
+        }
 
         // Determine which player's resources to display
         let displayPlayerIdx;
         if (onlineMode) {
-            displayPlayerIdx = localPlayerIndex;
+            // For cast host / viewer there's no local player — fall back to a sentinel
+            if (castRole) {
+                displayPlayerIdx = -1;
+            } else {
+                displayPlayerIdx = localPlayerIndex;
+            }
         } else if (aiEnabled) {
             displayPlayerIdx = HUMAN_PLAYER;
         } else {
             displayPlayerIdx = p;
         }
 
-        const displayPlayer = state.players[displayPlayerIdx];
+        // In cast/viewer there is no "display player" — guard all private-info reads.
+        const displayPlayer = (displayPlayerIdx >= 0 && state.players[displayPlayerIdx])
+            ? state.players[displayPlayerIdx]
+            : { resources: { wood:0, brick:0, wheat:0, sheep:0, ore:0 }, devCards: [], playedKnights: 0, devCardBoughtThisTurn: false, devCardPlayedThisTurn: false, disconnected: false, isBot: false };
 
         document.getElementById('turn-label').innerHTML =
             `<span style="color:${PLAYER_COLORS[p]}">${PLAYER_NAMES[p]}</span>'s Turn`;
@@ -3576,16 +4098,17 @@
         rollBtn.disabled = !canRoll;
         endTurnBtn.disabled = !canAct;
 
-        // Undo button: enabled only in play phase, human's turn, builds on stack, not AI turn, not setup
+        // Undo button: enabled only in play phase, human's turn, builds on stack, not bot turn, not setup
         const canUndo = canAct && buildUndoStack.length > 0
-            && !(aiEnabled && state.currentPlayer !== HUMAN_PLAYER)
+            && !state.players[state.currentPlayer]?.isBot
             && state.phase !== 'setup' && state.phase !== 'gameover';
         undoTurnBtn.disabled = !canUndo;
 
-        buildRoadBtn.disabled = !canAct || !canAfford(displayPlayerIdx, 'road') || getValidRoadEdges(displayPlayerIdx, false, -1).length === 0;
-        buildSettlementBtn.disabled = !canAct || !canAfford(displayPlayerIdx, 'settlement') || getValidSettlementVertices(displayPlayerIdx, false).length === 0;
-        buildCityBtn.disabled = !canAct || !canAfford(displayPlayerIdx, 'city') || getValidCityVertices(displayPlayerIdx).length === 0;
-        buyDevCardBtn.disabled = !canAct || !canAfford(displayPlayerIdx, 'devcard') || devCardDeck.length === 0;
+        const hasDisplayPlayer = displayPlayerIdx >= 0 && state.players[displayPlayerIdx];
+        buildRoadBtn.disabled = !canAct || !hasDisplayPlayer || !canAfford(displayPlayerIdx, 'road') || getValidRoadEdges(displayPlayerIdx, false, -1).length === 0;
+        buildSettlementBtn.disabled = !canAct || !hasDisplayPlayer || !canAfford(displayPlayerIdx, 'settlement') || getValidSettlementVertices(displayPlayerIdx, false).length === 0;
+        buildCityBtn.disabled = !canAct || !hasDisplayPlayer || !canAfford(displayPlayerIdx, 'city') || getValidCityVertices(displayPlayerIdx).length === 0;
+        buyDevCardBtn.disabled = !canAct || !hasDisplayPlayer || !canAfford(displayPlayerIdx, 'devcard') || devCardDeck.length === 0;
 
         buildRoadBtn.classList.toggle('active', state.buildMode === 'road');
         buildSettlementBtn.classList.toggle('active', state.buildMode === 'settlement');
@@ -3594,8 +4117,8 @@
 
         // Trade section - update ratios
         const giveRes = tradeGive.value;
-        const ratio = getTradeRatio(displayPlayerIdx, giveRes);
-        const canDoTrade = canAct && tradeGive.value !== tradeGet.value &&
+        const ratio = hasDisplayPlayer ? getTradeRatio(displayPlayerIdx, giveRes) : 4;
+        const canDoTrade = canAct && hasDisplayPlayer && tradeGive.value !== tradeGet.value &&
             displayPlayer.resources[tradeGive.value] >= ratio;
         tradeBtn.disabled = !canDoTrade;
         tradeBtn.textContent = `${ratio}:1`;
@@ -3608,7 +4131,7 @@
             if (i === displayPlayerIdx) continue;
             opponents.push(i);
         }
-        if (opponents.length > 1 && !aiEnabled) {
+        if (opponents.length > 1) {
             opponents.forEach(opp => {
                 const btn = document.createElement('button');
                 btn.className = 'btn' + (state.tradeTargetPlayer === opp ? ' selected' : '');
@@ -3627,21 +4150,25 @@
             state.tradeTargetPlayer = opponents[0];
         }
 
-        const hasResources = totalResources(displayPlayerIdx) > 0;
-        playerTradeBtn.disabled = !canAct || !hasResources;
+        const hasResources = hasDisplayPlayer && totalResources(displayPlayerIdx) > 0;
+        playerTradeBtn.disabled = !canAct || !hasDisplayPlayer || !hasResources;
 
         // Show trade ratios
         const tradeRatiosEl = document.getElementById('trade-ratios');
-        const ratioStrs = RESOURCES.map(r => {
-            const rt = getTradeRatio(displayPlayerIdx, r);
-            return `${r.charAt(0).toUpperCase() + r.slice(1)}: ${rt}:1`;
-        });
-        tradeRatiosEl.textContent = ratioStrs.join(' | ');
+        if (hasDisplayPlayer) {
+            const ratioStrs = RESOURCES.map(r => {
+                const rt = getTradeRatio(displayPlayerIdx, r);
+                return `${r.charAt(0).toUpperCase() + r.slice(1)}: ${rt}:1`;
+            });
+            tradeRatiosEl.textContent = ratioStrs.join(' | ');
+        } else {
+            tradeRatiosEl.textContent = '';
+        }
 
         // Dev cards section
         const devWrapper = document.getElementById('dev-cards-wrapper');
         const devList = document.getElementById('dev-cards-list');
-        const playerCards = state.players[displayPlayerIdx].devCards;
+        const playerCards = hasDisplayPlayer ? state.players[displayPlayerIdx].devCards : [];
         if (playerCards.length > 0) {
             devWrapper.style.display = '';
             const counts = {};
@@ -3680,10 +4207,14 @@
         const scoreRowsEl = document.getElementById('score-rows');
         scoreRowsEl.innerHTML = '';
         for (let i = 0; i < numPlayers; i++) {
+            const pState = state.players[i];
+            const badge = pState?.isBot ? ' <span title="AI-controlled" style="font-size:0.72rem;opacity:0.85">[AI]</span>'
+                        : pState?.disconnected ? ' <span title="Disconnected" style="font-size:0.72rem;opacity:0.85">[!]</span>'
+                        : '';
             const row = document.createElement('div');
             row.className = 'score-row';
             row.innerHTML = `
-                <span style="color:${PLAYER_COLORS[i]}">${PLAYER_NAMES[i]}</span>
+                <span style="color:${PLAYER_COLORS[i]}">${PLAYER_NAMES[i]}${badge}</span>
                 <span class="vp" style="color:${PLAYER_COLORS[i]}">${getVP(i)} / ${WIN_VP}</span>
             `;
             scoreRowsEl.appendChild(row);
@@ -3714,6 +4245,20 @@
         // Save/load visibility in online mode (host can save; load allowed when not mid-online-game or no game active)
         document.getElementById('save-btn').disabled = onlineMode && !isHost;
         document.getElementById('load-btn').disabled = (onlineMode && state.phase !== 'gameover') || !localStorage.getItem('settlers-save');
+
+        // "Replace Current Player with AI" button: visible only in Local hot-seat mode during an active game.
+        // (Online uses the voting flow; AI mode already has Player 1 as a bot.)
+        const replaceBtn = document.getElementById('replace-with-ai-btn');
+        if (replaceBtn) {
+            const inLocalMode = !onlineMode && !aiEnabled;
+            const gameActive = state.phase !== 'gameover';
+            const curP = state.phase === 'setup' ? setupPlayer() : state.currentPlayer;
+            const curIsBot = state.players[curP]?.isBot;
+            replaceBtn.style.display = (inLocalMode && gameActive && !curIsBot) ? '' : 'none';
+            if (inLocalMode && gameActive) {
+                replaceBtn.textContent = `Replace ${PLAYER_NAMES[curP] || 'current'} with AI`;
+            }
+        }
     }
 
     tradeGive.addEventListener('change', updateUI);
@@ -3770,7 +4315,8 @@
                     discardQueue: [...state.discardQueue],
                     roadBuildingRemaining: state.roadBuildingRemaining,
                     previousPhase: state.previousPhase,
-                    tradeTargetPlayer: state.tradeTargetPlayer
+                    tradeTargetPlayer: state.tradeTargetPlayer,
+                    pendingVote: state.pendingVote ? JSON.parse(JSON.stringify(state.pendingVote)) : null
                 },
                 hexes: hexes.map(h => ({ type: h.type, number: h.number, q: h.q, r: h.r })),
                 vertexBuildings: vertices.map(v => v.building),
@@ -3949,6 +4495,7 @@
             state.roadBuildingRemaining = s.roadBuildingRemaining;
             state.previousPhase = s.previousPhase;
             state.tradeTargetPlayer = s.tradeTargetPlayer || 1;
+            state.pendingVote = s.pendingVote || null;
 
             die1El.textContent = state.dice[0] || '?';
             die2El.textContent = state.dice[1] || '?';
@@ -4000,8 +4547,17 @@
         generateBoard();
         log('Welcome to Settlers! Place your starting settlements and roads.');
         log(`${PLAYER_NAMES[0]}: place a settlement.`);
+
+        // Preserve AI mode semantics: in vs-AI mode (non-online), flag Player 1 as bot.
+        if (aiEnabled && !onlineMode && state.players[AI_PLAYER]) {
+            state.players[AI_PLAYER].isBot = true;
+        }
+
+        state.pendingVote = null;
+
         updateUI();
         drawBoard();
+        checkBotActions();
     }
 
     // =================================================================
@@ -4035,17 +4591,64 @@
         document.querySelectorAll('.online-tab-content').forEach(c => { c.classList.remove('active'); c.style.display = ''; });
         document.getElementById('tab-create').classList.add('active');
         document.getElementById('tab-content-create').classList.add('active');
+        // Reset role pickers to defaults
+        pendingHostRole = 'player';
+        pendingJoinRole = 'player';
+        document.getElementById('host-role-player').classList.add('selected');
+        document.getElementById('host-role-cast').classList.remove('selected');
+        document.getElementById('join-role-player').classList.add('selected');
+        document.getElementById('join-role-viewer').classList.remove('selected');
+        document.getElementById('host-role-desc').textContent =
+            'You play as Player 1. Other devices join as remote players.';
     }
 
     function setOnlineStatus(msg) {
         document.getElementById('online-status').textContent = msg;
     }
 
+    // Host role picker buttons
+    document.getElementById('host-role-player').addEventListener('click', () => {
+        pendingHostRole = 'player';
+        document.getElementById('host-role-player').classList.add('selected');
+        document.getElementById('host-role-cast').classList.remove('selected');
+        document.getElementById('host-role-desc').textContent =
+            'You play as Player 1. Other devices join as remote players.';
+    });
+    document.getElementById('host-role-cast').addEventListener('click', () => {
+        pendingHostRole = 'cast';
+        document.getElementById('host-role-cast').classList.add('selected');
+        document.getElementById('host-role-player').classList.remove('selected');
+        document.getElementById('host-role-desc').textContent =
+            'This device shows the shared board (TV/display). All players join from other devices. Viewers can also join.';
+    });
+
+    // Join role picker buttons
+    const joinRoleBtns = ['join-role-player', 'join-role-both', 'join-role-viewer'];
+    function selectJoinRole(role, btnId) {
+        pendingJoinRole = role;
+        joinRoleBtns.forEach(id => document.getElementById(id).classList.toggle('selected', id === btnId));
+    }
+    document.getElementById('join-role-player').addEventListener('click', () => selectJoinRole('player', 'join-role-player'));
+    document.getElementById('join-role-both').addEventListener('click', () => selectJoinRole('both', 'join-role-both'));
+    document.getElementById('join-role-viewer').addEventListener('click', () => selectJoinRole('viewer', 'join-role-viewer'));
+
     // Create game (host)
     document.getElementById('create-game-btn').addEventListener('click', () => {
         const count = parseInt(document.getElementById('online-player-count').value);
         numPlayers = count;
-        roomCode = generateRoomCode();
+        // Use custom code if provided, otherwise auto-generate
+        const customCode = document.getElementById('custom-room-code').value.trim().toUpperCase().replace(/[^A-Z0-9]/g, '');
+        if (customCode.length >= 4 && customCode.length <= 12) {
+            roomCode = customCode;
+        } else {
+            if (customCode.length > 0) {
+                setOnlineStatus('Custom code must be 4-12 letters/numbers. Using random code instead.');
+            }
+            roomCode = generateRoomCode();
+        }
+        // Set role flags based on picker
+        hostIsPlayer = (pendingHostRole === 'player');
+        localRole = hostIsPlayer ? 'host-player' : 'host-cast';
         setOnlineStatus('Creating room...');
 
         peer = new Peer('settlers-' + roomCode, {
@@ -4055,41 +4658,67 @@
         peer.on('open', (id) => {
             isHost = true;
             onlineMode = true;
-            localPlayerIndex = 0;
             connections = [];
-            lobbyPlayers = [{ name: 'Player 1 (Host)', index: 0 }];
+            lobbyViewerCount = 0;
+
+            if (hostIsPlayer) {
+                localPlayerIndex = 0;
+                lobbyPlayers = [{ name: 'Player 1 (Host)', index: 0 }];
+            } else {
+                // Cast host: not a player at all
+                localPlayerIndex = -1;
+                lobbyPlayers = [];
+            }
+            applyRoleView();
 
             document.querySelectorAll('.online-tabs, .online-tab-content').forEach(el => el.style.display = 'none');
             document.getElementById('online-lobby').style.display = '';
             document.getElementById('room-code-display').textContent = roomCode;
-            setOnlineStatus('Waiting for players...');
+            // Show the cast-join URL so TVs can navigate directly
+            showCastJoinUrl(roomCode);
+            setOnlineStatus(hostIsPlayer ? 'Waiting for players...' : 'Cast mode: waiting for remote players to join...');
             updateLobbyDisplay();
         });
 
         peer.on('connection', (conn) => {
-            const playerIdx = connections.length + 1;
-            if (playerIdx >= numPlayers) {
-                conn.on('open', () => {
-                    conn.send({ type: 'error', message: 'Game is full!' });
-                    setTimeout(() => conn.close(), 500);
-                });
-                return;
-            }
-            const entry = { conn, playerIndex: playerIdx };
+            // We don't know the role yet — wait for the guest's 'join_as' message.
+            // Temporarily track the connection without a slot.
+            const entry = { conn, playerIndex: -1, role: null };
             connections.push(entry);
 
-            conn.on('open', () => {
-                conn.send({ type: 'player_assigned', playerIndex: playerIdx, numPlayers, roomCode });
-                lobbyPlayers.push({ name: `Player ${playerIdx + 1}`, index: playerIdx });
-                updateLobbyDisplay();
-                broadcastLobby();
-                setOnlineStatus(`${connections.length + 1}/${numPlayers} players connected.`);
+            let assigned = false;
+
+            conn.on('data', (data) => {
+                if (!assigned && data && data.type === 'join_as') {
+                    assigned = true;
+                    assignIncomingConnection(entry, data.role === 'viewer' ? 'viewer' : 'player');
+                    return;
+                }
+                if (!assigned) return; // ignore until assigned
+                if (entry.role === 'viewer') {
+                    // Viewers don't send player actions; ignore any
+                    return;
+                }
+                handleGuestAction(data, entry.playerIndex);
             });
 
-            conn.on('data', (data) => handleGuestAction(data, playerIdx));
+            // Safety: if no join_as arrives within a short window, treat as player (back-compat)
+            setTimeout(() => {
+                if (!assigned) {
+                    assigned = true;
+                    assignIncomingConnection(entry, 'player');
+                }
+            }, 1500);
 
             conn.on('close', () => {
-                handleDisconnect(playerIdx);
+                if (entry.role === 'viewer') {
+                    handleViewerDisconnect(entry);
+                } else if (entry.playerIndex >= 0) {
+                    handleDisconnect(entry.playerIndex);
+                } else {
+                    // Never assigned; just remove
+                    connections = connections.filter(c => c !== entry);
+                }
             });
         });
 
@@ -4097,6 +4726,94 @@
             setOnlineStatus('Error: ' + err.message);
         });
     });
+
+    // Assign a freshly-connected guest to a player slot or viewer list.
+    // `entry` is the connections[] entry whose conn is already open.
+    function assignIncomingConnection(entry, role) {
+        const conn = entry.conn;
+        if (role === 'viewer') {
+            entry.role = 'viewer';
+            entry.playerIndex = -1;
+            lobbyViewerCount++;
+            try {
+                conn.send({
+                    type: 'role_assignment',
+                    role: 'viewer',
+                    playerIndex: -1,
+                    numPlayers,
+                    roomCode,
+                    hostIsPlayer
+                });
+                // If game already in progress, send snapshot so viewer can watch
+                if (state.phase !== 'setup' || state.setupRound > 0 || hexes.length > 0) {
+                    const snapshot = buildStateSnapshot();
+                    conn.send({ type: 'state_sync', snapshot });
+                }
+            } catch (e) { /* ignore */ }
+            updateLobbyDisplay();
+            broadcastLobby();
+            setOnlineStatus(`${lobbyPlayers.length}/${numPlayers} players, ${lobbyViewerCount} viewer(s).`);
+            return;
+        }
+
+        // role === 'player'
+        const assignIndex = findNextPlayerSlot();
+        if (assignIndex === -1) {
+            try {
+                conn.send({ type: 'error', message: 'Game is full!' });
+                setTimeout(() => conn.close(), 500);
+            } catch (e) { /* ignore */ }
+            connections = connections.filter(c => c !== entry);
+            return;
+        }
+        entry.role = 'player';
+        entry.playerIndex = assignIndex;
+        try {
+            conn.send({
+                type: 'role_assignment',
+                role: 'player',
+                playerIndex: assignIndex,
+                numPlayers,
+                roomCode,
+                hostIsPlayer
+            });
+            // If a game is already in progress, resume
+            if (state.phase !== 'setup' || state.setupRound > 0 || hexes.length > 0) {
+                const snapshot = buildStateSnapshot();
+                conn.send({ type: 'state_sync', snapshot });
+                if (state.players[assignIndex]) {
+                    state.players[assignIndex].disconnected = false;
+                    // Player reclaims their seat from AI if a bot was driving it
+                    if (state.players[assignIndex].isBot) {
+                        state.players[assignIndex].isBot = false;
+                        log(`${PLAYER_NAMES[assignIndex]} reclaimed control from AI.`);
+                    }
+                }
+                // Cancel any pending vote targeting this player
+                if (state.pendingVote && state.pendingVote.targetPlayer === assignIndex) {
+                    state.pendingVote = null;
+                    log(`${PLAYER_NAMES[assignIndex]} returned; vote cancelled.`);
+                }
+                showNotification(`${PLAYER_NAMES[assignIndex]} reconnected!`, 'info');
+                broadcastState();
+            } else {
+                if (!lobbyPlayers.find(lp => lp.index === assignIndex)) {
+                    lobbyPlayers.push({ name: `Player ${assignIndex + 1}`, index: assignIndex });
+                }
+                updateLobbyDisplay();
+                broadcastLobby();
+            }
+        } catch (e) { /* ignore */ }
+        setOnlineStatus(`${lobbyPlayers.length}/${numPlayers} players, ${lobbyViewerCount} viewer(s).`);
+        saveOnlineSession();
+    }
+
+    function handleViewerDisconnect(entry) {
+        connections = connections.filter(c => c !== entry);
+        lobbyViewerCount = Math.max(0, lobbyViewerCount - 1);
+        updateLobbyDisplay();
+        broadcastLobby();
+    }
 
     // Join game tab auto-focus
     document.getElementById('tab-join').addEventListener('click', () => {
@@ -4110,6 +4827,11 @@
             return;
         }
         roomCode = code;
+        // Set a provisional local role based on picker; final role confirmed by host.
+        // 'both' is treated as a player on the wire but uses the full UI locally.
+        if (pendingJoinRole === 'viewer') localRole = 'viewer';
+        else if (pendingJoinRole === 'both') localRole = 'player-both';
+        else localRole = 'player';
         setOnlineStatus('Connecting...');
 
         peer = new Peer(undefined, {
@@ -4120,9 +4842,14 @@
             const conn = peer.connect('settlers-' + code, { reliable: true });
 
             conn.on('open', () => {
-                connections = [{ conn, playerIndex: -1 }];
+                connections = [{ conn, playerIndex: -1, role: localRole }];
                 isHost = false;
                 onlineMode = true;
+                // Tell host what role we want ('both' is sent as 'player' on the wire)
+                try {
+                    const wireRole = (localRole === 'viewer') ? 'viewer' : 'player';
+                    conn.send({ type: 'join_as', role: wireRole });
+                } catch (e) { /* ignore */ }
                 setOnlineStatus('Connected! Waiting for assignment...');
             });
 
@@ -4138,7 +4865,11 @@
         });
 
         peer.on('error', (err) => {
-            setOnlineStatus('Error: ' + err.message);
+            if (err && err.type === 'unavailable-id') {
+                setOnlineStatus(`Room code "${roomCode}" is already in use. Try a different one.`);
+            } else {
+                setOnlineStatus('Error: ' + (err.message || err.type || err));
+            }
         });
     });
 
@@ -4151,8 +4882,10 @@
     // Start game (host only)
     document.getElementById('start-online-btn').addEventListener('click', () => {
         if (!isHost) return;
-        if (connections.length + 1 < numPlayers) {
-            setOnlineStatus(`Need ${numPlayers - connections.length - 1} more players.`);
+        const connectedPlayerCount = (hostIsPlayer ? 1 : 0)
+            + connections.filter(c => c.role === 'player').length;
+        if (connectedPlayerCount < numPlayers) {
+            setOnlineStatus(`Need ${numPlayers - connectedPlayerCount} more player(s).`);
             return;
         }
 
@@ -4165,8 +4898,9 @@
 
         newGame();
         document.getElementById('online-modal').classList.remove('active');
+        applyRoleView();
 
-        // Send initial state to all
+        // Send initial state to all (players + viewers)
         const snapshot = buildStateSnapshot();
         connections.forEach(({ conn }) => {
             if (conn.open) conn.send({ type: 'game_start', snapshot });
@@ -4187,19 +4921,44 @@
             el.appendChild(row);
         });
 
+        const viewerEl = document.getElementById('lobby-viewers');
+        if (viewerEl) {
+            const viewerCount = isHost
+                ? lobbyViewerCount
+                : (localRole === 'viewer' ? 1 : 0);
+            const extraHostNote = (isHost && !hostIsPlayer) ? ' (this device is Cast display)' : '';
+            viewerEl.textContent = viewerCount > 0
+                ? `Viewers: ${viewerCount}${extraHostNote}`
+                : (isHost && !hostIsPlayer ? 'This device is the Cast display.' : '');
+        }
+
         const startBtn = document.getElementById('start-online-btn');
-        startBtn.disabled = lobbyPlayers.length < numPlayers;
-        if (lobbyPlayers.length >= numPlayers) {
+        if (!startBtn) return;
+        const playerCount = lobbyPlayers.length;
+        startBtn.disabled = playerCount < numPlayers;
+        if (playerCount >= numPlayers) {
             startBtn.textContent = 'Start Game';
         } else {
-            startBtn.textContent = `Waiting (${lobbyPlayers.length}/${numPlayers})...`;
+            startBtn.textContent = `Waiting (${playerCount}/${numPlayers})...`;
+        }
+        // Guests (player role) can't start
+        if (!isHost) {
+            startBtn.style.display = 'none';
+        } else {
+            startBtn.style.display = '';
         }
     }
 
     function broadcastLobby() {
         if (!isHost) return;
         connections.forEach(({ conn }) => {
-            if (conn.open) conn.send({ type: 'lobby_update', players: lobbyPlayers, numPlayers });
+            if (conn.open) conn.send({
+                type: 'lobby_update',
+                players: lobbyPlayers,
+                numPlayers,
+                viewerCount: lobbyViewerCount,
+                hostIsPlayer
+            });
         });
     }
 
@@ -4234,7 +4993,8 @@
                 discardQueue: [...state.discardQueue],
                 roadBuildingRemaining: state.roadBuildingRemaining,
                 previousPhase: state.previousPhase,
-                tradeTargetPlayer: state.tradeTargetPlayer
+                tradeTargetPlayer: state.tradeTargetPlayer,
+                pendingVote: state.pendingVote ? JSON.parse(JSON.stringify(state.pendingVote)) : null
             },
             hexes: hexes.map(h => ({ type: h.type, number: h.number, q: h.q, r: h.r })),
             vertexBuildings: vertices.map(v => v.building),
@@ -4386,6 +5146,7 @@
         state.roadBuildingRemaining = s.roadBuildingRemaining;
         state.previousPhase = s.previousPhase;
         state.tradeTargetPlayer = s.tradeTargetPlayer || 1;
+        state.pendingVote = s.pendingVote || null;
 
         // For online guests: rebuild buildUndoStack as placeholder entries so UI knows count
         if (onlineMode && !isHost && snapshot.buildUndoStackLength !== undefined) {
@@ -4411,7 +5172,8 @@
 
     function sendToPlayer(playerIndex, msg) {
         if (!isHost) return;
-        const c = connections.find(c => c.playerIndex === playerIndex);
+        if (playerIndex < 0) return;
+        const c = connections.find(c => c.role === 'player' && c.playerIndex === playerIndex);
         if (c && c.conn.open) c.conn.send(msg);
     }
 
@@ -4664,6 +5426,12 @@
                 drawBoard();
                 break;
             }
+            case 'vote_result': {
+                // Guest is voting on the pending vote
+                if (!state.pendingVote) return;
+                recordVote(playerIndex, data.vote);
+                break;
+            }
         }
     }
 
@@ -4673,10 +5441,36 @@
 
     function handleHostMessage(data) {
         switch(data.type) {
+            case 'role_assignment': {
+                numPlayers = data.numPlayers;
+                if (data.roomCode) roomCode = data.roomCode;
+                if (typeof data.hostIsPlayer === 'boolean') hostIsPlayer = data.hostIsPlayer;
+                if (data.role === 'viewer') {
+                    localRole = 'viewer';
+                    localPlayerIndex = -1;
+                    setOnlineStatus(`Joined as viewer. Waiting for game to start...`);
+                } else {
+                    // Preserve 'player-both' if user selected it; otherwise default to 'player'
+                    if (localRole !== 'player-both') localRole = 'player';
+                    localPlayerIndex = data.playerIndex;
+                    setOnlineStatus(`You are Player ${localPlayerIndex + 1}. Waiting for game to start...`);
+                }
+                applyRoleView();
+                document.querySelectorAll('.online-tabs, .online-tab-content').forEach(el => el.style.display = 'none');
+                document.getElementById('online-lobby').style.display = '';
+                document.getElementById('room-code-display').textContent = roomCode;
+                // Save session for auto-reconnect
+                saveOnlineSession();
+                updateLobbyDisplay();
+                break;
+            }
             case 'player_assigned':
+                // Legacy (pre-role_assignment) — treat as a player assignment
                 localPlayerIndex = data.playerIndex;
                 numPlayers = data.numPlayers;
                 if (data.roomCode) roomCode = data.roomCode;
+                if (localRole !== 'viewer' && localRole !== 'player-both') localRole = 'player';
+                applyRoleView();
                 setOnlineStatus(`You are Player ${localPlayerIndex + 1}. Waiting for game to start...`);
                 document.querySelectorAll('.online-tabs, .online-tab-content').forEach(el => el.style.display = 'none');
                 document.getElementById('online-lobby').style.display = '';
@@ -4687,6 +5481,8 @@
             case 'lobby_update':
                 lobbyPlayers = data.players;
                 numPlayers = data.numPlayers;
+                if (typeof data.viewerCount === 'number') lobbyViewerCount = data.viewerCount;
+                if (typeof data.hostIsPlayer === 'boolean') hostIsPlayer = data.hostIsPlayer;
                 updateLobbyDisplay();
                 break;
             case 'game_start':
@@ -4751,11 +5547,228 @@
             connections = connections.filter(c => c.playerIndex !== playerIndex);
             updateLobbyDisplay();
             broadcastLobby();
+
+            // If the game is active (not in lobby), initiate the replace-with-AI vote
+            if (state.phase !== 'setup' || state.setupRound > 0 || hexes.length > 0) {
+                // Only vote if target isn't already a bot
+                if (!state.players[playerIndex]?.isBot) {
+                    initiateReplaceVote(playerIndex);
+                }
+            }
+            broadcastState();
+            updateUI();
         } else if (!isHost) {
             showNotification('Disconnected from host! Refresh the page to reconnect.', 'warning');
             // Don't clear onlineMode or session - allow reconnection on refresh
         }
     }
+
+    // =================================================================
+    // REPLACE-WITH-AI VOTE (host-authoritative)
+    // =================================================================
+
+    // List of player indices that are eligible to vote on replacing `targetPlayer`.
+    // Eligible = has a player slot, not a bot, not the target, not disconnected.
+    function eligibleVoters(targetPlayer) {
+        const voters = [];
+        for (let i = 0; i < numPlayers; i++) {
+            const p = state.players[i];
+            if (!p) continue;
+            if (i === targetPlayer) continue;
+            if (p.isBot) continue;
+            if (p.disconnected) continue;
+            voters.push(i);
+        }
+        return voters;
+    }
+
+    function initiateReplaceVote(targetPlayer) {
+        if (!isHost) return;
+        if (!state.players[targetPlayer]) return;
+        if (state.players[targetPlayer].isBot) return;
+
+        const voters = eligibleVoters(targetPlayer);
+
+        // 0 voters (shouldn't happen while host is around) - can't vote; leave paused.
+        if (voters.length === 0) {
+            state.pendingVote = null;
+            return;
+        }
+
+        // Only 1 remaining connected human: auto-approve (no vote needed).
+        if (voters.length === 1) {
+            log(`Only one player remaining - auto-replacing ${PLAYER_NAMES[targetPlayer]} with AI.`);
+            finalizeReplaceVote(targetPlayer, true);
+            return;
+        }
+
+        // 2+ voters: start vote
+        state.pendingVote = {
+            type: 'replace_with_ai',
+            targetPlayer,
+            votes: {},
+            initiator: -1
+        };
+        log(`Vote started: Replace ${PLAYER_NAMES[targetPlayer]} with AI?`);
+        showNotification(`Vote: Replace ${PLAYER_NAMES[targetPlayer]} with AI?`, 'info', 5000);
+    }
+
+    function finalizeReplaceVote(targetPlayer, approved) {
+        if (approved) {
+            if (state.players[targetPlayer]) {
+                state.players[targetPlayer].isBot = true;
+            }
+            showNotification(`${PLAYER_NAMES[targetPlayer]} replaced with AI.`, 'info');
+            log(`${PLAYER_NAMES[targetPlayer]} is now AI-controlled.`);
+        } else {
+            showNotification(`Vote failed. ${PLAYER_NAMES[targetPlayer]} slot remains open.`, 'warning');
+            log(`Vote rejected. ${PLAYER_NAMES[targetPlayer]} slot remains open.`);
+        }
+        state.pendingVote = null;
+        broadcastState();
+        updateUI();
+        drawBoard();
+        // If a bot now needs to act (e.g., it's the bot's turn), kick off
+        if (approved) checkBotActions();
+    }
+
+    // Host records a vote from a player. Returns true if vote concluded.
+    function recordVote(voterIndex, choice) {
+        if (!isHost) return false;
+        if (!state.pendingVote) return false;
+        const vote = state.pendingVote;
+        const voters = eligibleVoters(vote.targetPlayer);
+        if (!voters.includes(voterIndex)) return false;
+        if (choice !== 'yes' && choice !== 'no') return false;
+
+        vote.votes[voterIndex] = choice;
+
+        // Count
+        const yesCount = Object.values(vote.votes).filter(v => v === 'yes').length;
+        const noCount = Object.values(vote.votes).filter(v => v === 'no').length;
+        const totalVoters = voters.length;
+        const required = Math.floor(totalVoters / 2) + 1; // strict majority
+
+        if (yesCount >= required) {
+            finalizeReplaceVote(vote.targetPlayer, true);
+            return true;
+        }
+        if (noCount >= required) {
+            finalizeReplaceVote(vote.targetPlayer, false);
+            return true;
+        }
+        // All voted but no majority either way (only possible with even voters & ties)
+        if (Object.keys(vote.votes).length >= totalVoters) {
+            // Tie or all-voted-without-majority: treat as failed (conservative)
+            finalizeReplaceVote(vote.targetPlayer, yesCount > noCount);
+            return true;
+        }
+        // Otherwise keep waiting
+        broadcastState();
+        updateUI();
+        return false;
+    }
+
+    // Show/hide the vote modal based on state.pendingVote and local player status
+    function updateVoteModalDisplay() {
+        const modal = document.getElementById('vote-modal');
+        if (!modal) return;
+        const vote = state.pendingVote;
+
+        if (!vote) {
+            modal.classList.remove('active');
+            return;
+        }
+
+        // Determine the local player slot (host-player or remote player)
+        let myIdx = -1;
+        if (!onlineMode) {
+            // Local/AI mode should never initiate a vote, but if it does, use current player
+            modal.classList.remove('active');
+            return;
+        }
+        if (localRole === 'host-cast' || localRole === 'viewer') {
+            modal.classList.remove('active');
+            return;
+        }
+        myIdx = localPlayerIndex;
+        if (myIdx < 0) { modal.classList.remove('active'); return; }
+        if (myIdx === vote.targetPlayer) { modal.classList.remove('active'); return; }
+        if (state.players[myIdx]?.isBot || state.players[myIdx]?.disconnected) {
+            modal.classList.remove('active');
+            return;
+        }
+
+        // Fill message
+        const msg = document.getElementById('vote-message');
+        const tally = document.getElementById('vote-tally');
+        const yesBtn = document.getElementById('vote-yes');
+        const noBtn = document.getElementById('vote-no');
+
+        const targetName = PLAYER_NAMES[vote.targetPlayer] || `Player ${vote.targetPlayer + 1}`;
+        msg.textContent = `${targetName} disconnected. Replace with AI? They can reclaim their seat if they return.`;
+
+        const voters = eligibleVoters(vote.targetPlayer);
+        const voteCount = Object.keys(vote.votes).length;
+        const yesCount = Object.values(vote.votes).filter(v => v === 'yes').length;
+        const noCount = Object.values(vote.votes).filter(v => v === 'no').length;
+
+        const myVote = vote.votes[myIdx];
+        if (myVote) {
+            tally.textContent = `You voted "${myVote}". Waiting for others... (${voteCount}/${voters.length} voted; ${yesCount} yes, ${noCount} no)`;
+            yesBtn.disabled = true;
+            noBtn.disabled = true;
+        } else {
+            tally.textContent = `${voteCount}/${voters.length} voted — ${yesCount} yes, ${noCount} no`;
+            yesBtn.disabled = false;
+            noBtn.disabled = false;
+        }
+
+        modal.classList.add('active');
+    }
+
+    // Wire up the vote buttons once
+    (function wireVoteButtons() {
+        const yesBtn = document.getElementById('vote-yes');
+        const noBtn = document.getElementById('vote-no');
+        if (!yesBtn || !noBtn) return;
+        yesBtn.addEventListener('click', () => submitVote('yes'));
+        noBtn.addEventListener('click', () => submitVote('no'));
+    })();
+
+    function submitVote(choice) {
+        if (!state.pendingVote) return;
+        const myIdx = onlineMode ? localPlayerIndex : state.currentPlayer;
+        if (myIdx < 0) return;
+        // Prevent double-vote in UI
+        if (state.pendingVote.votes[myIdx]) return;
+
+        if (onlineMode && !isHost) {
+            sendToHost({ type: 'vote_result', vote: choice });
+            // Optimistic UI update - mark locally but real state comes from host
+            state.pendingVote.votes[myIdx] = choice;
+            updateVoteModalDisplay();
+            return;
+        }
+        // Host: record directly
+        recordVote(myIdx, choice);
+        updateVoteModalDisplay();
+    }
+
+    // Local mode: replace current player with AI immediately
+    function replaceCurrentPlayerWithAI() {
+        if (onlineMode) return; // online uses voting
+        const p = state.phase === 'setup' ? setupPlayer() : state.currentPlayer;
+        if (!state.players[p] || state.players[p].isBot) return;
+        state.players[p].isBot = true;
+        showNotification(`${PLAYER_NAMES[p]} is now AI-controlled.`, 'info');
+        log(`${PLAYER_NAMES[p]} replaced with AI.`);
+        updateUI();
+        drawBoard();
+        checkBotActions();
+    }
+    // Expose globally for the inline onclick
+    window.replaceCurrentPlayerWithAI = replaceCurrentPlayerWithAI;
 
     function disconnectOnline() {
         if (peer) {
@@ -4768,6 +5781,10 @@
         localPlayerIndex = 0;
         roomCode = '';
         lobbyPlayers = [];
+        lobbyViewerCount = 0;
+        localRole = 'host-player';
+        hostIsPlayer = true;
+        applyRoleView();
         clearOnlineSession();
         try { sessionStorage.removeItem('settlers-online-autosave'); } catch (e) { /* ignore */ }
     }
@@ -4782,7 +5799,9 @@
                 roomCode: roomCode,
                 isHost: isHost,
                 localPlayerIndex: localPlayerIndex,
-                numPlayers: numPlayers
+                numPlayers: numPlayers,
+                localRole: localRole,
+                hostIsPlayer: hostIsPlayer
             }));
         } catch (e) { /* ignore */ }
     }
@@ -4805,46 +5824,52 @@
         peer.on('open', () => {
             isHost = true;
             onlineMode = true;
-            localPlayerIndex = 0;
+            if (hostIsPlayer) {
+                localPlayerIndex = 0;
+                if (localRole !== 'host-player') localRole = 'host-player';
+            } else {
+                localPlayerIndex = -1;
+                if (localRole !== 'host-cast') localRole = 'host-cast';
+            }
             roomCode = code;
             connections = [];
+            applyRoleView();
             if (onReady) onReady();
         });
 
         peer.on('connection', (conn) => {
-            const assignIndex = findNextPlayerSlot();
-            if (assignIndex === -1) {
-                conn.on('open', () => {
-                    conn.send({ type: 'error', message: 'Game is full!' });
-                    setTimeout(() => conn.close(), 500);
-                });
-                return;
-            }
-            const entry = { conn, playerIndex: assignIndex };
+            // Wait for the guest's join_as message; default to 'player' after a short timeout.
+            const entry = { conn, playerIndex: -1, role: null };
             connections.push(entry);
+            let assigned = false;
 
-            conn.on('open', () => {
-                conn.send({ type: 'player_assigned', playerIndex: assignIndex, numPlayers: expectedPlayers, roomCode: code });
-                // If game is already in progress, send current state immediately
-                if (state.phase !== 'setup' || state.setupRound > 0 || hexes.length > 0) {
-                    const snapshot = buildStateSnapshot();
-                    conn.send({ type: 'state_sync', snapshot });
-                    if (state.players[assignIndex]) {
-                        state.players[assignIndex].disconnected = false;
-                    }
-                    showNotification(`Player ${assignIndex + 1} reconnected!`, 'info');
-                    broadcastState();
-                } else {
-                    lobbyPlayers.push({ name: `Player ${assignIndex + 1}`, index: assignIndex });
-                    updateLobbyDisplay();
-                    broadcastLobby();
+            conn.on('data', (data) => {
+                if (!assigned && data && data.type === 'join_as') {
+                    assigned = true;
+                    assignIncomingConnection(entry, data.role === 'viewer' ? 'viewer' : 'player');
+                    return;
                 }
-                setOnlineStatus(`${connections.length + 1}/${expectedPlayers} players connected.`);
-                saveOnlineSession();
+                if (!assigned) return;
+                if (entry.role === 'viewer') return; // viewers don't send actions
+                handleGuestAction(data, entry.playerIndex);
             });
 
-            conn.on('data', (data) => handleGuestAction(data, assignIndex));
-            conn.on('close', () => handleDisconnect(assignIndex));
+            setTimeout(() => {
+                if (!assigned) {
+                    assigned = true;
+                    assignIncomingConnection(entry, 'player');
+                }
+            }, 1500);
+
+            conn.on('close', () => {
+                if (entry.role === 'viewer') {
+                    handleViewerDisconnect(entry);
+                } else if (entry.playerIndex >= 0) {
+                    handleDisconnect(entry.playerIndex);
+                } else {
+                    connections = connections.filter(c => c !== entry);
+                }
+            });
         });
 
         peer.on('error', (err) => {
@@ -4853,9 +5878,15 @@
     }
 
     function findNextPlayerSlot() {
-        // Find first unoccupied player slot (not index 0 = host, and not already connected)
-        const connectedIndices = new Set(connections.map(c => c.playerIndex));
-        for (let i = 1; i < numPlayers; i++) {
+        // Find first unoccupied player slot.
+        // In host-player mode, slot 0 is reserved for the host.
+        // In cast mode (hostIsPlayer = false), all slots 0..N-1 are available to guests.
+        const connectedIndices = new Set(
+            connections.filter(c => c.role === 'player' && c.playerIndex >= 0)
+                .map(c => c.playerIndex)
+        );
+        const start = hostIsPlayer ? 1 : 0;
+        for (let i = start; i < numPlayers; i++) {
             if (!connectedIndices.has(i)) return i;
         }
         return -1;
@@ -4898,6 +5929,9 @@
             // Host reconnect: re-create peer with same room code
             numPlayers = session.numPlayers;
             roomCode = session.roomCode;
+            // Restore cast/host-player mode
+            hostIsPlayer = session.hostIsPlayer !== false;
+            localRole = session.localRole || (hostIsPlayer ? 'host-player' : 'host-cast');
 
             // Try to load the last auto-save from sessionStorage
             const autoSave = sessionStorage.getItem('settlers-online-autosave');
@@ -4938,6 +5972,9 @@
             numPlayers = session.numPlayers;
             roomCode = session.roomCode;
             localPlayerIndex = session.localPlayerIndex;
+            localRole = session.localRole || 'player';
+            hostIsPlayer = session.hostIsPlayer !== false;
+            applyRoleView();
 
             peer = new Peer(undefined, { debug: 0 });
 
@@ -4945,13 +5982,17 @@
                 const conn = peer.connect('settlers-' + session.roomCode, { reliable: true });
 
                 conn.on('open', () => {
-                    connections = [{ conn, playerIndex: localPlayerIndex }];
+                    connections = [{ conn, playerIndex: localPlayerIndex, role: localRole }];
                     isHost = false;
                     onlineMode = true;
                     clearTimeout(timeout);
                     showNotification('Reconnected! Syncing game state...', 'info', 3000);
-                    // Tell host who we are so they can assign us correctly
-                    conn.send({ type: 'reconnect', playerIndex: localPlayerIndex });
+                    // Tell host what role we want (matters for viewer reconnection)
+                    try { conn.send({ type: 'join_as', role: localRole === 'viewer' ? 'viewer' : 'player' }); } catch (e) { /* ignore */ }
+                    // Legacy reconnect hint for host backwards-compat (players only)
+                    if (localRole !== 'viewer' && localPlayerIndex >= 0) {
+                        try { conn.send({ type: 'reconnect', playerIndex: localPlayerIndex }); } catch (e) { /* ignore */ }
+                    }
                 });
 
                 conn.on('data', (data) => handleHostMessage(data));
@@ -4994,7 +6035,8 @@
                     discardQueue: [...state.discardQueue],
                     roadBuildingRemaining: state.roadBuildingRemaining,
                     previousPhase: state.previousPhase,
-                    tradeTargetPlayer: state.tradeTargetPlayer
+                    tradeTargetPlayer: state.tradeTargetPlayer,
+                    pendingVote: state.pendingVote ? JSON.parse(JSON.stringify(state.pendingVote)) : null
                 },
                 hexes: hexes.map(h => ({ type: h.type, number: h.number, q: h.q, r: h.r })),
                 vertexBuildings: vertices.map(v => v.building),
@@ -5011,6 +6053,122 @@
     }
 
     // =================================================================
+    // URL-BASED AUTO-JOIN (for TV cast monitors)
+    // =================================================================
+
+    function showCastJoinUrl(code) {
+        const el = document.getElementById('cast-join-url');
+        const val = document.getElementById('cast-join-url-value');
+        if (!el || !val) return;
+        const base = window.location.href.split('?')[0].split('#')[0];
+        const url = `${base}?room=${code}&role=viewer`;
+        val.textContent = url;
+        el.style.display = '';
+    }
+
+    function getUrlParams() {
+        const params = {};
+        const query = window.location.search.substring(1);
+        if (!query) return params;
+        query.split('&').forEach(pair => {
+            const [k, v] = pair.split('=');
+            if (k) params[decodeURIComponent(k)] = v ? decodeURIComponent(v) : '';
+        });
+        return params;
+    }
+
+    function autoJoinFromUrl() {
+        const params = getUrlParams();
+        if (!params.room) return false;
+        const code = params.room.trim().toUpperCase();
+        if (code.length < 4) return false;
+
+        // Set role based on ?role= param (viewer default for TVs)
+        const roleParam = (params.role || 'viewer').toLowerCase();
+        if (roleParam === 'player') pendingJoinRole = 'player';
+        else if (roleParam === 'both') pendingJoinRole = 'both';
+        else pendingJoinRole = 'viewer';
+
+        // Open the online modal and prefill the join tab
+        document.getElementById('online-modal').classList.add('active');
+        document.querySelectorAll('.online-tab').forEach(t => t.classList.remove('active'));
+        document.getElementById('tab-join').classList.add('active');
+        document.querySelectorAll('.online-tab-content').forEach(c => c.classList.remove('active'));
+        document.getElementById('tab-join-content').classList.add('active');
+        document.getElementById('room-code-input').value = code;
+
+        // Select the matching role button
+        document.querySelectorAll('#join-role-player,#join-role-both,#join-role-viewer').forEach(b => b.classList.remove('selected'));
+        if (pendingJoinRole === 'player') document.getElementById('join-role-player').classList.add('selected');
+        else if (pendingJoinRole === 'both') document.getElementById('join-role-both').classList.add('selected');
+        else document.getElementById('join-role-viewer').classList.add('selected');
+
+        setOnlineStatus('Auto-joining from URL...');
+        // Trigger the connect flow with retry
+        attemptCastConnect(code, 0);
+        return true;
+    }
+
+    function attemptCastConnect(code, attempt) {
+        const maxAttempts = 30; // ~60 seconds of retry
+        if (attempt >= maxAttempts) {
+            setOnlineStatus(`Could not connect to room ${code}. Host may not be online yet.`);
+            return;
+        }
+
+        // Reset peer if we have one from a previous attempt
+        if (peer) {
+            try { peer.destroy(); } catch (e) { /* ignore */ }
+            peer = null;
+        }
+
+        roomCode = code;
+        if (pendingJoinRole === 'viewer') localRole = 'viewer';
+        else if (pendingJoinRole === 'both') localRole = 'player-both';
+        else localRole = 'player';
+
+        peer = new Peer(undefined, { debug: 0 });
+        let connected = false;
+
+        peer.on('open', () => {
+            const conn = peer.connect('settlers-' + code, { reliable: true });
+
+            conn.on('open', () => {
+                connected = true;
+                connections = [{ conn, playerIndex: -1, role: localRole }];
+                isHost = false;
+                onlineMode = true;
+                try {
+                    const wireRole = (localRole === 'viewer') ? 'viewer' : 'player';
+                    conn.send({ type: 'join_as', role: wireRole });
+                } catch (e) { /* ignore */ }
+                setOnlineStatus('Connected! Waiting for host to start...');
+            });
+
+            conn.on('data', (data) => handleHostMessage(data));
+            conn.on('close', () => handleDisconnect(-1));
+            conn.on('error', () => {
+                if (!connected) {
+                    // Host not reachable yet — retry after delay
+                    setOnlineStatus(`Waiting for host... (retry ${attempt + 1}/${maxAttempts})`);
+                    setTimeout(() => attemptCastConnect(code, attempt + 1), 2000);
+                }
+            });
+        });
+
+        peer.on('error', (err) => {
+            if (!connected) {
+                // 'peer-unavailable' means the room doesn't exist yet
+                const msg = err && err.type === 'peer-unavailable'
+                    ? `Waiting for host to create room ${code}... (retry ${attempt + 1}/${maxAttempts})`
+                    : `Connection error: ${err.message || err.type}. Retrying...`;
+                setOnlineStatus(msg);
+                setTimeout(() => attemptCastConnect(code, attempt + 1), 2000);
+            }
+        });
+    }
+
+    // =================================================================
     // INITIALIZATION
     // =================================================================
 
@@ -5018,6 +6176,11 @@
     log('Welcome to Settlers! Place your starting settlements and roads.');
     log(`${PLAYER_NAMES[0]}: place a settlement.`);
     state.currentPlayer = 0;
+    // Initial mode is vs-AI: mark Player 1 as bot
+    if (aiEnabled && !onlineMode && state.players[AI_PLAYER]) {
+        state.players[AI_PLAYER].isBot = true;
+    }
+    applyRoleView();
     updateUI();
     drawBoard();
 
@@ -5029,6 +6192,9 @@
     // Auto-reconnect if we have an active online session (page was refreshed)
     if (getOnlineSession()) {
         setTimeout(() => reconnectToGame(), 500);
+    } else {
+        // Otherwise, check for URL-based auto-join (cast monitor / direct link)
+        setTimeout(() => autoJoinFromUrl(), 300);
     }
 
     </script>
