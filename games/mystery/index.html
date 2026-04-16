@@ -1245,6 +1245,8 @@ const state = {
     publicClues: [], // {roomId, hotspotId, text, fromPlayerId, fromPlayerName}
     questionLog: [], // {askerId, askerName, suspectId, q, a}
     askedThisRoom: {}, // playerId -> true (has asked or skipped this room visit)
+    inspectionsThisRoom: {}, // playerId -> count of hotspots inspected this visit
+    extraInspections: {}, // playerId -> count of purchased extra inspections this visit
     minigame: null,  // {type:'tap', startTime, endTime, tapCounts:{playerId:n}, placements:[]}
     leaderId: null,
     accusationEndTime: 0,
@@ -1606,8 +1608,11 @@ function handleGuestMessage(conn, msg) {
             if (msg.roomId !== room.id) return;
             const hs = room.hotspots.find(h => h.id === msg.hotspotId);
             if (!hs) return;
-            // Has this player already inspected this hotspot?
             if (player.privateClues.some(c => c.roomId === room.id && c.hotspotId === hs.id)) return;
+            const count = state.inspectionsThisRoom[player.id] || 0;
+            const extra = state.extraInspections[player.id] || 0;
+            if (count >= 2 + extra) return; // limit reached
+            state.inspectionsThisRoom[player.id] = count + 1;
             player.privateClues.push({
                 roomId: room.id, hotspotId: hs.id, text: hs.clue, shared: false
             });
@@ -1849,6 +1854,8 @@ function broadcastState() {
         publicClues: state.publicClues,
         questionLog: state.questionLog,
         askedThisRoom: state.askedThisRoom,
+        inspectionsThisRoom: state.inspectionsThisRoom,
+        extraInspections: state.extraInspections,
         minigame: state.minigame ? {
             type: state.minigame.type,
             startTime: state.minigame.startTime,
@@ -1931,6 +1938,8 @@ function enterRoom(roomId) {
     state.currentRoomId = roomId;
     if (!state.visitedRoomIds.includes(roomId)) state.visitedRoomIds.push(roomId);
     state.askedThisRoom = {};
+    state.inspectionsThisRoom = {};
+    state.extraInspections = {};
     state.players.forEach(p => { p.ready = false; });
     // Reset accusation blocking after entering a new room
     state.accusationBlocked = false;
@@ -2266,14 +2275,32 @@ function renderRoom() {
                 inner += '<div class="check">✓ shared</div>';
             }
         }
+        // Check inspection limit for guests
+        const myInspCount = me ? (state.inspectionsThisRoom[me.id] || 0) : 0;
+        const myExtraCount = me ? (state.extraInspections[me.id] || 0) : 0;
+        const atInspLimit = myInspCount >= 2 + myExtraCount;
+        if (!inspectedByMe && atInspLimit && !isHost) {
+            el.classList.add('inspected');
+            inner += '<div class="check" style="color:var(--text-secondary)">🔒 limit reached</div>';
+        }
         el.innerHTML = inner;
-        if (!dim && !isHost) {
+        if (!dim && !isHost && !atInspLimit) {
             el.onclick = () => inspectHotspot(room.id, hs.id);
         } else {
             el.onclick = null;
         }
         hotspotContainer.appendChild(el);
     });
+
+    // Show inspection counter for guests
+    if (me && !isHost) {
+        const inspCount = state.inspectionsThisRoom[me.id] || 0;
+        const extraCount = state.extraInspections[me.id] || 0;
+        const limitText = document.createElement('div');
+        limitText.style.cssText = 'text-align:center;font-size:0.8rem;color:var(--text-secondary);margin-top:6px;';
+        limitText.textContent = 'Evidence searched: ' + inspCount + ' / ' + (2 + extraCount);
+        hotspotContainer.appendChild(limitText);
+    }
 
     // Suspect
     const suspectEl = document.getElementById('room-suspect');
@@ -2408,13 +2435,17 @@ function buildPlayerActionsHtml(me, room, forHost) {
 
     // Hotspots (for host-as-player — they need their own clickable hotspots since TV ones are display-only)
     if (forHost) {
-        html += '<div class="panel"><h3>' + room.icon + ' ' + escapeHtml(room.name) + ' — Hotspots</h3>';
+        const hostInspCount = state.inspectionsThisRoom[me.id] || 0;
+        const hostExtraCount = state.extraInspections[me.id] || 0;
+        const hostAtLimit = hostInspCount >= 2 + hostExtraCount;
+        html += '<div class="panel"><h3>' + room.icon + ' ' + escapeHtml(room.name) + ' — Hotspots (' + hostInspCount + '/' + (2 + hostExtraCount) + ')</h3>';
         html += '<div class="hotspot-grid">';
         room.hotspots.forEach(hs => {
             const myClue = (me.privateClues || []).find(c => c.roomId === room.id && c.hotspotId === hs.id);
             const inspected = !!myClue;
-            html += '<div class="hotspot' + (inspected ? ' inspected' : '') + '"' +
-                (!inspected ? ' onclick="hostPlayerInspect(\'' + room.id + '\',\'' + hs.id + '\')"' : '') + '>';
+            const locked = !inspected && hostAtLimit;
+            html += '<div class="hotspot' + (inspected || locked ? ' inspected' : '') + '"' +
+                (!inspected && !locked ? ' onclick="hostPlayerInspect(\'' + room.id + '\',\'' + hs.id + '\')"' : '') + '>';
             html += '<span class="icon">' + hs.icon + '</span><div>' + escapeHtml(hs.label) + '</div>';
             if (myClue) {
                 html += '<div style="margin-top:6px; font-size:0.82rem; color:var(--text-primary);">' + escapeHtml(myClue.text) + '</div>';
@@ -2424,6 +2455,8 @@ function buildPlayerActionsHtml(me, room, forHost) {
                 } else {
                     html += '<div class="check">✓ shared</div>';
                 }
+            } else if (locked) {
+                html += '<div class="check" style="color:var(--text-secondary)">🔒 limit reached</div>';
             }
             html += '</div>';
         });
@@ -2453,6 +2486,14 @@ function buildPlayerActionsHtml(me, room, forHost) {
     // Coin shop
     html += '<details class="collapsible"><summary>🪙 Coin Shop — balance: ' + me.coins + '</summary>';
     html += '<div style="display:flex;flex-direction:column;gap:6px;margin-top:8px">';
+
+    // Extra inspection (3 coins) - search one more piece of evidence this room
+    const myInspections = state.inspectionsThisRoom[me.id] || 0;
+    const myExtra = state.extraInspections[me.id] || 0;
+    const atLimit = myInspections >= 2 + myExtra;
+    const extraDisabled = (me.coins < 3 || !atLimit) ? ' disabled' : '';
+    const extraFn = forHost ? 'hostPlayerSpendCoins(\'extra_inspect\')' : 'spendCoins(\'extra_inspect\')';
+    html += '<button class="btn secondary small"' + extraDisabled + ' onclick="' + extraFn + '">🔓 Extra Inspection — 3 🪙<br><span style="font-size:0.75rem;color:var(--text-secondary)">Search one more piece of evidence this room</span></button>';
 
     // Unlock Hint (5 coins) - get a random clue you haven't found yet
     const hintDisabled = me.coins < 5 ? ' disabled' : '';
@@ -2909,6 +2950,10 @@ function hostPlayerInspect(roomId, hotspotId) {
     const hs = room.hotspots.find(h => h.id === hotspotId);
     if (!hs) return;
     if (player.privateClues.some(c => c.roomId === room.id && c.hotspotId === hs.id)) return;
+    const count = state.inspectionsThisRoom[player.id] || 0;
+    const extra = state.extraInspections[player.id] || 0;
+    if (count >= 2 + extra) { showNotification('Inspection limit reached! Buy an extra inspection.', 'warning'); return; }
+    state.inspectionsThisRoom[player.id] = count + 1;
     player.privateClues.push({ roomId: room.id, hotspotId: hs.id, text: hs.clue, shared: false });
     const hsKey = room.id + '_' + hs.id;
     if (!state.discoveredHotspots.includes(hsKey)) {
@@ -2995,6 +3040,15 @@ function hostPlayerSkipQuestion() {
 // ============================================================
 
 function processSpendCoins(player, action) {
+    if (action === 'extra_inspect') {
+        if (player.coins < 3) return;
+        const count = state.inspectionsThisRoom[player.id] || 0;
+        const extra = state.extraInspections[player.id] || 0;
+        if (count < 2 + extra) return; // haven't hit the limit yet
+        player.coins -= 3;
+        state.extraInspections[player.id] = extra + 1;
+        return;
+    }
     if (action === 'hint') {
         if (player.coins < 5) return;
         // Find a clue this player hasn't discovered yet
