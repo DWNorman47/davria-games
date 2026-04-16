@@ -1031,7 +1031,7 @@
             <div class="online-tab-content active" id="tab-content-create">
                 <div class="online-section" id="host-name-section">
                     <div style="font-size:0.85rem;color:var(--text-secondary);margin-bottom:0.3rem">Your name:</div>
-                    <input type="text" id="host-name-input" placeholder="Required (max 8 chars)" maxlength="8" style="width:100%;padding:0.45rem;background:var(--bg-card);border:1px solid var(--border);border-radius:6px;color:var(--text-primary);font-size:0.9rem">
+                    <input type="text" id="host-name-input" placeholder="Required (max 20 chars)" maxlength="20" style="width:100%;padding:0.45rem;background:var(--bg-card);border:1px solid var(--border);border-radius:6px;color:var(--text-primary);font-size:0.9rem">
                 </div>
                 <div class="online-section">
                     <label style="font-size:0.85rem;color:var(--text-secondary)">Players:
@@ -1064,7 +1064,7 @@
             <div class="online-tab-content" id="tab-content-join">
                 <div id="online-join-section" class="online-section">
                     <div style="font-size:0.85rem;color:var(--text-secondary);margin-bottom:0.3rem">Your name:</div>
-                    <input type="text" id="join-name-input" placeholder="Required (max 8 chars)" maxlength="8" style="width:100%;padding:0.45rem;background:var(--bg-card);border:1px solid var(--border);border-radius:6px;color:var(--text-primary);font-size:0.9rem;margin-bottom:0.5rem">
+                    <input type="text" id="join-name-input" placeholder="Required (max 20 chars)" maxlength="20" style="width:100%;padding:0.45rem;background:var(--bg-card);border:1px solid var(--border);border-radius:6px;color:var(--text-primary);font-size:0.9rem;margin-bottom:0.5rem">
                     <input type="text" id="room-code-input" placeholder="Enter room code" maxlength="6">
                     <div style="font-size:0.85rem;color:var(--text-secondary);margin:0.5rem 0 0.3rem">Join as:</div>
                     <div style="display:flex;gap:0.35rem;margin-bottom:0.5rem;flex-wrap:wrap">
@@ -1203,7 +1203,7 @@
     let connections = [];
     let localPlayerIndex = 0;
     let gameStarted = false; // true once the host has clicked Start Game (distinguishes lobby from in-progress game)
-    let localName = ''; // player's name in online mode (max 8 chars)
+    let localName = ''; // player's name in online mode (max 20 chars)
     let roomCode = '';
     let lobbyPlayers = []; // names in lobby (players only)
     let lobbyViewerCount = 0; // viewers in lobby (host-tracked)
@@ -4643,7 +4643,7 @@
     // Create game (host)
     document.getElementById('create-game-btn').addEventListener('click', () => {
         // Host name required only if host is actually a player (not cast-only)
-        const hostName = document.getElementById('host-name-input').value.trim().slice(0, 8);
+        const hostName = document.getElementById('host-name-input').value.trim().slice(0, 20);
         if (pendingHostRole === 'player' && !hostName) {
             setOnlineStatus('Please enter your name.');
             document.getElementById('host-name-input').focus();
@@ -4707,7 +4707,7 @@
             conn.on('data', (data) => {
                 if (!assigned && data && data.type === 'join_as') {
                     assigned = true;
-                    const incomingName = (data.name || '').trim().slice(0, 8);
+                    const incomingName = (data.name || '').trim().slice(0, 20);
                     assignIncomingConnection(entry, data.role === 'viewer' ? 'viewer' : 'player', incomingName);
                     return;
                 }
@@ -4748,7 +4748,7 @@
     // `entry` is the connections[] entry whose conn is already open.
     function assignIncomingConnection(entry, role, name) {
         const conn = entry.conn;
-        const cleanName = (name || '').trim().slice(0, 8);
+        const cleanName = (name || '').trim().slice(0, 20);
         entry.name = cleanName;
         if (role === 'viewer') {
             entry.role = 'viewer';
@@ -4846,7 +4846,7 @@
     });
 
     document.getElementById('join-connect-btn').addEventListener('click', () => {
-        const name = document.getElementById('join-name-input').value.trim().slice(0, 8);
+        const name = document.getElementById('join-name-input').value.trim().slice(0, 20);
         if (pendingJoinRole !== 'viewer' && !name) {
             setOnlineStatus('Please enter your name.');
             document.getElementById('join-name-input').focus();
@@ -5888,7 +5888,7 @@
             conn.on('data', (data) => {
                 if (!assigned && data && data.type === 'join_as') {
                     assigned = true;
-                    const incomingName = (data.name || '').trim().slice(0, 8);
+                    const incomingName = (data.name || '').trim().slice(0, 20);
                     assignIncomingConnection(entry, data.role === 'viewer' ? 'viewer' : 'player', incomingName);
                     return;
                 }
@@ -6135,7 +6135,7 @@
         else if (roleParam === 'both') pendingJoinRole = 'both';
         else pendingJoinRole = 'viewer';
         // Name from URL ?name=XYZ, or default to 'TV' for viewer, 'Player' otherwise
-        const nameParam = (params.name || '').trim().slice(0, 8);
+        const nameParam = (params.name || '').trim().slice(0, 20);
         localName = nameParam || (pendingJoinRole === 'viewer' ? 'TV' : 'Player');
 
         // Open the online modal and prefill the join tab
