@@ -1625,6 +1625,9 @@ function handleGuestMessage(conn, msg) {
             if (state.phase !== 'room') return;
             const clue = player.privateClues.find(c => c.roomId === msg.roomId && c.hotspotId === msg.hotspotId);
             if (!clue || clue.shared) return;
+            // Check if someone else already shared this same clue
+            const alreadyPublic = state.publicClues.some(c => c.roomId === msg.roomId && c.hotspotId === msg.hotspotId);
+            if (alreadyPublic) return;
             clue.shared = true;
             state.publicClues.push({
                 roomId: clue.roomId,
@@ -2256,7 +2259,8 @@ function renderRoom() {
             if (inspectedByAnyone) inner += '<div class="check">✓ inspected</div>';
         } else if (myClue) {
             inner += '<div style="margin-top:6px; font-size:0.82rem; color:var(--text-primary);">' + escapeHtml(myClue.text) + '</div>';
-            if (!myClue.shared) {
+            const alreadyOnBoard = state.publicClues.some(c => c.roomId === room.id && c.hotspotId === hs.id);
+            if (!myClue.shared && !alreadyOnBoard) {
                 inner += '<button class="btn small success" onclick="event.stopPropagation(); shareClue(\'' + room.id + '\',\'' + hs.id + '\');">Share with Group</button>';
             } else {
                 inner += '<div class="check">✓ shared</div>';
@@ -2414,7 +2418,8 @@ function buildPlayerActionsHtml(me, room, forHost) {
             html += '<span class="icon">' + hs.icon + '</span><div>' + escapeHtml(hs.label) + '</div>';
             if (myClue) {
                 html += '<div style="margin-top:6px; font-size:0.82rem; color:var(--text-primary);">' + escapeHtml(myClue.text) + '</div>';
-                if (!myClue.shared) {
+                const alreadyOnBoard = state.publicClues.some(c => c.roomId === room.id && c.hotspotId === hs.id);
+                if (!myClue.shared && !alreadyOnBoard) {
                     html += '<button class="btn small success" onclick="event.stopPropagation(); hostPlayerShareClue(\'' + room.id + '\',\'' + hs.id + '\');">Share with Group</button>';
                 } else {
                     html += '<div class="check">✓ shared</div>';
@@ -2920,6 +2925,8 @@ function hostPlayerShareClue(roomId, hotspotId) {
     if (state.phase !== 'room') return;
     const clue = player.privateClues.find(c => c.roomId === roomId && c.hotspotId === hotspotId);
     if (!clue || clue.shared) return;
+    const alreadyPublic = state.publicClues.some(c => c.roomId === roomId && c.hotspotId === hotspotId);
+    if (alreadyPublic) return;
     clue.shared = true;
     state.publicClues.push({
         roomId: clue.roomId, hotspotId: clue.hotspotId, text: clue.text,
