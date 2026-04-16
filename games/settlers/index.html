@@ -1196,6 +1196,7 @@
     // role is one of 'player' | 'viewer'; for viewers playerIndex is -1
     let connections = [];
     let localPlayerIndex = 0;
+    let gameStarted = false; // true once the host has clicked Start Game (distinguishes lobby from in-progress game)
     let roomCode = '';
     let lobbyPlayers = []; // names in lobby (players only)
     let lobbyViewerCount = 0; // viewers in lobby (host-tracked)
@@ -4745,7 +4746,7 @@
                     hostIsPlayer
                 });
                 // If game already in progress, send snapshot so viewer can watch
-                if (state.phase !== 'setup' || state.setupRound > 0 || hexes.length > 0) {
+                if (gameStarted) {
                     const snapshot = buildStateSnapshot();
                     conn.send({ type: 'state_sync', snapshot });
                 }
@@ -4778,7 +4779,7 @@
                 hostIsPlayer
             });
             // If a game is already in progress, resume
-            if (state.phase !== 'setup' || state.setupRound > 0 || hexes.length > 0) {
+            if (gameStarted) {
                 const snapshot = buildStateSnapshot();
                 conn.send({ type: 'state_sync', snapshot });
                 if (state.players[assignIndex]) {
@@ -4897,6 +4898,7 @@
         }
 
         newGame();
+        gameStarted = true;
         document.getElementById('online-modal').classList.remove('active');
         applyRoleView();
 
@@ -5488,6 +5490,7 @@
             case 'game_start':
                 document.getElementById('online-modal').classList.remove('active');
                 aiEnabled = false;
+                gameStarted = true;
                 applyStateSnapshot(data.snapshot);
                 break;
             case 'state_sync':
@@ -5549,7 +5552,7 @@
             broadcastLobby();
 
             // If the game is active (not in lobby), initiate the replace-with-AI vote
-            if (state.phase !== 'setup' || state.setupRound > 0 || hexes.length > 0) {
+            if (gameStarted) {
                 // Only vote if target isn't already a bot
                 if (!state.players[playerIndex]?.isBot) {
                     initiateReplaceVote(playerIndex);
@@ -5784,6 +5787,7 @@
         lobbyViewerCount = 0;
         localRole = 'host-player';
         hostIsPlayer = true;
+        gameStarted = false;
         applyRoleView();
         clearOnlineSession();
         try { sessionStorage.removeItem('settlers-online-autosave'); } catch (e) { /* ignore */ }
@@ -5956,6 +5960,7 @@
                         PLAYER_NAMES: saveData.PLAYER_NAMES
                     };
                     applyStateSnapshot(snapshot);
+                    gameStarted = true; // restoring a game in progress
                 } catch (e) {
                     log('Error restoring auto-save: ' + e.message);
                 }
