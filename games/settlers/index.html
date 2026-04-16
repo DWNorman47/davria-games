@@ -1029,6 +1029,10 @@
                 <button class="online-tab" id="tab-join" data-tab="join">Join Game</button>
             </div>
             <div class="online-tab-content active" id="tab-content-create">
+                <div class="online-section" id="host-name-section">
+                    <div style="font-size:0.85rem;color:var(--text-secondary);margin-bottom:0.3rem">Your name:</div>
+                    <input type="text" id="host-name-input" placeholder="Required (max 8 chars)" maxlength="8" style="width:100%;padding:0.45rem;background:var(--bg-card);border:1px solid var(--border);border-radius:6px;color:var(--text-primary);font-size:0.9rem">
+                </div>
                 <div class="online-section">
                     <label style="font-size:0.85rem;color:var(--text-secondary)">Players:
                         <select id="online-player-count" style="padding:0.3rem;background:var(--bg-card);border:1px solid var(--border);border-radius:4px;color:var(--text-primary);font-size:0.85rem;margin-left:0.3rem">
@@ -1059,6 +1063,8 @@
             </div>
             <div class="online-tab-content" id="tab-content-join">
                 <div id="online-join-section" class="online-section">
+                    <div style="font-size:0.85rem;color:var(--text-secondary);margin-bottom:0.3rem">Your name:</div>
+                    <input type="text" id="join-name-input" placeholder="Required (max 8 chars)" maxlength="8" style="width:100%;padding:0.45rem;background:var(--bg-card);border:1px solid var(--border);border-radius:6px;color:var(--text-primary);font-size:0.9rem;margin-bottom:0.5rem">
                     <input type="text" id="room-code-input" placeholder="Enter room code" maxlength="6">
                     <div style="font-size:0.85rem;color:var(--text-secondary);margin:0.5rem 0 0.3rem">Join as:</div>
                     <div style="display:flex;gap:0.35rem;margin-bottom:0.5rem;flex-wrap:wrap">
@@ -1197,6 +1203,7 @@
     let connections = [];
     let localPlayerIndex = 0;
     let gameStarted = false; // true once the host has clicked Start Game (distinguishes lobby from in-progress game)
+    let localName = ''; // player's name in online mode (max 8 chars)
     let roomCode = '';
     let lobbyPlayers = []; // names in lobby (players only)
     let lobbyViewerCount = 0; // viewers in lobby (host-tracked)
@@ -4635,6 +4642,14 @@
 
     // Create game (host)
     document.getElementById('create-game-btn').addEventListener('click', () => {
+        // Host name required only if host is actually a player (not cast-only)
+        const hostName = document.getElementById('host-name-input').value.trim().slice(0, 8);
+        if (pendingHostRole === 'player' && !hostName) {
+            setOnlineStatus('Please enter your name.');
+            document.getElementById('host-name-input').focus();
+            return;
+        }
+        localName = hostName || 'Cast';
         const count = parseInt(document.getElementById('online-player-count').value);
         numPlayers = count;
         // Use custom code if provided, otherwise auto-generate
@@ -4664,7 +4679,7 @@
 
             if (hostIsPlayer) {
                 localPlayerIndex = 0;
-                lobbyPlayers = [{ name: 'Player 1 (Host)', index: 0 }];
+                lobbyPlayers = [{ name: `${localName} (Host)`, index: 0 }];
             } else {
                 // Cast host: not a player at all
                 localPlayerIndex = -1;
@@ -4692,7 +4707,8 @@
             conn.on('data', (data) => {
                 if (!assigned && data && data.type === 'join_as') {
                     assigned = true;
-                    assignIncomingConnection(entry, data.role === 'viewer' ? 'viewer' : 'player');
+                    const incomingName = (data.name || '').trim().slice(0, 8);
+                    assignIncomingConnection(entry, data.role === 'viewer' ? 'viewer' : 'player', incomingName);
                     return;
                 }
                 if (!assigned) return; // ignore until assigned
@@ -4707,7 +4723,7 @@
             setTimeout(() => {
                 if (!assigned) {
                     assigned = true;
-                    assignIncomingConnection(entry, 'player');
+                    assignIncomingConnection(entry, 'player', '');
                 }
             }, 1500);
 
@@ -4730,8 +4746,10 @@
 
     // Assign a freshly-connected guest to a player slot or viewer list.
     // `entry` is the connections[] entry whose conn is already open.
-    function assignIncomingConnection(entry, role) {
+    function assignIncomingConnection(entry, role, name) {
         const conn = entry.conn;
+        const cleanName = (name || '').trim().slice(0, 8);
+        entry.name = cleanName;
         if (role === 'viewer') {
             entry.role = 'viewer';
             entry.playerIndex = -1;
@@ -4780,6 +4798,8 @@
             });
             // If a game is already in progress, resume
             if (gameStarted) {
+                // If the reconnecting player provided a (new or matching) name, use it
+                if (cleanName) PLAYER_NAMES[assignIndex] = cleanName;
                 const snapshot = buildStateSnapshot();
                 conn.send({ type: 'state_sync', snapshot });
                 if (state.players[assignIndex]) {
@@ -4798,8 +4818,12 @@
                 showNotification(`${PLAYER_NAMES[assignIndex]} reconnected!`, 'info');
                 broadcastState();
             } else {
-                if (!lobbyPlayers.find(lp => lp.index === assignIndex)) {
-                    lobbyPlayers.push({ name: `Player ${assignIndex + 1}`, index: assignIndex });
+                const lobbyName = cleanName || `Player ${assignIndex + 1}`;
+                const existing = lobbyPlayers.find(lp => lp.index === assignIndex);
+                if (existing) {
+                    existing.name = lobbyName;
+                } else {
+                    lobbyPlayers.push({ name: lobbyName, index: assignIndex });
                 }
                 updateLobbyDisplay();
                 broadcastLobby();
@@ -4822,6 +4846,13 @@
     });
 
     document.getElementById('join-connect-btn').addEventListener('click', () => {
+        const name = document.getElementById('join-name-input').value.trim().slice(0, 8);
+        if (pendingJoinRole !== 'viewer' && !name) {
+            setOnlineStatus('Please enter your name.');
+            document.getElementById('join-name-input').focus();
+            return;
+        }
+        localName = name || 'Viewer';
         const code = document.getElementById('room-code-input').value.trim().toUpperCase();
         if (code.length < 4) {
             setOnlineStatus('Please enter a valid room code.');
@@ -4849,7 +4880,7 @@
                 // Tell host what role we want ('both' is sent as 'player' on the wire)
                 try {
                     const wireRole = (localRole === 'viewer') ? 'viewer' : 'player';
-                    conn.send({ type: 'join_as', role: wireRole });
+                    conn.send({ type: 'join_as', role: wireRole, name: localName });
                 } catch (e) { /* ignore */ }
                 setOnlineStatus('Connected! Waiting for assignment...');
             });
@@ -4890,11 +4921,16 @@
             return;
         }
 
-        // Set up names
+        // Set up names from lobby (filled as players joined)
         aiEnabled = false;
         PLAYER_NAMES = [];
         for (let i = 0; i < numPlayers; i++) {
-            PLAYER_NAMES.push(`Player ${i + 1}`);
+            if (i === 0 && hostIsPlayer) {
+                PLAYER_NAMES.push(localName || `Player 1`);
+            } else {
+                const guestConn = connections.find(c => c.role === 'player' && c.playerIndex === i);
+                PLAYER_NAMES.push((guestConn && guestConn.name) || `Player ${i + 1}`);
+            }
         }
 
         newGame();
@@ -5788,6 +5824,7 @@
         localRole = 'host-player';
         hostIsPlayer = true;
         gameStarted = false;
+        localName = '';
         applyRoleView();
         clearOnlineSession();
         try { sessionStorage.removeItem('settlers-online-autosave'); } catch (e) { /* ignore */ }
@@ -5805,7 +5842,8 @@
                 localPlayerIndex: localPlayerIndex,
                 numPlayers: numPlayers,
                 localRole: localRole,
-                hostIsPlayer: hostIsPlayer
+                hostIsPlayer: hostIsPlayer,
+                localName: localName
             }));
         } catch (e) { /* ignore */ }
     }
@@ -5850,7 +5888,8 @@
             conn.on('data', (data) => {
                 if (!assigned && data && data.type === 'join_as') {
                     assigned = true;
-                    assignIncomingConnection(entry, data.role === 'viewer' ? 'viewer' : 'player');
+                    const incomingName = (data.name || '').trim().slice(0, 8);
+                    assignIncomingConnection(entry, data.role === 'viewer' ? 'viewer' : 'player', incomingName);
                     return;
                 }
                 if (!assigned) return;
@@ -5861,7 +5900,7 @@
             setTimeout(() => {
                 if (!assigned) {
                     assigned = true;
-                    assignIncomingConnection(entry, 'player');
+                    assignIncomingConnection(entry, 'player', '');
                 }
             }, 1500);
 
@@ -5936,6 +5975,7 @@
             // Restore cast/host-player mode
             hostIsPlayer = session.hostIsPlayer !== false;
             localRole = session.localRole || (hostIsPlayer ? 'host-player' : 'host-cast');
+            if (session.localName) localName = session.localName;
 
             // Try to load the last auto-save from sessionStorage
             const autoSave = sessionStorage.getItem('settlers-online-autosave');
@@ -5979,6 +6019,7 @@
             localPlayerIndex = session.localPlayerIndex;
             localRole = session.localRole || 'player';
             hostIsPlayer = session.hostIsPlayer !== false;
+            if (session.localName) localName = session.localName;
             applyRoleView();
 
             peer = new Peer(undefined, { debug: 0 });
@@ -5993,7 +6034,7 @@
                     clearTimeout(timeout);
                     showNotification('Reconnected! Syncing game state...', 'info', 3000);
                     // Tell host what role we want (matters for viewer reconnection)
-                    try { conn.send({ type: 'join_as', role: localRole === 'viewer' ? 'viewer' : 'player' }); } catch (e) { /* ignore */ }
+                    try { conn.send({ type: 'join_as', role: localRole === 'viewer' ? 'viewer' : 'player', name: localName }); } catch (e) { /* ignore */ }
                     // Legacy reconnect hint for host backwards-compat (players only)
                     if (localRole !== 'viewer' && localPlayerIndex >= 0) {
                         try { conn.send({ type: 'reconnect', playerIndex: localPlayerIndex }); } catch (e) { /* ignore */ }
@@ -6093,6 +6134,9 @@
         if (roleParam === 'player') pendingJoinRole = 'player';
         else if (roleParam === 'both') pendingJoinRole = 'both';
         else pendingJoinRole = 'viewer';
+        // Name from URL ?name=XYZ, or default to 'TV' for viewer, 'Player' otherwise
+        const nameParam = (params.name || '').trim().slice(0, 8);
+        localName = nameParam || (pendingJoinRole === 'viewer' ? 'TV' : 'Player');
 
         // Open the online modal and prefill the join tab
         document.getElementById('online-modal').classList.add('active');
@@ -6145,7 +6189,7 @@
                 onlineMode = true;
                 try {
                     const wireRole = (localRole === 'viewer') ? 'viewer' : 'player';
-                    conn.send({ type: 'join_as', role: wireRole });
+                    conn.send({ type: 'join_as', role: wireRole, name: localName });
                 } catch (e) { /* ignore */ }
                 setOnlineStatus('Connected! Waiting for host to start...');
             });
