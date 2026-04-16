@@ -677,6 +677,52 @@
     .notification-toast.warning { border-color: #e67e22; }
     .notification-toast.info { border-color: #5dade2; }
 
+    /* Host-as-player controls panel */
+    .host-player-controls {
+        background: var(--bg-card);
+        border: 2px solid var(--accent);
+        border-radius: 12px;
+        margin-top: 14px;
+        overflow: hidden;
+    }
+    .host-player-controls summary {
+        cursor: pointer;
+        font-weight: 700;
+        color: var(--text-primary);
+        user-select: none;
+        padding: 14px 18px;
+        background: rgba(233, 69, 96, 0.08);
+        font-size: 1.05rem;
+    }
+    .host-player-controls[open] summary {
+        border-bottom: 1px solid var(--border);
+        margin-bottom: 0;
+    }
+    .host-player-controls .hpc-body {
+        padding: 14px 18px;
+    }
+    .host-player-controls .hpc-body .panel {
+        margin-bottom: 10px;
+    }
+    body.cast-view .host-player-controls {
+        max-width: 720px;
+    }
+
+    /* Role picker buttons in lobby */
+    .role-picker {
+        display: flex;
+        gap: 8px;
+        margin: 10px 0;
+    }
+    .role-picker .btn {
+        flex: 1;
+        opacity: 0.6;
+    }
+    .role-picker .btn.selected {
+        opacity: 1;
+        border: 2px solid var(--accent);
+    }
+
     /* Cast-only helpers */
     body.cast-view .hide-on-tv { display: none !important; }
     body:not(.cast-view) .tv-only { display: none !important; }
@@ -709,8 +755,16 @@
         </div>
         <div class="panel" id="panel-create">
             <p class="subtitle" style="margin-bottom:6px;">Open this page on a big screen. Players join from their phones.</p>
+            <div style="font-size:0.85rem;color:var(--text-secondary);margin-bottom:0.3rem">Your role:</div>
+            <div class="role-picker">
+                <button class="btn selected" id="host-role-player" onclick="setHostRole('player')">Host as Player</button>
+                <button class="btn" id="host-role-cast" onclick="setHostRole('cast')">Cast Mode (display only)</button>
+            </div>
+            <div style="font-size:0.75rem;color:var(--text-secondary);margin-top:0.25rem" id="host-role-desc">You play as a detective too. Other devices join as remote players.</div>
             <label>Custom room code <span style="color:var(--text-secondary);font-size:0.8rem">(optional, 4-10 letters/numbers)</span></label>
             <input type="text" id="custom-room-code" placeholder="Leave blank for random" maxlength="10" style="text-transform:uppercase; letter-spacing:2px;">
+            <label id="host-name-label">Your name</label>
+            <input type="text" id="host-name" placeholder="Detective" maxlength="20">
             <button class="btn" onclick="createGame()">Create Game</button>
         </div>
         <div class="panel" id="panel-join" style="display:none;">
@@ -748,7 +802,7 @@
         </div>
         <div id="lobby-host-controls" class="panel hide-on-tv" style="display:none;">
             <button class="btn" id="btn-start-game" onclick="hostStartGame()">Start Mystery</button>
-            <div class="status-line" style="margin-top:6px;">You can start with 1+ players (intended range: 3-12).</div>
+            <div class="status-line" style="margin-top:6px;" id="lobby-start-hint">You can start with 1+ players (intended range: 3-12).</div>
         </div>
         <div class="panel tv-only" style="text-align:center;">
             <button class="btn" id="btn-start-game-tv" onclick="hostStartGame()">Start Mystery</button>
@@ -804,6 +858,11 @@
                 </div>
             </div>
         </div>
+        <!-- Host-as-player controls (shown when hostIsPlayer) -->
+        <details class="host-player-controls" id="host-player-controls" style="display:none;" open>
+            <summary>🎮 Your Controls</summary>
+            <div class="hpc-body" id="host-player-actions"></div>
+        </details>
     </div>
 
     <!-- ================= MINIGAME ================= -->
@@ -818,6 +877,7 @@
             <div class="tap-bars" id="minigame-tap-bars"></div>
         </div>
         <div class="hide-on-tv" id="minigame-phone-ui"></div>
+        <div id="minigame-host-player-ui" style="display:none;"></div>
     </div>
 
     <!-- ================= LEADER PICK ROOM ================= -->
@@ -827,6 +887,7 @@
             <div id="leader-pick-status" class="status-line"></div>
             <div class="room-map" id="leader-room-map"></div>
         </div>
+        <div id="leader-pick-host-player-ui" style="display:none;"></div>
     </div>
 
     <!-- ================= ACCUSATION ================= -->
@@ -856,6 +917,23 @@
         <div class="panel tv-only">
             <h3 style="text-align:center;">Submissions</h3>
             <div class="player-strip" id="accusation-player-strip"></div>
+        </div>
+        <!-- Host-as-player accusation form -->
+        <div id="accusation-host-player-form" style="display:none;">
+            <div class="panel">
+                <label>Culprit</label>
+                <div class="choice-grid" id="host-accuse-culprit-grid"></div>
+            </div>
+            <div class="panel">
+                <label>Weapon</label>
+                <div class="choice-grid" id="host-accuse-weapon-grid"></div>
+            </div>
+            <div class="panel">
+                <label>Location</label>
+                <div class="choice-grid" id="host-accuse-location-grid"></div>
+            </div>
+            <button class="btn success" id="btn-host-submit-accusation" onclick="hostPlayerSubmitAccusation()">Submit Accusation</button>
+            <div class="status-line" id="accusation-host-player-status"></div>
         </div>
     </div>
 
@@ -1072,6 +1150,8 @@ const PLAYER_COLORS = [
 
 let isHost = false;
 let isTV = false; // true when this device is the host AND cast view (always true for host in this game)
+let hostIsPlayer = true; // default: host plays as player 0
+let pendingHostRole = 'player'; // 'player' or 'cast'
 let peer = null;
 let roomCode = '';
 let myPeerId = '';
@@ -1197,14 +1277,40 @@ function autoJoinFromUrl() {
 }
 
 // ============================================================
+// Role picker (lobby)
+// ============================================================
+function setHostRole(role) {
+    pendingHostRole = role;
+    document.getElementById('host-role-player').classList.toggle('selected', role === 'player');
+    document.getElementById('host-role-cast').classList.toggle('selected', role === 'cast');
+    const descEl = document.getElementById('host-role-desc');
+    const nameLabel = document.getElementById('host-name-label');
+    const nameInput = document.getElementById('host-name');
+    if (role === 'player') {
+        descEl.textContent = 'You play as a detective too. Other devices join as remote players.';
+        nameLabel.style.display = '';
+        nameInput.style.display = '';
+    } else {
+        descEl.textContent = 'This device is the TV display only. Players join from their phones.';
+        nameLabel.style.display = 'none';
+        nameInput.style.display = 'none';
+    }
+}
+
+// ============================================================
 // HOST: create game
 // ============================================================
 function createGame() {
     ensureAudio();
     isHost = true;
     isTV = true; // host is always the TV display in Mystery Party
+    hostIsPlayer = (pendingHostRole === 'player');
     soundMuted = false;
     updateMuteButton();
+    // Get host name if playing
+    if (hostIsPlayer) {
+        myName = (document.getElementById('host-name').value || '').trim().slice(0, 20) || 'Host';
+    }
     const custom = (document.getElementById('custom-room-code').value || '')
         .trim().toUpperCase().replace(/[^A-Z0-9]/g, '');
     if (custom.length >= 4 && custom.length <= 10) {
@@ -1219,9 +1325,17 @@ function createGame() {
     setStatus('entry-status', 'Creating room...');
     peer = new Peer(myPeerId, { debug: 1 });
     peer.on('open', () => {
-        // Host is NOT a player; just the display.
         state.phase = 'lobby';
         state.players = [];
+        // If host is player, add them as player 0
+        if (hostIsPlayer) {
+            myPlayerId = myPeerId;
+            state.players.push({
+                id: myPeerId, name: myName, color: PLAYER_COLORS[0],
+                coins: 0, privateClues: [], ready: false,
+                submitted: false, accusation: null, disconnected: false
+            });
+        }
         document.body.classList.add('cast-view');
         document.getElementById('lobby-room-code').textContent = roomCode;
         document.getElementById('lobby-room-code-tv').textContent = roomCode;
@@ -1329,7 +1443,8 @@ function handleGuestMessage(conn, msg) {
                     setTimeout(() => { try { conn.close(); } catch(e){} }, 400);
                     return;
                 }
-                const color = PLAYER_COLORS[state.players.length % PLAYER_COLORS.length];
+                const colorIdx = state.players.length % PLAYER_COLORS.length;
+                const color = PLAYER_COLORS[colorIdx];
                 state.players.push({
                     id: peerId, name, color, coins: 0,
                     privateClues: [], ready: false, submitted: false,
@@ -1566,10 +1681,16 @@ function broadcastState() {
 function hostStartGame() {
     if (!isHost) return;
     if (state.phase !== 'lobby') return;
-    // 1-12 players. Allow 0 (host alone) for dev testing? The spec says support 1.
-    // We'll allow ≥0 so you can peek at screens solo, but warn if <1.
-    if (state.players.length === 0) {
-        showNotification('Starting with 0 players — dev test mode.', 'warning');
+    // Validate player count
+    if (hostIsPlayer) {
+        // Host is player 0, so at least 1 player (host alone is valid for solo testing)
+        if (state.players.length === 1) {
+            showNotification('Starting solo — host-as-player mode.', 'info');
+        }
+    } else {
+        if (state.players.length === 0) {
+            showNotification('Starting with 0 players — dev test mode.', 'warning');
+        }
     }
     // reset derived fields
     state.players.forEach(p => {
@@ -1824,6 +1945,13 @@ function hostNewGame() {
     state.accusations = {};
     state.askQueue = [];
     state.currentAskerIdx = -1;
+    // Keep connected guest players, reset their state
+    if (hostIsPlayer) {
+        // Keep host player (index 0) and connected guests
+        state.players = state.players.filter(p => p.id === myPeerId || guestConns.has(p.id));
+    } else {
+        state.players = state.players.filter(p => guestConns.has(p.id));
+    }
     state.players.forEach(p => {
         p.coins = 0; p.privateClues = []; p.ready = false;
         p.submitted = false; p.accusation = null;
@@ -1867,6 +1995,14 @@ function renderLobby() {
         document.getElementById('lobby-host-controls').style.display = '';
         document.getElementById('lobby-room-code').textContent = roomCode;
         document.getElementById('lobby-room-code-tv').textContent = roomCode;
+        const hint = document.getElementById('lobby-start-hint');
+        if (hint) {
+            if (hostIsPlayer) {
+                hint.textContent = 'Host as Player mode — you can start solo or wait for guests.';
+            } else {
+                hint.textContent = 'You can start with 1+ players (intended range: 3-12).';
+            }
+        }
     } else {
         document.getElementById('lobby-host-panel').style.display = 'none';
         document.getElementById('lobby-host-controls').style.display = 'none';
@@ -1916,10 +2052,13 @@ function renderRoom() {
             }
         });
         const myClue = me && (me.privateClues || []).find(c => c.roomId === room.id && c.hotspotId === hs.id);
-        const dim = isHost ? inspectedByAnyone : inspectedByMe;
+        const dim = (isHost && !hostIsPlayer) ? inspectedByAnyone : (isHost && hostIsPlayer) ? inspectedByAnyone : inspectedByMe;
         if (dim) el.classList.add('inspected');
         let inner = '<span class="icon">' + hs.icon + '</span><div>' + escapeHtml(hs.label) + '</div>';
-        if (isHost) {
+        if (isHost && !hostIsPlayer) {
+            if (inspectedByAnyone) inner += '<div class="check">✓ inspected</div>';
+        } else if (isHost && hostIsPlayer) {
+            // TV display shows inspected status; actual interaction is in the controls panel
             if (inspectedByAnyone) inner += '<div class="check">✓ inspected</div>';
         } else if (myClue) {
             inner += '<div style="margin-top:6px; font-size:0.82rem; color:var(--text-primary);">' + escapeHtml(myClue.text) + '</div>';
@@ -2034,6 +2173,8 @@ function renderRoom() {
 
     // Phone actions (question menu, ready button, notebook, coin shop)
     renderPhoneActions();
+    // Host-as-player controls
+    renderHostPlayerControls();
 }
 
 function renderPlayerStrip() {
@@ -2058,15 +2199,7 @@ function renderPlayerStrip() {
     });
 }
 
-function renderPhoneActions() {
-    const container = document.getElementById('phone-actions');
-    if (!container) return;
-    if (isHost) { container.innerHTML = ''; return; }
-    const me = getMyPlayer();
-    if (!me) { container.innerHTML = '<div class="status-line">Waiting...</div>'; return; }
-    const room = SCENARIO.rooms.find(r => r.id === state.currentRoomId);
-    if (!room) { container.innerHTML = ''; return; }
-
+function buildPlayerActionsHtml(me, room, forHost) {
     let html = '';
 
     // Question menu (if my turn)
@@ -2079,18 +2212,42 @@ function renderPhoneActions() {
             html += '<h3>🎤 Ask ' + escapeHtml(suspect.name) + '</h3>';
             html += '<div class="question-menu">';
             const pool = SCENARIO.questions[suspect.id] || [];
+            const askFn = forHost ? 'hostPlayerAskQuestion' : 'askQuestion';
+            const skipFn = forHost ? 'hostPlayerSkipQuestion' : 'skipQuestion';
             pool.forEach((qa, idx) => {
-                html += '<button class="btn secondary" onclick="askQuestion(' + idx + ')">' + escapeHtml(qa.q) + '</button>';
+                html += '<button class="btn secondary" onclick="' + askFn + '(' + idx + ')">' + escapeHtml(qa.q) + '</button>';
             });
-            html += '<button class="btn small" onclick="skipQuestion()">Skip my turn</button>';
+            html += '<button class="btn small" onclick="' + skipFn + '()">Skip my turn</button>';
             html += '</div></div>';
         } else if (asker) {
             html += '<div class="panel"><div class="status-line">🎤 ' + escapeHtml(asker.name) + ' is questioning ' + escapeHtml(SCENARIO.suspects.find(s => s.id === room.suspectId).name) + '...</div></div>';
         }
     }
 
+    // Hotspots (for host-as-player — they need their own clickable hotspots since TV ones are display-only)
+    if (forHost) {
+        html += '<div class="panel"><h3>' + room.icon + ' ' + escapeHtml(room.name) + ' — Hotspots</h3>';
+        html += '<div class="hotspot-grid">';
+        room.hotspots.forEach(hs => {
+            const myClue = (me.privateClues || []).find(c => c.roomId === room.id && c.hotspotId === hs.id);
+            const inspected = !!myClue;
+            html += '<div class="hotspot' + (inspected ? ' inspected' : '') + '"' +
+                (!inspected ? ' onclick="hostPlayerInspect(\'' + room.id + '\',\'' + hs.id + '\')"' : '') + '>';
+            html += '<span class="icon">' + hs.icon + '</span><div>' + escapeHtml(hs.label) + '</div>';
+            if (myClue) {
+                html += '<div style="margin-top:6px; font-size:0.82rem; color:var(--text-primary);">' + escapeHtml(myClue.text) + '</div>';
+                if (!myClue.shared) {
+                    html += '<button class="btn small success" onclick="event.stopPropagation(); hostPlayerShareClue(\'' + room.id + '\',\'' + hs.id + '\');">Share with Group</button>';
+                } else {
+                    html += '<div class="check">✓ shared</div>';
+                }
+            }
+            html += '</div>';
+        });
+        html += '</div></div>';
+    }
+
     // Notebook (collapsible)
-    const mine = (me.privateClues || []).filter(c => c.roomId === room.id || true);
     html += '<details class="collapsible"><summary>📓 My Notebook (' + (me.privateClues || []).length + ' clues)</summary>';
     if ((me.privateClues || []).length === 0) {
         html += '<div style="color:var(--text-secondary); margin-top:8px;">No clues yet. Tap hotspots to investigate.</div>';
@@ -2105,9 +2262,9 @@ function renderPhoneActions() {
     }
     html += '</details>';
 
-    // Ready to leave (only enabled if suspect questioning is complete OR no suspect here)
-    const askingActive = (state.currentAskerIdx >= 0 && room.suspectId);
-    html += '<button class="btn ' + (me.ready ? 'success' : '') + '" onclick="toggleReady()">' +
+    // Ready to leave
+    const readyFn = forHost ? 'hostPlayerToggleReady' : 'toggleReady';
+    html += '<button class="btn ' + (me.ready ? 'success' : '') + '" onclick="' + readyFn + '()">' +
         (me.ready ? '✓ Ready to Leave' : 'Ready to Leave →') + '</button>';
 
     // Coin shop (optional)
@@ -2115,7 +2272,33 @@ function renderPhoneActions() {
         '<div style="color:var(--text-secondary); margin:8px 0; font-size:0.85rem;">Spend coins during exploration (coming in a future update).</div>' +
         '</details>';
 
-    container.innerHTML = html;
+    return html;
+}
+
+function renderPhoneActions() {
+    const container = document.getElementById('phone-actions');
+    if (!container) return;
+    if (isHost && !hostIsPlayer) { container.innerHTML = ''; return; }
+    if (isHost && hostIsPlayer) { container.innerHTML = ''; return; } // host-as-player uses separate panel
+    const me = getMyPlayer();
+    if (!me) { container.innerHTML = '<div class="status-line">Waiting...</div>'; return; }
+    const room = SCENARIO.rooms.find(r => r.id === state.currentRoomId);
+    if (!room) { container.innerHTML = ''; return; }
+
+    container.innerHTML = buildPlayerActionsHtml(me, room, false);
+}
+
+function renderHostPlayerControls() {
+    const panel = document.getElementById('host-player-controls');
+    const container = document.getElementById('host-player-actions');
+    if (!panel || !container) return;
+    if (!isHost || !hostIsPlayer) { panel.style.display = 'none'; return; }
+    const me = getMyPlayer();
+    if (!me) { panel.style.display = 'none'; return; }
+    const room = SCENARIO.rooms.find(r => r.id === state.currentRoomId);
+    if (!room) { panel.style.display = 'none'; return; }
+    panel.style.display = '';
+    container.innerHTML = buildPlayerActionsHtml(me, room, true);
 }
 
 function roomNameById(roomId) {
@@ -2123,7 +2306,7 @@ function roomNameById(roomId) {
     return r ? (r.icon + ' ' + r.name) : roomId;
 }
 function getMyPlayer() {
-    if (isHost) return null;
+    if (isHost && !hostIsPlayer) return null;
     return state.players.find(p => p.id === myPlayerId);
 }
 
@@ -2189,6 +2372,29 @@ function renderMinigame() {
         }
     }
 
+    // Host-as-player: tap button
+    const hostPlayerUI = document.getElementById('minigame-host-player-ui');
+    if (hostPlayerUI) {
+        if (isHost && hostIsPlayer) {
+            const me = getMyPlayer();
+            if (me) {
+                hostPlayerUI.style.display = '';
+                if (phase === 'racing') {
+                    const myTaps = (mg && mg.tapCounts && mg.tapCounts[me.id]) || 0;
+                    hostPlayerUI.innerHTML = '<button class="tap-button-huge" onclick="hostPlayerTapMinigame()" ontouchstart="hostPlayerTapMinigame(event)" style="max-width:720px; min-height:200px;">TAP!<br>' + myTaps + '</button>';
+                } else if (phase === 'countdown') {
+                    hostPlayerUI.innerHTML = '<div class="panel" style="text-align:center; font-size:1.2rem; max-width:720px;">Get ready to tap!</div>';
+                } else {
+                    hostPlayerUI.innerHTML = '';
+                }
+            } else {
+                hostPlayerUI.style.display = 'none';
+            }
+        } else {
+            hostPlayerUI.style.display = 'none';
+        }
+    }
+
     // Phone: big tap button (only during racing)
     if (phoneUI && !isHost) {
         const me = getMyPlayer();
@@ -2231,6 +2437,8 @@ function renderLeaderPick() {
         if (leader) {
             if (me && me.id === leader.id) {
                 statusEl.innerHTML = '<strong>You won the tap race!</strong> Pick the next room.';
+            } else if (isHost && hostIsPlayer && leader.id === myPeerId) {
+                statusEl.innerHTML = '<strong>You won the tap race!</strong> Pick the next room.';
             } else {
                 statusEl.textContent = leader.name + ' is choosing the next room...';
             }
@@ -2249,15 +2457,16 @@ function renderLeaderPick() {
         let html = '<div class="icon">' + r.icon + '</div><div>' + escapeHtml(r.name) + '</div>';
         if (visited) html += '<div class="cost">Revisit: 2 🪙</div>';
         tile.innerHTML = html;
-        // Only leader (on phone) can click
+        // Only leader can click (on phone or host-as-player)
         if (me && me.id === state.leaderId) {
             if (me.coins < cost) {
                 tile.style.opacity = '0.4';
                 tile.onclick = () => showNotification('Not enough coins!', 'warning');
             } else {
-                tile.onclick = () => pickRoom(r.id);
+                const pickFn = (isHost && hostIsPlayer) ? 'hostPlayerPickRoom' : 'pickRoom';
+                tile.onclick = () => { if (isHost && hostIsPlayer) hostPlayerPickRoom(r.id); else pickRoom(r.id); };
             }
-        } else if (isHost) {
+        } else if (isHost && !hostIsPlayer) {
             // no-op on host (display only)
         } else {
             tile.style.cursor = 'default';
@@ -2288,6 +2497,27 @@ function renderAccusation() {
             if (status) status.textContent = '';
             const btn = document.getElementById('btn-submit-accusation');
             if (btn) btn.disabled = false;
+        }
+    }
+    // Host-as-player accusation form
+    const hostForm = document.getElementById('accusation-host-player-form');
+    if (hostForm) {
+        if (isHost && hostIsPlayer && me) {
+            hostForm.style.display = '';
+            buildChoiceGrid('host-accuse-culprit-grid', SCENARIO.suspects, 'culpritId');
+            buildChoiceGrid('host-accuse-weapon-grid', SCENARIO.weapons, 'weaponId');
+            buildChoiceGrid('host-accuse-location-grid', SCENARIO.rooms, 'locationId');
+            const status = document.getElementById('accusation-host-player-status');
+            const btn = document.getElementById('btn-host-submit-accusation');
+            if (me.submitted) {
+                if (status) status.textContent = '✓ Accusation submitted. Waiting for other players...';
+                if (btn) btn.disabled = true;
+            } else {
+                if (status) status.textContent = '';
+                if (btn) btn.disabled = false;
+            }
+        } else if (hostForm) {
+            hostForm.style.display = 'none';
         }
     }
     // TV submission strip
@@ -2442,6 +2672,140 @@ function submitAccusation() {
     if (!hostConn || !hostConn.open) return;
     hostConn.send({ type: 'submit_accusation',
         culpritId: d.culpritId, weaponId: d.weaponId, locationId: d.locationId });
+}
+
+// ============================================================
+// HOST-AS-PLAYER actions (process locally, no network)
+// ============================================================
+function hostPlayerInspect(roomId, hotspotId) {
+    if (!isHost || !hostIsPlayer) return;
+    const player = state.players.find(p => p.id === myPeerId);
+    if (!player) return;
+    if (state.phase !== 'room') return;
+    const room = SCENARIO.rooms.find(r => r.id === state.currentRoomId);
+    if (!room || roomId !== room.id) return;
+    const hs = room.hotspots.find(h => h.id === hotspotId);
+    if (!hs) return;
+    if (player.privateClues.some(c => c.roomId === room.id && c.hotspotId === hs.id)) return;
+    player.privateClues.push({ roomId: room.id, hotspotId: hs.id, text: hs.clue, shared: false });
+    broadcastState();
+    renderAll();
+}
+
+function hostPlayerShareClue(roomId, hotspotId) {
+    if (!isHost || !hostIsPlayer) return;
+    const player = state.players.find(p => p.id === myPeerId);
+    if (!player) return;
+    if (state.phase !== 'room') return;
+    const clue = player.privateClues.find(c => c.roomId === roomId && c.hotspotId === hotspotId);
+    if (!clue || clue.shared) return;
+    clue.shared = true;
+    state.publicClues.push({
+        roomId: clue.roomId, hotspotId: clue.hotspotId, text: clue.text,
+        fromPlayerId: player.id, fromPlayerName: player.name
+    });
+    broadcastState();
+    renderAll();
+}
+
+function hostPlayerAskQuestion(idx) {
+    if (!isHost || !hostIsPlayer) return;
+    const player = state.players.find(p => p.id === myPeerId);
+    if (!player || state.phase !== 'room') return;
+    const askerIdx = state.askQueue[state.currentAskerIdx];
+    if (askerIdx == null) return;
+    const currentAsker = state.players[askerIdx];
+    if (!currentAsker || currentAsker.id !== player.id) return;
+    const room = SCENARIO.rooms.find(r => r.id === state.currentRoomId);
+    if (!room || !room.suspectId) return;
+    const suspect = SCENARIO.suspects.find(s => s.id === room.suspectId);
+    if (!suspect) return;
+    const pool = SCENARIO.questions[suspect.id] || [];
+    if (idx < 0 || idx >= pool.length) return;
+    const qa = pool[idx];
+    state.questionLog.push({
+        askerId: player.id, askerName: player.name,
+        suspectId: suspect.id, q: qa.q, a: qa.a, roomId: room.id
+    });
+    state.askedThisRoom[player.id] = true;
+    advanceAskQueue();
+    broadcastState();
+    renderAll();
+}
+
+function hostPlayerSkipQuestion() {
+    if (!isHost || !hostIsPlayer) return;
+    const player = state.players.find(p => p.id === myPeerId);
+    if (!player || state.phase !== 'room') return;
+    const askerIdx = state.askQueue[state.currentAskerIdx];
+    if (askerIdx == null) return;
+    const currentAsker = state.players[askerIdx];
+    if (!currentAsker || currentAsker.id !== player.id) return;
+    state.askedThisRoom[player.id] = true;
+    advanceAskQueue();
+    broadcastState();
+    renderAll();
+}
+
+function hostPlayerToggleReady() {
+    if (!isHost || !hostIsPlayer) return;
+    const player = state.players.find(p => p.id === myPeerId);
+    if (!player || state.phase !== 'room') return;
+    player.ready = !player.ready;
+    broadcastState();
+    renderAll();
+    checkAllReady();
+}
+
+function hostPlayerTapMinigame(ev) {
+    if (ev && ev.preventDefault) ev.preventDefault();
+    if (!isHost || !hostIsPlayer) return;
+    if (state.phase !== 'minigame' || !state.minigame) return;
+    const now = Date.now();
+    if (now < state.minigame.startTime || now > state.minigame.endTime) return;
+    const player = state.players.find(p => p.id === myPeerId);
+    if (!player) return;
+    state.minigame.tapCounts[player.id] = (state.minigame.tapCounts[player.id] || 0) + 1;
+    renderMinigame();
+}
+
+function hostPlayerPickRoom(roomId) {
+    if (!isHost || !hostIsPlayer) return;
+    const player = state.players.find(p => p.id === myPeerId);
+    if (!player || state.phase !== 'leader_pick') return;
+    if (state.leaderId !== player.id) return;
+    const targetRoom = SCENARIO.rooms.find(r => r.id === roomId);
+    if (!targetRoom) return;
+    const revisit = state.visitedRoomIds.includes(targetRoom.id);
+    const cost = revisit ? 2 : 0;
+    if (player.coins < cost) {
+        showNotification('Not enough coins to revisit!', 'warning');
+        return;
+    }
+    player.coins -= cost;
+    enterRoom(targetRoom.id);
+}
+
+function hostPlayerSubmitAccusation() {
+    if (!isHost || !hostIsPlayer) return;
+    const player = state.players.find(p => p.id === myPeerId);
+    if (!player || state.phase !== 'accusation') return;
+    const d = accusationDraft;
+    if (!d.culpritId || !d.weaponId || !d.locationId) {
+        showNotification('Please pick Culprit, Weapon, and Location', 'warning');
+        return;
+    }
+    const validCulprit = SCENARIO.suspects.some(s => s.id === d.culpritId);
+    const validWeapon = SCENARIO.weapons.some(w => w.id === d.weaponId);
+    const validLoc = SCENARIO.rooms.some(r => r.id === d.locationId);
+    if (!validCulprit || !validWeapon || !validLoc) return;
+    player.accusation = { culpritId: d.culpritId, weaponId: d.weaponId, locationId: d.locationId };
+    player.submitted = true;
+    broadcastState();
+    renderAll();
+    if (state.players.every(p => p.submitted || p.disconnected)) {
+        finishAccusation();
+    }
 }
 
 // ============================================================
