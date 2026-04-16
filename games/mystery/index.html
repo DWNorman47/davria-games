@@ -1,0 +1,2465 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+<title>Mystery Party</title>
+<link rel="stylesheet" href="../../css/style.css">
+<script src="https://unpkg.com/peerjs@1.5.4/dist/peerjs.min.js"></script>
+<style>
+    * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
+    html, body {
+        width: 100%;
+        overscroll-behavior: none;
+        touch-action: manipulation;
+    }
+    body {
+        background: var(--bg-primary);
+        color: var(--text-primary);
+        font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+        min-height: 100vh;
+        display: flex;
+        flex-direction: column;
+    }
+    .app {
+        flex: 1;
+        display: flex;
+        flex-direction: column;
+        padding: 16px;
+        max-width: 720px;
+        margin: 0 auto;
+        width: 100%;
+    }
+    /* TV (host) gets the full width */
+    body.cast-view .app {
+        max-width: 1400px;
+        padding: 24px;
+    }
+    body.cast-view {
+        font-size: 18px;
+    }
+
+    h1.game-title {
+        text-align: center;
+        font-size: 1.8rem;
+        color: var(--accent);
+        letter-spacing: 2px;
+        margin-bottom: 4px;
+        font-family: 'Georgia', serif;
+    }
+    .subtitle {
+        text-align: center;
+        color: var(--text-secondary);
+        font-size: 0.9rem;
+        margin-bottom: 16px;
+        font-style: italic;
+    }
+    body.cast-view h1.game-title { font-size: 3rem; }
+    body.cast-view .subtitle { font-size: 1.2rem; margin-bottom: 24px; }
+
+    .screen { display: none; flex: 1; flex-direction: column; }
+    .screen.active { display: flex; }
+
+    .panel {
+        background: var(--bg-card);
+        border: 1px solid var(--border);
+        border-radius: 12px;
+        padding: 18px;
+        margin-bottom: 14px;
+    }
+    .panel h2, .panel h3 {
+        margin-bottom: 10px;
+    }
+
+    .btn {
+        display: block;
+        width: 100%;
+        padding: 16px;
+        min-height: 50px;
+        background: var(--accent);
+        color: white;
+        border: none;
+        border-radius: 10px;
+        font-size: 1.05rem;
+        font-weight: 600;
+        cursor: pointer;
+        margin-top: 10px;
+        transition: background 0.15s, transform 0.05s, opacity 0.15s;
+        font-family: inherit;
+    }
+    .btn:active { transform: scale(0.98); }
+    .btn:hover { background: var(--accent-hover); }
+    .btn:disabled { background: #555; cursor: not-allowed; opacity: 0.6; }
+    .btn.secondary { background: var(--bg-secondary); border: 1px solid var(--border); }
+    .btn.secondary:hover { background: var(--border); }
+    .btn.small { padding: 8px 12px; font-size: 0.85rem; min-height: 0; margin-top: 4px; width: auto; display: inline-block; }
+    .btn.success { background: #27ae60; }
+    .btn.success:hover { background: #2ecc71; }
+    .btn.huge {
+        min-height: 180px;
+        font-size: 2.5rem;
+        letter-spacing: 2px;
+    }
+
+    input[type="text"], select {
+        width: 100%;
+        padding: 12px;
+        background: var(--bg-secondary);
+        color: var(--text-primary);
+        border: 1px solid var(--border);
+        border-radius: 8px;
+        font-size: 1rem;
+        margin-top: 6px;
+        font-family: inherit;
+    }
+    label {
+        display: block;
+        margin-top: 12px;
+        color: var(--text-secondary);
+        font-size: 0.9rem;
+    }
+
+    .tabs { display: flex; gap: 8px; margin-bottom: 14px; }
+    .tab {
+        flex: 1;
+        padding: 12px;
+        background: var(--bg-secondary);
+        border: 1px solid var(--border);
+        border-radius: 8px;
+        text-align: center;
+        cursor: pointer;
+        font-weight: 600;
+    }
+    .tab.active { background: var(--accent); border-color: var(--accent); }
+
+    .room-code-display {
+        text-align: center;
+        font-size: 3rem;
+        font-weight: bold;
+        letter-spacing: 8px;
+        color: var(--accent);
+        padding: 18px;
+        background: var(--bg-secondary);
+        border-radius: 12px;
+        font-family: 'Courier New', monospace;
+        margin: 12px 0;
+    }
+    body.cast-view .room-code-display { font-size: 6rem; padding: 36px; letter-spacing: 16px; }
+
+    .cast-url {
+        font-size: 0.75rem;
+        color: var(--text-secondary);
+        padding: 10px;
+        background: var(--bg-secondary);
+        border-radius: 6px;
+        margin-top: 8px;
+        word-break: break-all;
+        text-align: center;
+    }
+    body.cast-view .cast-url { font-size: 1rem; padding: 14px; }
+
+    .player-list { list-style: none; padding: 0; margin: 0; }
+    .player-list li {
+        padding: 10px 14px;
+        background: var(--bg-secondary);
+        border-radius: 8px;
+        margin-bottom: 6px;
+        display: flex;
+        align-items: center;
+        gap: 10px;
+        border-left: 4px solid var(--text-secondary);
+    }
+    .player-dot {
+        width: 14px;
+        height: 14px;
+        border-radius: 50%;
+        flex-shrink: 0;
+        display: inline-block;
+    }
+
+    .status-line {
+        text-align: center;
+        color: var(--text-secondary);
+        padding: 8px;
+        font-size: 0.9rem;
+    }
+    .error-msg {
+        color: var(--accent);
+        text-align: center;
+        padding: 10px;
+        font-size: 0.95rem;
+    }
+
+    /* ===== Mystery-specific styles ===== */
+    .mystery-header {
+        text-align: center;
+        font-family: 'Georgia', serif;
+    }
+    .mystery-header .title {
+        font-size: 1.5rem;
+        color: #e8c77a;
+        letter-spacing: 2px;
+    }
+    body.cast-view .mystery-header .title { font-size: 3.2rem; }
+
+    .portrait {
+        width: 80px;
+        height: 80px;
+        border-radius: 50%;
+        background: var(--bg-secondary);
+        border: 3px solid var(--border);
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        font-size: 2.5rem;
+        flex-shrink: 0;
+    }
+    body.cast-view .portrait { width: 140px; height: 140px; font-size: 5rem; border-width: 5px; }
+    .portrait.victim { border-color: #a03030; background: #2a1414; }
+    .portrait.large {
+        width: 110px; height: 110px; font-size: 3rem;
+    }
+    body.cast-view .portrait.large { width: 200px; height: 200px; font-size: 7rem; }
+
+    .suspect-lineup {
+        display: grid;
+        grid-template-columns: repeat(auto-fit, minmax(130px, 1fr));
+        gap: 12px;
+        margin: 14px 0;
+    }
+    body.cast-view .suspect-lineup {
+        grid-template-columns: repeat(4, 1fr);
+        gap: 20px;
+    }
+    .suspect-card {
+        background: var(--bg-secondary);
+        border-radius: 12px;
+        padding: 14px;
+        text-align: center;
+        border: 1px solid var(--border);
+    }
+    .suspect-card .name { font-weight: 700; margin-top: 8px; font-size: 0.95rem; }
+    .suspect-card .bio { color: var(--text-secondary); font-size: 0.78rem; margin-top: 6px; }
+    body.cast-view .suspect-card .name { font-size: 1.3rem; }
+    body.cast-view .suspect-card .bio { font-size: 1rem; }
+
+    /* Room view */
+    .room-view {
+        display: grid;
+        grid-template-columns: 1fr;
+        gap: 14px;
+    }
+    body.cast-view .room-view {
+        grid-template-columns: 2fr 1fr;
+    }
+    .room-main {
+        background: linear-gradient(135deg, rgba(40, 30, 50, 0.7), rgba(30, 20, 40, 0.8));
+        border: 1px solid var(--border);
+        border-radius: 12px;
+        padding: 18px;
+        min-height: 200px;
+    }
+    body.cast-view .room-main { min-height: 500px; }
+    .room-name {
+        font-family: 'Georgia', serif;
+        font-size: 1.6rem;
+        color: #e8c77a;
+        margin-bottom: 8px;
+        text-align: center;
+    }
+    body.cast-view .room-name { font-size: 2.8rem; }
+    .room-desc {
+        color: var(--text-secondary);
+        font-size: 0.95rem;
+        text-align: center;
+        margin-bottom: 14px;
+        font-style: italic;
+    }
+    body.cast-view .room-desc { font-size: 1.2rem; }
+
+    .hotspot-grid {
+        display: grid;
+        grid-template-columns: repeat(auto-fill, minmax(150px, 1fr));
+        gap: 10px;
+    }
+    body.cast-view .hotspot-grid {
+        grid-template-columns: repeat(3, 1fr);
+        gap: 14px;
+    }
+    .hotspot {
+        background: var(--bg-secondary);
+        border: 1px solid var(--border);
+        border-radius: 10px;
+        padding: 12px;
+        cursor: pointer;
+        transition: background 0.15s, border-color 0.15s;
+        text-align: center;
+        font-size: 0.95rem;
+    }
+    .hotspot:hover { background: var(--border); border-color: var(--accent); }
+    .hotspot.inspected { opacity: 0.55; cursor: default; border-color: #27ae60; }
+    .hotspot.inspected:hover { background: var(--bg-secondary); }
+    .hotspot .icon { font-size: 1.5rem; display: block; margin-bottom: 6px; }
+    body.cast-view .hotspot .icon { font-size: 2.2rem; }
+    body.cast-view .hotspot { font-size: 1.1rem; padding: 16px; }
+    .hotspot .check { color: #27ae60; font-size: 0.8rem; margin-top: 4px; }
+
+    /* Suspect in room */
+    .suspect-present {
+        background: var(--bg-card);
+        border: 2px solid #a36; /* plum */
+        border-radius: 12px;
+        padding: 14px;
+        margin-top: 14px;
+        display: flex;
+        align-items: center;
+        gap: 14px;
+    }
+    .suspect-present .info {
+        flex: 1;
+    }
+    .suspect-present .info .label {
+        color: var(--text-secondary); font-size: 0.8rem; text-transform: uppercase; letter-spacing: 1px;
+    }
+    .suspect-present .info .sname { font-size: 1.25rem; font-weight: 700; }
+    body.cast-view .suspect-present .info .sname { font-size: 2rem; }
+    body.cast-view .suspect-present .info .label { font-size: 1rem; }
+
+    /* Clue board */
+    .clue-board {
+        background: var(--bg-card);
+        border: 1px solid var(--border);
+        border-radius: 12px;
+        padding: 14px;
+        max-height: 60vh;
+        overflow-y: auto;
+    }
+    .clue-board h3 {
+        font-family: 'Georgia', serif;
+        color: #e8c77a;
+        margin-bottom: 10px;
+        border-bottom: 1px solid var(--border);
+        padding-bottom: 6px;
+    }
+    body.cast-view .clue-board h3 { font-size: 1.6rem; }
+    .clue-item {
+        background: var(--bg-secondary);
+        border-left: 3px solid var(--accent);
+        padding: 10px;
+        border-radius: 6px;
+        margin-bottom: 8px;
+        font-size: 0.9rem;
+    }
+    .clue-item.private { border-left-color: #888; }
+    .clue-item.shared { border-left-color: #5dade2; }
+    .clue-item .meta {
+        color: var(--text-secondary);
+        font-size: 0.75rem;
+        margin-top: 4px;
+        display: flex;
+        justify-content: space-between;
+    }
+    body.cast-view .clue-item { font-size: 1.05rem; padding: 14px; }
+
+    /* Questioning */
+    .transcript {
+        background: var(--bg-card);
+        border: 1px solid var(--border);
+        border-radius: 12px;
+        padding: 14px;
+        margin-top: 14px;
+        max-height: 40vh;
+        overflow-y: auto;
+    }
+    .transcript h3 { font-family: 'Georgia', serif; color: #e8c77a; margin-bottom: 10px; }
+    body.cast-view .transcript h3 { font-size: 1.6rem; }
+    .qa-block {
+        background: var(--bg-secondary);
+        border-radius: 8px;
+        padding: 10px;
+        margin-bottom: 8px;
+    }
+    .qa-block .q { font-weight: 700; }
+    .qa-block .q::before { content: "Q: "; color: var(--accent); }
+    .qa-block .a { color: var(--text-secondary); margin-top: 4px; font-style: italic; }
+    .qa-block .a::before { content: "A: "; color: #e8c77a; font-style: normal; font-weight: 700; }
+    .qa-block .asker { font-size: 0.75rem; color: var(--text-secondary); margin-bottom: 4px; }
+    body.cast-view .qa-block { font-size: 1.15rem; padding: 14px; }
+
+    .question-menu {
+        display: flex; flex-direction: column; gap: 6px;
+    }
+    .question-menu .btn {
+        text-align: left;
+        padding: 12px;
+        font-size: 0.95rem;
+        font-weight: 500;
+    }
+
+    /* Player strip */
+    .player-strip {
+        display: flex;
+        gap: 10px;
+        flex-wrap: wrap;
+        padding: 12px;
+        background: var(--bg-card);
+        border-radius: 12px;
+        margin-top: 14px;
+        justify-content: center;
+    }
+    .player-chip {
+        background: var(--bg-secondary);
+        border-radius: 8px;
+        padding: 8px 12px;
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        border: 1px solid var(--border);
+        font-size: 0.9rem;
+    }
+    .player-chip.ready { border-color: #27ae60; }
+    .player-chip.asking { border-color: #e8c77a; box-shadow: 0 0 0 2px rgba(232, 199, 122, 0.3); }
+    .player-chip .coin { color: #e8c77a; font-weight: 700; margin-left: 4px; }
+    .player-chip .ready-dot {
+        width: 8px; height: 8px; border-radius: 50%; background: #555;
+    }
+    .player-chip.ready .ready-dot { background: #27ae60; }
+    body.cast-view .player-chip { font-size: 1.15rem; padding: 12px 16px; }
+
+    /* Minigame */
+    .minigame-wrap {
+        text-align: center;
+        padding: 14px;
+    }
+    .minigame-count {
+        font-size: 7rem;
+        font-weight: 800;
+        color: var(--accent);
+        font-family: 'Courier New', monospace;
+        line-height: 1;
+    }
+    body.cast-view .minigame-count { font-size: 14rem; }
+    .tap-bars {
+        margin: 20px 0;
+        display: flex;
+        flex-direction: column;
+        gap: 8px;
+    }
+    .tap-bar {
+        background: var(--bg-secondary);
+        border-radius: 8px;
+        height: 36px;
+        position: relative;
+        overflow: hidden;
+    }
+    .tap-bar-fill {
+        position: absolute;
+        left: 0; top: 0; bottom: 0;
+        background: var(--accent);
+        transition: width 0.12s linear;
+    }
+    .tap-bar-label {
+        position: absolute;
+        left: 12px; top: 50%; transform: translateY(-50%);
+        font-weight: 700;
+        color: white;
+        z-index: 1;
+        text-shadow: 0 1px 2px rgba(0,0,0,0.6);
+    }
+    .tap-bar-count {
+        position: absolute;
+        right: 12px; top: 50%; transform: translateY(-50%);
+        font-weight: 800;
+        color: white;
+        z-index: 1;
+        text-shadow: 0 1px 2px rgba(0,0,0,0.6);
+    }
+    body.cast-view .tap-bar { height: 54px; }
+    body.cast-view .tap-bar-label, body.cast-view .tap-bar-count { font-size: 1.4rem; }
+
+    .tap-button-huge {
+        width: 100%;
+        min-height: 50vh;
+        font-size: 3rem;
+        background: var(--accent);
+        color: white;
+        border: none;
+        border-radius: 16px;
+        font-weight: 900;
+        letter-spacing: 4px;
+        cursor: pointer;
+    }
+    .tap-button-huge:active { transform: scale(0.98); background: var(--accent-hover); }
+
+    /* Map for leader */
+    .room-map {
+        display: grid;
+        grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+        gap: 10px;
+        margin-top: 12px;
+    }
+    .room-tile {
+        background: var(--bg-secondary);
+        border: 1px solid var(--border);
+        border-radius: 10px;
+        padding: 14px;
+        cursor: pointer;
+        text-align: center;
+        transition: background 0.15s, border-color 0.15s;
+    }
+    .room-tile:hover { background: var(--border); border-color: var(--accent); }
+    .room-tile.visited { opacity: 0.6; }
+    .room-tile.current { border-color: #e8c77a; background: #2d251a; }
+    .room-tile .icon { font-size: 2rem; margin-bottom: 6px; }
+    .room-tile .cost { color: var(--accent); font-size: 0.75rem; margin-top: 4px; }
+
+    /* Accusation */
+    .accusation-form {
+        display: grid;
+        gap: 14px;
+    }
+    .choice-grid {
+        display: grid;
+        grid-template-columns: repeat(auto-fit, minmax(130px, 1fr));
+        gap: 8px;
+        margin-top: 6px;
+    }
+    .choice-btn {
+        background: var(--bg-secondary);
+        border: 2px solid var(--border);
+        border-radius: 10px;
+        padding: 12px;
+        cursor: pointer;
+        text-align: center;
+        color: var(--text-primary);
+        font-family: inherit;
+        font-size: 0.95rem;
+    }
+    .choice-btn .icon { font-size: 1.6rem; display: block; margin-bottom: 4px; }
+    .choice-btn.selected {
+        border-color: var(--accent);
+        background: rgba(233, 69, 96, 0.15);
+    }
+    .choice-btn:hover { border-color: var(--accent-hover); }
+
+    .timer {
+        font-size: 2rem;
+        text-align: center;
+        color: var(--accent);
+        font-family: 'Courier New', monospace;
+        font-weight: 800;
+        padding: 10px;
+    }
+    body.cast-view .timer { font-size: 5rem; }
+
+    /* Results */
+    .reveal-banner {
+        text-align: center;
+        padding: 24px;
+        background: linear-gradient(135deg, #3d1c28, #1f0f18);
+        border: 2px solid var(--accent);
+        border-radius: 14px;
+        margin-bottom: 14px;
+    }
+    .reveal-banner .label { color: var(--text-secondary); text-transform: uppercase; letter-spacing: 3px; font-size: 0.85rem; }
+    .reveal-banner .answer { font-family: 'Georgia', serif; font-size: 1.8rem; color: #e8c77a; margin-top: 10px; }
+    body.cast-view .reveal-banner .answer { font-size: 3.4rem; }
+    body.cast-view .reveal-banner { padding: 48px; }
+
+    .leaderboard {
+        display: flex;
+        flex-direction: column;
+        gap: 10px;
+    }
+    .leader-row {
+        background: var(--bg-secondary);
+        border-radius: 10px;
+        padding: 14px;
+        display: flex;
+        align-items: center;
+        gap: 14px;
+        border-left: 4px solid var(--text-secondary);
+    }
+    .leader-row.winner {
+        background: linear-gradient(135deg, #3d2c14, #1f1508);
+        border-color: #e8c77a;
+        animation: gold-pulse 2s ease-in-out infinite;
+    }
+    @keyframes gold-pulse {
+        0%, 100% { box-shadow: 0 0 0 0 rgba(232, 199, 122, 0.3); }
+        50% { box-shadow: 0 0 20px 4px rgba(232, 199, 122, 0.4); }
+    }
+    .leader-row .rank {
+        font-size: 1.6rem;
+        font-weight: 800;
+        min-width: 40px;
+        text-align: center;
+    }
+    .leader-row .name { flex: 1; font-weight: 700; }
+    .leader-row .score { font-size: 1.4rem; font-weight: 800; color: #e8c77a; }
+    .leader-row .breakdown { color: var(--text-secondary); font-size: 0.8rem; margin-top: 4px; }
+    body.cast-view .leader-row .rank { font-size: 2.4rem; min-width: 60px; }
+    body.cast-view .leader-row .name { font-size: 1.6rem; }
+    body.cast-view .leader-row .score { font-size: 2.2rem; }
+    body.cast-view .leader-row .breakdown { font-size: 1rem; }
+
+    /* Bio panel (collapsible notebook etc) */
+    details.collapsible {
+        background: var(--bg-secondary);
+        border-radius: 8px;
+        padding: 10px 14px;
+        margin-top: 10px;
+    }
+    details.collapsible summary {
+        cursor: pointer;
+        font-weight: 700;
+        color: var(--text-primary);
+        user-select: none;
+    }
+    details.collapsible[open] summary { margin-bottom: 8px; }
+
+    /* Back link */
+    .back-link {
+        display: block;
+        text-align: center;
+        color: var(--text-secondary);
+        text-decoration: none;
+        padding: 12px;
+        font-size: 0.85rem;
+    }
+    .back-link:hover { color: var(--accent); }
+
+    /* Mute toggle */
+    #mute-toggle {
+        position: fixed;
+        top: 12px;
+        right: 12px;
+        width: 44px;
+        height: 44px;
+        border-radius: 50%;
+        border: none;
+        background: rgba(0, 0, 0, 0.45);
+        color: #fff;
+        font-size: 1.35rem;
+        line-height: 1;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        cursor: pointer;
+        z-index: 1000;
+    }
+    #mute-toggle:active { background: rgba(0, 0, 0, 0.65); }
+
+    /* Notifications */
+    #notification-container {
+        position: fixed;
+        top: 12px;
+        left: 50%;
+        transform: translateX(-50%);
+        z-index: 1001;
+        display: flex;
+        flex-direction: column;
+        gap: 8px;
+        pointer-events: none;
+    }
+    .notification-toast {
+        background: var(--bg-card);
+        border: 1px solid var(--accent);
+        color: var(--text-primary);
+        padding: 12px 18px;
+        border-radius: 10px;
+        font-size: 0.95rem;
+        box-shadow: 0 6px 20px rgba(0,0,0,0.5);
+        pointer-events: auto;
+        transition: opacity 0.3s;
+    }
+    .notification-toast.fade-out { opacity: 0; }
+    .notification-toast.warning { border-color: #e67e22; }
+    .notification-toast.info { border-color: #5dade2; }
+
+    /* Cast-only helpers */
+    body.cast-view .hide-on-tv { display: none !important; }
+    body:not(.cast-view) .tv-only { display: none !important; }
+
+    /* Responsive */
+    @media (max-width: 520px) {
+        .app { padding: 10px; }
+        h1.game-title { font-size: 1.4rem; }
+        .room-code-display { font-size: 2.2rem; letter-spacing: 5px; padding: 14px; }
+        .minigame-count { font-size: 5rem; }
+        .tap-button-huge { font-size: 2rem; }
+    }
+</style>
+</head>
+<body>
+<button id="mute-toggle" type="button" onclick="toggleMute()" aria-label="Toggle sound">🔇</button>
+<div id="notification-container"></div>
+
+<div class="app">
+    <div class="mystery-header">
+        <h1 class="game-title">🔍 Mystery Party</h1>
+        <div class="subtitle">A cast-to-TV whodunit party game</div>
+    </div>
+
+    <!-- ================= ENTRY ================= -->
+    <div id="screen-entry" class="screen active">
+        <div class="tabs">
+            <div id="tab-create" class="tab active" onclick="switchTab('create')">Host / Cast</div>
+            <div id="tab-join" class="tab" onclick="switchTab('join')">Join Game</div>
+        </div>
+        <div class="panel" id="panel-create">
+            <p class="subtitle" style="margin-bottom:6px;">Open this page on a big screen. Players join from their phones.</p>
+            <label>Custom room code <span style="color:var(--text-secondary);font-size:0.8rem">(optional, 4-10 letters/numbers)</span></label>
+            <input type="text" id="custom-room-code" placeholder="Leave blank for random" maxlength="10" style="text-transform:uppercase; letter-spacing:2px;">
+            <button class="btn" onclick="createGame()">Create Game</button>
+        </div>
+        <div class="panel" id="panel-join" style="display:none;">
+            <p class="subtitle" style="margin-bottom:6px;">Enter the room code shown on the TV.</p>
+            <label>Room code</label>
+            <input type="text" id="room-code-input" placeholder="ABCDEF" maxlength="10" style="text-transform:uppercase; letter-spacing:4px; text-align:center; font-size:1.35rem;">
+            <label>Your name</label>
+            <input type="text" id="guest-name" placeholder="Detective" maxlength="20">
+            <button class="btn" onclick="joinGame()">Join</button>
+        </div>
+        <div id="entry-status" class="status-line"></div>
+        <a href="../../index.html" class="back-link">← Back to Arcade</a>
+    </div>
+
+    <!-- ================= LOBBY ================= -->
+    <div id="screen-lobby" class="screen">
+        <!-- Host-side lobby -->
+        <div class="panel hide-on-tv" id="lobby-host-panel" style="display:none;">
+            <p class="subtitle" style="margin-bottom:4px;">Share this room code with players:</p>
+            <div class="room-code-display" id="lobby-room-code">------</div>
+            <div class="cast-url">
+                📺 TV bookmark URL:<br>
+                <span id="lobby-cast-url"></span>
+            </div>
+        </div>
+        <!-- TV-style big code -->
+        <div class="panel tv-only" style="text-align:center;">
+            <div style="color:var(--text-secondary); font-size:1.1rem; letter-spacing:3px; text-transform:uppercase;">Room Code</div>
+            <div class="room-code-display" id="lobby-room-code-tv">------</div>
+            <div class="cast-url" id="lobby-cast-url-tv"></div>
+        </div>
+        <div class="panel">
+            <h3>Detectives (<span id="player-count">0</span>)</h3>
+            <ul class="player-list" id="lobby-players"></ul>
+        </div>
+        <div id="lobby-host-controls" class="panel hide-on-tv" style="display:none;">
+            <button class="btn" id="btn-start-game" onclick="hostStartGame()">Start Mystery</button>
+            <div class="status-line" style="margin-top:6px;">You can start with 1+ players (intended range: 3-12).</div>
+        </div>
+        <div class="panel tv-only" style="text-align:center;">
+            <button class="btn" id="btn-start-game-tv" onclick="hostStartGame()">Start Mystery</button>
+        </div>
+        <div id="lobby-guest-status" class="status-line hide-on-tv" style="display:none;">Connected! Waiting for host to start...</div>
+    </div>
+
+    <!-- ================= INTRO ================= -->
+    <div id="screen-intro" class="screen">
+        <div class="panel reveal-banner">
+            <div class="label">Tonight's Mystery</div>
+            <div class="answer" id="intro-title">Murder at Ravenscroft Manor</div>
+            <div style="margin-top:14px;">
+                <div class="portrait victim" style="margin:0 auto;">💀</div>
+                <div style="margin-top:10px; font-weight:700;" id="intro-victim-name">Lord Alistair Ravenscroft</div>
+                <div style="color:var(--text-secondary); font-size:0.95rem; margin-top:6px;" id="intro-backstory"></div>
+            </div>
+        </div>
+        <div class="panel">
+            <h3 style="text-align:center;">The Suspects</h3>
+            <div class="suspect-lineup" id="intro-suspects"></div>
+        </div>
+        <button class="btn hide-on-tv" id="btn-begin-investigation" onclick="hostBeginInvestigation()" style="display:none;">Begin Investigation</button>
+        <button class="btn tv-only" onclick="hostBeginInvestigation()">Begin Investigation</button>
+        <div id="intro-guest-status" class="status-line hide-on-tv" style="display:none;">Get ready — the host will start the investigation.</div>
+    </div>
+
+    <!-- ================= ROOM ================= -->
+    <div id="screen-room" class="screen">
+        <div class="room-view">
+            <div>
+                <div class="room-main">
+                    <div class="room-name" id="room-name">Library</div>
+                    <div class="room-desc" id="room-desc"></div>
+                    <div class="hotspot-grid" id="room-hotspots"></div>
+                    <div id="room-suspect" style="display:none;"></div>
+                </div>
+                <div class="transcript hide-on-tv" id="room-transcript-phone" style="display:none;">
+                    <h3>Questioning</h3>
+                    <div id="room-transcript-list-phone"></div>
+                </div>
+                <div class="player-strip" id="room-player-strip"></div>
+                <div class="hide-on-tv" id="phone-actions" style="margin-top:10px;"></div>
+            </div>
+            <div class="tv-only">
+                <div class="clue-board">
+                    <h3>🗒️ Public Clue Board</h3>
+                    <div id="room-clue-board"></div>
+                </div>
+                <div class="transcript" id="room-transcript-tv" style="display:none; margin-top:14px;">
+                    <h3>🗣️ Questioning</h3>
+                    <div id="room-transcript-list-tv"></div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- ================= MINIGAME ================= -->
+    <div id="screen-minigame" class="screen">
+        <div class="panel minigame-wrap">
+            <h2 style="font-family:Georgia,serif; color:#e8c77a;">⚡ Tap Race!</h2>
+            <div class="subtitle">Tap your phone as fast as you can!</div>
+            <div class="minigame-count" id="minigame-count">5</div>
+            <div id="minigame-status" class="status-line"></div>
+        </div>
+        <div class="panel tv-only">
+            <div class="tap-bars" id="minigame-tap-bars"></div>
+        </div>
+        <div class="hide-on-tv" id="minigame-phone-ui"></div>
+    </div>
+
+    <!-- ================= LEADER PICK ROOM ================= -->
+    <div id="screen-leader-pick" class="screen">
+        <div class="panel">
+            <h2 style="text-align:center; font-family:Georgia,serif; color:#e8c77a;">Where to next?</h2>
+            <div id="leader-pick-status" class="status-line"></div>
+            <div class="room-map" id="leader-room-map"></div>
+        </div>
+    </div>
+
+    <!-- ================= ACCUSATION ================= -->
+    <div id="screen-accusation" class="screen">
+        <div class="panel">
+            <h2 style="text-align:center; font-family:Georgia,serif; color:var(--accent);">⚖️ Make Your Accusation</h2>
+            <div class="timer" id="accusation-timer">60</div>
+        </div>
+        <!-- Phone form -->
+        <div class="hide-on-tv" id="accusation-phone-form">
+            <div class="panel">
+                <label>Culprit</label>
+                <div class="choice-grid" id="accuse-culprit-grid"></div>
+            </div>
+            <div class="panel">
+                <label>Weapon</label>
+                <div class="choice-grid" id="accuse-weapon-grid"></div>
+            </div>
+            <div class="panel">
+                <label>Location</label>
+                <div class="choice-grid" id="accuse-location-grid"></div>
+            </div>
+            <button class="btn success" id="btn-submit-accusation" onclick="submitAccusation()">Submit Accusation</button>
+            <div class="status-line" id="accusation-phone-status"></div>
+        </div>
+        <!-- TV submission status -->
+        <div class="panel tv-only">
+            <h3 style="text-align:center;">Submissions</h3>
+            <div class="player-strip" id="accusation-player-strip"></div>
+        </div>
+    </div>
+
+    <!-- ================= RESULTS ================= -->
+    <div id="screen-results" class="screen">
+        <div class="reveal-banner">
+            <div class="label">The True Answer</div>
+            <div class="answer" id="reveal-answer"></div>
+            <div id="reveal-motive" style="color:var(--text-secondary); margin-top:10px; font-style:italic;"></div>
+        </div>
+        <div class="panel">
+            <h3 style="text-align:center;">🏆 Final Leaderboard</h3>
+            <div class="leaderboard" id="results-leaderboard"></div>
+        </div>
+        <button class="btn hide-on-tv" id="btn-new-game" onclick="hostNewGame()" style="display:none;">New Mystery</button>
+        <button class="btn tv-only" onclick="hostNewGame()">New Mystery</button>
+        <a href="../../index.html" class="back-link">← Back to Arcade</a>
+    </div>
+</div>
+
+<script>
+"use strict";
+// ============================================================
+// SCENARIO: Murder at Ravenscroft Manor
+// ============================================================
+const SCENARIO = {
+    title: "Murder at Ravenscroft Manor",
+    victim: {
+        name: "Lord Alistair Ravenscroft",
+        icon: "💀",
+        backstory: "Lord Alistair Ravenscroft was hosting a formal dinner party. He was found dead in the Library at 10:30 PM. The door was unlocked. A crystal decanter lies shattered beside his body."
+    },
+    suspects: [
+        { id: 'eleanor', name: "Lady Eleanor Ravenscroft", icon: "👑",
+          bio: "Alistair's wife. Cold and composed.",
+          motive: "Recently discovered his affair; inheritance." },
+        { id: 'montgomery', name: "Dr. Julian Montgomery", icon: "🎩",
+          bio: "Old friend and family doctor.",
+          motive: "Alistair was about to cut him out of the will." },
+        { id: 'ash', name: "Theodore Ash", icon: "🤵",
+          bio: "The butler.",
+          motive: "Alistair discovered his embezzlement from the estate." },
+        { id: 'vivian', name: "Miss Vivian Crane", icon: "💃",
+          bio: "An actress; Alistair's mistress.",
+          motive: "Alistair was ending their affair tonight." }
+    ],
+    weapons: [
+        { id: 'decanter', name: "Crystal Decanter", icon: "🍾" },
+        { id: 'knife',    name: "Carving Knife",   icon: "🔪" },
+        { id: 'poison',   name: "Poison",          icon: "🧪" },
+        { id: 'candlestick', name: "Candlestick",  icon: "🕯️" }
+    ],
+    rooms: [
+        {
+            id: 'library', name: "Library", icon: "📚",
+            desc: "Where the body was found. A shattered crystal decanter lies on the floor.",
+            suspectId: null, // nobody "lives" here now; body is here
+            hotspots: [
+                { id: 'decanter', icon: "🍾", label: "Shattered Decanter",
+                  clue: "The decanter is shattered — edges bloodied. A crystal shard is missing." },
+                { id: 'carpet',   icon: "🩸", label: "Bloodstained Carpet",
+                  clue: "Pool of blood where the body lay. A single red silk thread caught in the fibers." },
+                { id: 'window',   icon: "🪟", label: "Open Window",
+                  clue: "The window was open. Wet leaves and a faint muddy smudge on the sill." },
+                { id: 'letter',   icon: "✉️", label: "Desk Letter",
+                  clue: "An unfinished note: 'Vivian, I can't continue this... -A'" },
+                { id: 'shelf',    icon: "📖", label: "Gap in Bookshelf",
+                  clue: "A clearly empty space. Dust outlines a hidden ledger — now missing." }
+            ]
+        },
+        {
+            id: 'drawing', name: "Drawing Room", icon: "🎻",
+            desc: "Silk sofas and a grand piano. The party was held here until 10:15.",
+            suspectId: 'eleanor',
+            hotspots: [
+                { id: 'wine',     icon: "🍷", label: "Wine Glasses",
+                  clue: "Three wine glasses. Lady Eleanor's lipstick on one." },
+                { id: 'seating',  icon: "🪑", label: "Seating Chart",
+                  clue: "Lady Eleanor was seated with three guests from 9:30 to 10:15 PM." },
+                { id: 'fabric',   icon: "🧵", label: "Torn Dress Fabric",
+                  clue: "A scrap of red silk caught on the chair — color matches Miss Crane's gown." },
+                { id: 'piano',    icon: "🎹", label: "Piano",
+                  clue: "Dr. Montgomery was playing until roughly 10:20, says the hostess." }
+            ]
+        },
+        {
+            id: 'kitchen', name: "Kitchen", icon: "🍳",
+            desc: "Pans still warm. Back door slightly ajar.",
+            suspectId: 'ash',
+            hotspots: [
+                { id: 'pantry',  icon: "🗄️", label: "Pantry Inventory",
+                  clue: "The inventory ledger shows crossed-out items — clumsy attempts to hide missing goods." },
+                { id: 'knives',  icon: "🔪", label: "Knife Rack",
+                  clue: "All carving knives are present and clean. Not the weapon." },
+                { id: 'boot',    icon: "🥾", label: "Muddy Boot",
+                  clue: "A butler's boot, fresh mud caked on — someone walked in the garden tonight." },
+                { id: 'backdoor',icon: "🚪", label: "Back Door",
+                  clue: "Unlocked. The butler insists he locked it at 9:00 PM." },
+                { id: 'receipt', icon: "🧾", label: "Crumpled Receipt",
+                  clue: "A receipt for a fine silk scarf — delivered to Miss Vivian Crane." }
+            ]
+        },
+        {
+            id: 'garden', name: "Garden", icon: "🌿",
+            desc: "Dark and wet. The rain started at 10:00 PM sharp.",
+            suspectId: 'vivian',
+            hotspots: [
+                { id: 'prints',  icon: "👣", label: "Footprints",
+                  clue: "Small, narrow heeled prints leading from the library window to the garden gate." },
+                { id: 'scarf',   icon: "🧣", label: "Torn Scarf Fragment",
+                  clue: "A silk scarf fragment, red — snagged on the rosebush near the library window." },
+                { id: 'gloves',  icon: "🧤", label: "Garden Gloves",
+                  clue: "A pair of lady's gloves, dropped in a puddle. Monogrammed 'V.C.'." },
+                { id: 'puddle',  icon: "💧", label: "Puddle with Red Stain",
+                  clue: "A muddy puddle. The red stain is not blood — it's wine. But mixed with... something sharper." },
+                { id: 'shed',    icon: "🏚️", label: "Tool Shed",
+                  clue: "The shed is undisturbed. Nothing taken." }
+            ]
+        },
+        {
+            id: 'study', name: "Study", icon: "📜",
+            desc: "Lord Alistair's private office. Safe open. Papers scattered.",
+            suspectId: 'montgomery',
+            hotspots: [
+                { id: 'safe',    icon: "🗝️", label: "Open Safe",
+                  clue: "Safe was opened tonight — only Alistair and Dr. Montgomery knew the combination." },
+                { id: 'will',    icon: "📃", label: "Recent Will Draft",
+                  clue: "A draft will removing Dr. Montgomery as beneficiary — dated today, unsigned." },
+                { id: 'book',    icon: "📅", label: "Appointment Book",
+                  clue: "10:00 PM entry: 'V — it ends tonight.' Underlined twice." },
+                { id: 'whiskey', icon: "🥃", label: "Whiskey Glass",
+                  clue: "Half-empty whiskey. Dr. Montgomery's prints on the glass — he was here recently." },
+                { id: 'note',    icon: "📝", label: "Threatening Note",
+                  clue: "A typed note: 'Change the will and you'll regret it — J.M.' (Dr. Montgomery's initials — but typed, not signed.)" }
+            ]
+        }
+    ],
+    // Canned Q&A per suspect. One question is "correct alibi" per suspect. Vivian has contradictions.
+    questions: {
+        eleanor: [
+            { q: "Where were you at 10:30 PM?", a: "In the Drawing Room. Three guests sat with me. I never left." },
+            { q: "Did you hear anything unusual?", a: "A faint crash from the Library around 10:30. I assumed the cat knocked a glass." },
+            { q: "What was your relationship with the victim?", a: "We were... distant. I knew of his affair. I had not decided yet what to do about it." },
+            { q: "Who do you think did it?", a: "That woman. Vivian. She sinks her claws in and they don't come out." },
+            { q: "What were you wearing?", a: "A black velvet gown. Not a thread out of place — I haven't left the Drawing Room." },
+            { q: "When did you last see Lord Alistair alive?", a: "At 9:45 PM. He excused himself to the Study. Said he had a 'private matter' to settle." },
+            { q: "Do you know who benefits from his death?", a: "I do, primarily. But I assure you I don't need the money." }
+        ],
+        montgomery: [
+            { q: "Where were you at 10:30 PM?", a: "In the Study. Alistair asked me to witness the new will. He was alive when I left around 10:20." },
+            { q: "Did you hear anything unusual?", a: "Muffled voices from the Library around 10:25. A woman's voice, arguing." },
+            { q: "What was your relationship with the victim?", a: "Oldest friends. Yes, I was being cut from the will — but I'd already made peace with it." },
+            { q: "Who do you think did it?", a: "Someone with more to lose than I did, and less patience." },
+            { q: "What were you wearing?", a: "Dinner jacket, white shirt. I never changed all evening." },
+            { q: "When did you last see Lord Alistair alive?", a: "At 10:20 PM in the Study. I left to play piano in the Drawing Room briefly." },
+            { q: "That threatening note bearing your initials — explain.", a: "I never wrote it. It's typed. Anyone could have typed 'J.M.'. Someone is framing me." },
+            { q: "Did you drink tonight?", a: "A small whiskey in the Study, yes. I always do when we meet." }
+        ],
+        ash: [
+            { q: "Where were you at 10:30 PM?", a: "In the Kitchen, finishing the washing-up. Alone — my usual routine." },
+            { q: "Did you hear anything unusual?", a: "A door slammed — the back door. I thought a gust of wind. It wasn't the wind." },
+            { q: "What was your relationship with the victim?", a: "Loyal servant of thirty years. He was a hard man but a fair one." },
+            { q: "Who do you think did it?", a: "I couldn't possibly speculate, sir." },
+            { q: "What were you wearing?", a: "Standard black tails. I changed my boots — caught mud somehow." },
+            { q: "When did you last see Lord Alistair alive?", a: "At 10:10 PM. I brought him a brandy in the Library. He was alive and well." },
+            { q: "The pantry inventory looks... altered.", a: "A bookkeeping error, sir. I'll correct it." },
+            { q: "Why were your boots muddy?", a: "I stepped out to shut the garden gate. The wind had blown it open. Only briefly." }
+        ],
+        vivian: [
+            { q: "Where were you at 10:30 PM?", a: "In the Garden. Taking some air. The rain had stopped." },
+            { q: "Did you hear anything unusual?", a: "No. Nothing at all. The Garden is very quiet." },
+            { q: "What was your relationship with the victim?", a: "We were... close. Very close. He cared for me deeply." },
+            { q: "Who do you think did it?", a: "The wife. She knew. Women always know." },
+            { q: "What were you wearing?", a: "My red silk gown. Alistair bought it for me. It's perfectly intact, I assure you." },
+            { q: "When did you last see Lord Alistair alive?", a: "At dinner. I left the Drawing Room early — I had a headache." },
+            { q: "A silk scrap was found in the Library. Red. Like your dress.", a: "I... have never been in the Library tonight. That must belong to someone else." },
+            { q: "Gloves monogrammed 'V.C.' were found wet in the Garden.", a: "Those are old. Not mine. I don't own garden gloves." }
+        ]
+    },
+    truth: {
+        culpritId: 'vivian',
+        weaponId: 'decanter',
+        locationId: 'library',
+        motive: "Lord Alistair ended their affair that evening. Vivian, enraged, followed him to the Library, argued, and struck him with the crystal decanter before fleeing through the window into the Garden."
+    }
+};
+
+// ============================================================
+// STATE
+// ============================================================
+const state = {
+    phase: 'lobby', // lobby, intro, room, ready_check, minigame, leader_pick, accusation, results
+    players: [],    // {id, name, color, coins, privateClues:[{roomId,hotspotId,clueText,shared}], ready, submitted, accusation}
+    currentRoomId: null,
+    visitedRoomIds: [],
+    publicClues: [], // {roomId, hotspotId, text, fromPlayerId, fromPlayerName}
+    askQueue: [],    // player indices in order
+    currentAskerIdx: -1,
+    questionLog: [], // {askerId, askerName, suspectId, q, a}
+    askedThisRoom: {}, // playerId -> true (has asked or skipped this room)
+    minigame: null,  // {type:'tap', startTime, endTime, tapCounts:{playerId:n}, placements:[]}
+    leaderId: null,
+    accusationEndTime: 0,
+    accusations: {}, // playerId -> {culpritId, weaponId, locationId}
+    maxRooms: 5      // after all 5 rooms visited (or host can end) move to accusation
+};
+
+// Palette for player colors (up to 12)
+const PLAYER_COLORS = [
+    '#e74c3c', '#3498db', '#2ecc71', '#f39c12',
+    '#9b59b6', '#1abc9c', '#e67e22', '#34495e',
+    '#d35400', '#16a085', '#c0392b', '#8e44ad'
+];
+
+let isHost = false;
+let isTV = false; // true when this device is the host AND cast view (always true for host in this game)
+let peer = null;
+let roomCode = '';
+let myPeerId = '';
+let myName = '';
+let hostConn = null;         // guest → host
+const guestConns = new Map(); // host: peerId → conn
+let soundMuted = true;
+let audioCtx = null;
+
+// Minigame timing / state refs (host-local)
+let minigameTickInterval = null;
+let accusationTickInterval = null;
+let readyTimeoutHandle = null;
+
+// ============================================================
+// UI HELPERS
+// ============================================================
+function showScreen(id) {
+    document.querySelectorAll('.screen').forEach(s => s.classList.remove('active'));
+    const el = document.getElementById(id);
+    if (el) el.classList.add('active');
+}
+function switchTab(which) {
+    document.getElementById('tab-create').classList.toggle('active', which === 'create');
+    document.getElementById('tab-join').classList.toggle('active', which === 'join');
+    document.getElementById('panel-create').style.display = which === 'create' ? '' : 'none';
+    document.getElementById('panel-join').style.display = which === 'join' ? '' : 'none';
+}
+function setStatus(id, text) {
+    const el = document.getElementById(id);
+    if (el) el.textContent = text;
+}
+function escapeHtml(s) {
+    return String(s == null ? '' : s).replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+}
+function genRoomCode() {
+    const chars = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
+    let s = '';
+    for (let i = 0; i < 6; i++) s += chars[Math.floor(Math.random() * chars.length)];
+    return s;
+}
+function showNotification(message, type = 'info', duration = 2800) {
+    const container = document.getElementById('notification-container');
+    if (!container) return;
+    const toast = document.createElement('div');
+    toast.className = 'notification-toast ' + type;
+    toast.textContent = message;
+    container.appendChild(toast);
+    while (container.children.length > 3) container.removeChild(container.firstChild);
+    setTimeout(() => {
+        toast.classList.add('fade-out');
+        setTimeout(() => toast.remove(), 320);
+    }, duration);
+}
+function updateMuteButton() {
+    const btn = document.getElementById('mute-toggle');
+    if (btn) btn.textContent = soundMuted ? '🔇' : '🔊';
+}
+function toggleMute() {
+    soundMuted = !soundMuted;
+    if (!soundMuted) ensureAudio();
+    updateMuteButton();
+}
+function ensureAudio() {
+    if (!audioCtx) {
+        try { audioCtx = new (window.AudioContext || window.webkitAudioContext)(); }
+        catch (e) { /* no audio */ }
+    }
+    if (audioCtx && audioCtx.state === 'suspended') audioCtx.resume();
+}
+function playBeep(freq, duration, volume) {
+    if (soundMuted || !audioCtx) return;
+    try {
+        const osc = audioCtx.createOscillator();
+        const gain = audioCtx.createGain();
+        osc.type = 'sine';
+        osc.frequency.value = freq;
+        gain.gain.value = volume;
+        osc.connect(gain); gain.connect(audioCtx.destination);
+        osc.start();
+        gain.gain.exponentialRampToValueAtTime(0.0001, audioCtx.currentTime + duration);
+        osc.stop(audioCtx.currentTime + duration);
+    } catch (e) { /* ignore */ }
+}
+
+// ============================================================
+// URL auto-join (for TVs)
+// ============================================================
+function getUrlParams() {
+    const params = {};
+    const q = window.location.search.substring(1);
+    if (!q) return params;
+    q.split('&').forEach(p => {
+        const [k, v] = p.split('=');
+        if (k) params[decodeURIComponent(k)] = v ? decodeURIComponent(v) : '';
+    });
+    return params;
+}
+function showCastJoinUrl(code, elId) {
+    const el = document.getElementById(elId);
+    if (!el) return;
+    const base = window.location.href.split('?')[0].split('#')[0];
+    el.textContent = base + '?room=' + code;
+}
+function autoJoinFromUrl() {
+    const params = getUrlParams();
+    if (!params.room) return false;
+    const code = params.room.trim().toUpperCase();
+    if (code.length < 4) return false;
+    // Prefill join tab and attempt
+    switchTab('join');
+    document.getElementById('room-code-input').value = code;
+    const nm = (params.name || '').trim().slice(0, 20);
+    if (nm) {
+        document.getElementById('guest-name').value = nm;
+        // Attempt auto-connect after short delay
+        setStatus('entry-status', 'Auto-joining room ' + code + '...');
+        setTimeout(() => joinGame(), 300);
+    } else {
+        setStatus('entry-status', 'Room ' + code + ' — enter your name to join.');
+    }
+    return true;
+}
+
+// ============================================================
+// HOST: create game
+// ============================================================
+function createGame() {
+    ensureAudio();
+    isHost = true;
+    isTV = true; // host is always the TV display in Mystery Party
+    soundMuted = false;
+    updateMuteButton();
+    const custom = (document.getElementById('custom-room-code').value || '')
+        .trim().toUpperCase().replace(/[^A-Z0-9]/g, '');
+    if (custom.length >= 4 && custom.length <= 10) {
+        roomCode = custom;
+    } else {
+        if (custom.length > 0) {
+            setStatus('entry-status', 'Custom code must be 4-10 letters/numbers. Using random.');
+        }
+        roomCode = genRoomCode();
+    }
+    myPeerId = 'mystery-' + roomCode;
+    setStatus('entry-status', 'Creating room...');
+    peer = new Peer(myPeerId, { debug: 1 });
+    peer.on('open', () => {
+        // Host is NOT a player; just the display.
+        state.phase = 'lobby';
+        state.players = [];
+        document.body.classList.add('cast-view');
+        document.getElementById('lobby-room-code').textContent = roomCode;
+        document.getElementById('lobby-room-code-tv').textContent = roomCode;
+        document.getElementById('lobby-host-panel').style.display = '';
+        document.getElementById('lobby-host-controls').style.display = '';
+        showCastJoinUrl(roomCode, 'lobby-cast-url');
+        showCastJoinUrl(roomCode, 'lobby-cast-url-tv');
+        showScreen('screen-lobby');
+        renderLobby();
+    });
+    peer.on('connection', conn => {
+        conn.on('open', () => {
+            guestConns.set(conn.peer, conn);
+        });
+        conn.on('data', data => handleGuestMessage(conn, data));
+        conn.on('close', () => {
+            guestConns.delete(conn.peer);
+            // Keep player slot so they can rejoin by name, but mark disconnected
+            const p = state.players.find(pl => pl.id === conn.peer);
+            if (p) {
+                p.disconnected = true;
+                // In lobby we remove; in-game we keep
+                if (state.phase === 'lobby') {
+                    state.players = state.players.filter(pl => pl.id !== conn.peer);
+                }
+                broadcastState();
+                renderAll();
+            }
+        });
+        conn.on('error', e => console.warn('conn err', e));
+    });
+    peer.on('error', err => {
+        console.error(err);
+        if (err && err.type === 'unavailable-id') {
+            setStatus('entry-status', 'Room "' + roomCode + '" is in use. Try a different code.');
+            isHost = false;
+            try { peer.destroy(); } catch(e){}
+            document.body.classList.remove('cast-view');
+            showScreen('screen-entry');
+        } else {
+            setStatus('entry-status', 'Error: ' + (err.type || err.message || err));
+        }
+    });
+}
+
+// ============================================================
+// GUEST: join game
+// ============================================================
+function joinGame() {
+    const code = (document.getElementById('room-code-input').value || '').trim().toUpperCase();
+    if (code.length < 4) {
+        setStatus('entry-status', 'Enter a room code (4-10 chars)');
+        return;
+    }
+    myName = (document.getElementById('guest-name').value || '').trim().slice(0, 20);
+    if (!myName) {
+        setStatus('entry-status', 'Please enter your name');
+        return;
+    }
+    ensureAudio();
+    isHost = false;
+    isTV = false;
+    roomCode = code;
+    setStatus('entry-status', 'Connecting...');
+    peer = new Peer(undefined, { debug: 1 });
+    peer.on('open', id => {
+        myPeerId = id;
+        hostConn = peer.connect('mystery-' + code, { reliable: true });
+        hostConn.on('open', () => {
+            setStatus('entry-status', 'Connected!');
+            hostConn.send({ type: 'join_as', role: 'player', name: myName });
+            showScreen('screen-lobby');
+            document.getElementById('lobby-guest-status').style.display = '';
+        });
+        hostConn.on('data', data => handleHostMessage(data));
+        hostConn.on('close', () => {
+            setStatus('entry-status', 'Disconnected from host.');
+            showScreen('screen-entry');
+        });
+        hostConn.on('error', e => {
+            setStatus('entry-status', 'Connection error');
+        });
+    });
+    peer.on('error', err => {
+        console.error(err);
+        setStatus('entry-status', 'Error: ' + (err.type || err.message || err));
+    });
+}
+
+// ============================================================
+// HOST — message handling
+// ============================================================
+function handleGuestMessage(conn, msg) {
+    if (!isHost || !msg || !msg.type) return;
+    const peerId = conn.peer;
+    const player = state.players.find(p => p.id === peerId);
+
+    switch (msg.type) {
+        case 'join_as': {
+            const name = ((msg.name || 'Player') + '').trim().slice(0, 20) || 'Player';
+            // If in lobby, add player. Otherwise allow rejoin (match disconnected by name).
+            if (state.phase === 'lobby') {
+                if (state.players.length >= 12) {
+                    try { conn.send({ type: 'error', message: 'Game is full (12 players max).' }); } catch(e){}
+                    setTimeout(() => { try { conn.close(); } catch(e){} }, 400);
+                    return;
+                }
+                const color = PLAYER_COLORS[state.players.length % PLAYER_COLORS.length];
+                state.players.push({
+                    id: peerId, name, color, coins: 0,
+                    privateClues: [], ready: false, submitted: false,
+                    accusation: null, disconnected: false
+                });
+                try { conn.send({ type: 'role_assignment', playerId: peerId, roomCode }); } catch(e){}
+                broadcastState();
+                renderAll();
+                return;
+            }
+            // Mid-game rejoin: match existing disconnected player by name
+            const slot = state.players.find(p => p.name === name && p.disconnected);
+            if (slot) {
+                // Re-bind: update id on this player (old id was stale)
+                slot.id = peerId;
+                slot.disconnected = false;
+                try { conn.send({ type: 'role_assignment', playerId: peerId, roomCode }); } catch(e){}
+                broadcastState();
+                renderAll();
+                showNotification(name + ' reconnected!', 'info');
+                return;
+            }
+            // No slot available mid-game
+            try { conn.send({ type: 'error', message: 'Game already started. Ask the host for the original name you used, or wait for a new game.' }); } catch(e){}
+            setTimeout(() => { try { conn.close(); } catch(e){} }, 400);
+            return;
+        }
+        case 'inspect_hotspot': {
+            if (!player) return;
+            if (state.phase !== 'room') return;
+            const room = SCENARIO.rooms.find(r => r.id === state.currentRoomId);
+            if (!room) return;
+            if (msg.roomId !== room.id) return;
+            const hs = room.hotspots.find(h => h.id === msg.hotspotId);
+            if (!hs) return;
+            // Has this player already inspected this hotspot?
+            if (player.privateClues.some(c => c.roomId === room.id && c.hotspotId === hs.id)) return;
+            player.privateClues.push({
+                roomId: room.id, hotspotId: hs.id, text: hs.clue, shared: false
+            });
+            broadcastState();
+            renderAll();
+            return;
+        }
+        case 'share_clue': {
+            if (!player) return;
+            if (state.phase !== 'room') return;
+            const clue = player.privateClues.find(c => c.roomId === msg.roomId && c.hotspotId === msg.hotspotId);
+            if (!clue || clue.shared) return;
+            clue.shared = true;
+            state.publicClues.push({
+                roomId: clue.roomId,
+                hotspotId: clue.hotspotId,
+                text: clue.text,
+                fromPlayerId: player.id,
+                fromPlayerName: player.name
+            });
+            broadcastState();
+            renderAll();
+            return;
+        }
+        case 'ask_question': {
+            if (!player) return;
+            if (state.phase !== 'room') return;
+            const askerIdx = state.askQueue[state.currentAskerIdx];
+            if (askerIdx == null) return;
+            const currentAsker = state.players[askerIdx];
+            if (!currentAsker || currentAsker.id !== player.id) return;
+            const room = SCENARIO.rooms.find(r => r.id === state.currentRoomId);
+            if (!room || !room.suspectId) return;
+            const suspect = SCENARIO.suspects.find(s => s.id === room.suspectId);
+            if (!suspect) return;
+            const pool = SCENARIO.questions[suspect.id] || [];
+            const qidx = msg.questionIndex;
+            if (qidx < 0 || qidx >= pool.length) return;
+            const qa = pool[qidx];
+            state.questionLog.push({
+                askerId: player.id, askerName: player.name,
+                suspectId: suspect.id, q: qa.q, a: qa.a, roomId: room.id
+            });
+            state.askedThisRoom[player.id] = true;
+            advanceAskQueue();
+            broadcastState();
+            renderAll();
+            return;
+        }
+        case 'skip_question': {
+            if (!player) return;
+            if (state.phase !== 'room') return;
+            const askerIdx = state.askQueue[state.currentAskerIdx];
+            if (askerIdx == null) return;
+            const currentAsker = state.players[askerIdx];
+            if (!currentAsker || currentAsker.id !== player.id) return;
+            state.askedThisRoom[player.id] = true;
+            advanceAskQueue();
+            broadcastState();
+            renderAll();
+            return;
+        }
+        case 'toggle_ready': {
+            if (!player) return;
+            if (state.phase !== 'room') return;
+            player.ready = !player.ready;
+            broadcastState();
+            renderAll();
+            checkAllReady();
+            return;
+        }
+        case 'tap_minigame': {
+            if (!player) return;
+            if (state.phase !== 'minigame') return;
+            if (!state.minigame || Date.now() < state.minigame.startTime || Date.now() > state.minigame.endTime) return;
+            state.minigame.tapCounts[player.id] = (state.minigame.tapCounts[player.id] || 0) + (msg.taps || 1);
+            // broadcast frequently but lightly
+            // We'll rely on tick interval for bar updates (already set up).
+            return;
+        }
+        case 'pick_room': {
+            if (!player) return;
+            if (state.phase !== 'leader_pick') return;
+            if (state.leaderId !== player.id) return;
+            const targetRoom = SCENARIO.rooms.find(r => r.id === msg.roomId);
+            if (!targetRoom) return;
+            const revisit = state.visitedRoomIds.includes(targetRoom.id);
+            const cost = revisit ? 2 : 0;
+            if (player.coins < cost) {
+                showNotification(player.name + ': not enough coins to revisit', 'warning');
+                return;
+            }
+            player.coins -= cost;
+            enterRoom(targetRoom.id);
+            return;
+        }
+        case 'submit_accusation': {
+            if (!player) return;
+            if (state.phase !== 'accusation') return;
+            const validCulprit = SCENARIO.suspects.some(s => s.id === msg.culpritId);
+            const validWeapon = SCENARIO.weapons.some(w => w.id === msg.weaponId);
+            const validLoc = SCENARIO.rooms.some(r => r.id === msg.locationId);
+            if (!validCulprit || !validWeapon || !validLoc) return;
+            player.accusation = {
+                culpritId: msg.culpritId,
+                weaponId: msg.weaponId,
+                locationId: msg.locationId
+            };
+            player.submitted = true;
+            broadcastState();
+            renderAll();
+            // If everyone submitted, finish early.
+            if (state.players.every(p => p.submitted || p.disconnected)) {
+                finishAccusation();
+            }
+            return;
+        }
+    }
+}
+
+// ============================================================
+// GUEST — message handling
+// ============================================================
+let myPlayerId = null;
+function handleHostMessage(msg) {
+    if (!msg || !msg.type) return;
+    switch (msg.type) {
+        case 'role_assignment':
+            myPlayerId = msg.playerId;
+            return;
+        case 'state_update':
+            Object.assign(state, msg.state);
+            renderAll();
+            return;
+        case 'minigame_tap_update':
+            // live tap bar update (pushed from host during minigame)
+            if (state.minigame) {
+                state.minigame.tapCounts = msg.tapCounts || state.minigame.tapCounts;
+                state.minigame.remainingMs = msg.remainingMs;
+            }
+            renderMinigame();
+            return;
+        case 'accusation_tick':
+            state.accusationRemaining = msg.remaining;
+            renderAccusationTimer();
+            return;
+        case 'notification':
+            showNotification(msg.message || '', msg.level || 'info');
+            return;
+        case 'error':
+            setStatus('entry-status', msg.message || 'Error');
+            showScreen('screen-entry');
+            return;
+    }
+}
+
+function broadcast(msg) {
+    guestConns.forEach(conn => { if (conn && conn.open) try { conn.send(msg); } catch(e){} });
+}
+function broadcastState() {
+    if (!isHost) return;
+    // Strip any non-serializable fields
+    const clean = {
+        phase: state.phase,
+        players: state.players.map(p => ({
+            id: p.id, name: p.name, color: p.color, coins: p.coins,
+            privateClues: p.privateClues, ready: p.ready,
+            submitted: p.submitted, accusation: p.accusation,
+            disconnected: !!p.disconnected
+        })),
+        currentRoomId: state.currentRoomId,
+        visitedRoomIds: state.visitedRoomIds,
+        publicClues: state.publicClues,
+        askQueue: state.askQueue,
+        currentAskerIdx: state.currentAskerIdx,
+        questionLog: state.questionLog,
+        askedThisRoom: state.askedThisRoom,
+        minigame: state.minigame ? {
+            type: state.minigame.type,
+            startTime: state.minigame.startTime,
+            endTime: state.minigame.endTime,
+            tapCounts: state.minigame.tapCounts,
+            placements: state.minigame.placements,
+            phase: state.minigame.phase
+        } : null,
+        leaderId: state.leaderId,
+        accusationEndTime: state.accusationEndTime,
+        accusations: state.accusations,
+        maxRooms: state.maxRooms
+    };
+    broadcast({ type: 'state_update', state: clean });
+}
+
+// ============================================================
+// GAME FLOW — host-driven
+// ============================================================
+function hostStartGame() {
+    if (!isHost) return;
+    if (state.phase !== 'lobby') return;
+    // 1-12 players. Allow 0 (host alone) for dev testing? The spec says support 1.
+    // We'll allow ≥0 so you can peek at screens solo, but warn if <1.
+    if (state.players.length === 0) {
+        showNotification('Starting with 0 players — dev test mode.', 'warning');
+    }
+    // reset derived fields
+    state.players.forEach(p => {
+        p.coins = 0; p.privateClues = []; p.ready = false;
+        p.submitted = false; p.accusation = null;
+    });
+    state.visitedRoomIds = [];
+    state.publicClues = [];
+    state.questionLog = [];
+    state.askedThisRoom = {};
+    state.minigame = null;
+    state.leaderId = null;
+    state.accusations = {};
+    state.phase = 'intro';
+    broadcastState();
+    renderAll();
+}
+
+function hostBeginInvestigation() {
+    if (!isHost) return;
+    if (state.phase !== 'intro') return;
+    // Pick random first room (prefer Library — where the body is)
+    const firstRoomId = 'library';
+    // Random ask order for first room
+    state.askQueue = shuffledIndices(state.players.length);
+    state.currentAskerIdx = 0;
+    enterRoom(firstRoomId);
+}
+
+function enterRoom(roomId) {
+    state.phase = 'room';
+    state.currentRoomId = roomId;
+    if (!state.visitedRoomIds.includes(roomId)) state.visitedRoomIds.push(roomId);
+    state.askedThisRoom = {};
+    state.players.forEach(p => { p.ready = false; });
+    // If the suspect is here, set up ask queue; otherwise queue is empty
+    const room = SCENARIO.rooms.find(r => r.id === roomId);
+    if (room && room.suspectId && state.players.length > 0) {
+        state.currentAskerIdx = 0;
+        // askQueue was set previously (random on first room; winner-first after minigame)
+        // Ensure askQueue length matches player count
+        if (!state.askQueue || state.askQueue.length !== state.players.length) {
+            state.askQueue = shuffledIndices(state.players.length);
+        }
+    } else {
+        state.currentAskerIdx = -1;
+        state.askQueue = [];
+    }
+    // Clear any leftover ready timer
+    if (readyTimeoutHandle) { clearTimeout(readyTimeoutHandle); readyTimeoutHandle = null; }
+    // 2-minute auto-advance timer
+    readyTimeoutHandle = setTimeout(() => {
+        if (state.phase === 'room') {
+            showNotification('Time to move on!', 'info');
+            beginMinigameOrAccusation();
+        }
+    }, 2 * 60 * 1000);
+    broadcastState();
+    renderAll();
+}
+
+function advanceAskQueue() {
+    if (state.currentAskerIdx < 0) return;
+    state.currentAskerIdx++;
+    if (state.currentAskerIdx >= state.askQueue.length) {
+        // Everyone asked or skipped
+        state.currentAskerIdx = -1;
+    }
+}
+
+function shuffledIndices(n) {
+    const a = [];
+    for (let i = 0; i < n; i++) a.push(i);
+    for (let i = a.length - 1; i > 0; i--) {
+        const j = Math.floor(Math.random() * (i + 1));
+        [a[i], a[j]] = [a[j], a[i]];
+    }
+    return a;
+}
+
+function checkAllReady() {
+    if (!isHost) return;
+    if (state.phase !== 'room') return;
+    const alive = state.players.filter(p => !p.disconnected);
+    if (alive.length === 0) return;
+    if (alive.every(p => p.ready)) {
+        beginMinigameOrAccusation();
+    }
+}
+
+function beginMinigameOrAccusation() {
+    if (readyTimeoutHandle) { clearTimeout(readyTimeoutHandle); readyTimeoutHandle = null; }
+    // If we've visited all rooms, go to accusation
+    if (state.visitedRoomIds.length >= state.maxRooms || state.visitedRoomIds.length >= SCENARIO.rooms.length) {
+        startAccusation();
+        return;
+    }
+    // Otherwise run the tap race minigame
+    startMinigame();
+}
+
+function startMinigame() {
+    state.phase = 'minigame';
+    const now = Date.now();
+    state.minigame = {
+        type: 'tap',
+        phase: 'countdown', // 3,2,1 then 'racing' then 'done'
+        startTime: now + 3000,
+        endTime: now + 3000 + 5000, // 5s of tapping
+        tapCounts: {},
+        placements: []
+    };
+    state.players.forEach(p => { state.minigame.tapCounts[p.id] = 0; });
+    broadcastState();
+    renderAll();
+
+    // tick to push live updates
+    if (minigameTickInterval) clearInterval(minigameTickInterval);
+    minigameTickInterval = setInterval(() => {
+        if (!state.minigame) return;
+        const t = Date.now();
+        if (t < state.minigame.startTime) {
+            // countdown phase
+            state.minigame.phase = 'countdown';
+            broadcast({ type: 'minigame_tap_update',
+                tapCounts: state.minigame.tapCounts,
+                remainingMs: state.minigame.startTime - t });
+        } else if (t < state.minigame.endTime) {
+            state.minigame.phase = 'racing';
+            broadcast({ type: 'minigame_tap_update',
+                tapCounts: state.minigame.tapCounts,
+                remainingMs: state.minigame.endTime - t });
+        } else {
+            // finished
+            clearInterval(minigameTickInterval);
+            minigameTickInterval = null;
+            state.minigame.phase = 'done';
+            finishMinigame();
+        }
+        renderMinigame();
+    }, 120);
+}
+
+function finishMinigame() {
+    // Compute placements
+    const entries = state.players.map(p => ({
+        id: p.id, name: p.name, taps: state.minigame.tapCounts[p.id] || 0
+    }));
+    entries.sort((a, b) => b.taps - a.taps);
+    state.minigame.placements = entries;
+    // Award coins
+    const coinByPlacement = (i) => {
+        if (i === 0) return 5;
+        if (i === 1) return 3;
+        if (i === 2) return 2;
+        return 1;
+    };
+    entries.forEach((e, i) => {
+        const p = state.players.find(pl => pl.id === e.id);
+        if (!p) return;
+        p.coins += coinByPlacement(i);
+    });
+    // Winner becomes leader & first asker next round
+    const winnerId = entries[0] ? entries[0].id : null;
+    state.leaderId = winnerId;
+    // set askQueue with winner first, then others in taps-descending order
+    const winnerList = entries.filter(e => e.id).map(e => state.players.findIndex(p => p.id === e.id)).filter(i => i >= 0);
+    state.askQueue = winnerList;
+    state.currentAskerIdx = 0;
+
+    broadcastState();
+    renderAll();
+
+    // After 3 seconds showing results, go to leader pick
+    setTimeout(() => {
+        if (state.visitedRoomIds.length >= state.maxRooms || state.visitedRoomIds.length >= SCENARIO.rooms.length) {
+            startAccusation();
+        } else {
+            startLeaderPick();
+        }
+    }, 3500);
+}
+
+function startLeaderPick() {
+    state.phase = 'leader_pick';
+    // If there's no leader (zero players), auto-advance
+    if (!state.leaderId) {
+        const nextRoom = SCENARIO.rooms.find(r => !state.visitedRoomIds.includes(r.id));
+        if (nextRoom) enterRoom(nextRoom.id);
+        else startAccusation();
+        return;
+    }
+    broadcastState();
+    renderAll();
+}
+
+function startAccusation() {
+    state.phase = 'accusation';
+    state.accusationEndTime = Date.now() + 60 * 1000; // 60s timer
+    state.players.forEach(p => { p.submitted = false; p.accusation = null; });
+    broadcastState();
+    renderAll();
+    if (accusationTickInterval) clearInterval(accusationTickInterval);
+    accusationTickInterval = setInterval(() => {
+        const remaining = Math.max(0, state.accusationEndTime - Date.now());
+        broadcast({ type: 'accusation_tick', remaining });
+        state.accusationRemaining = remaining;
+        renderAccusationTimer();
+        if (remaining <= 0) {
+            clearInterval(accusationTickInterval);
+            accusationTickInterval = null;
+            finishAccusation();
+        }
+    }, 250);
+}
+
+function finishAccusation() {
+    if (state.phase !== 'accusation') return;
+    if (accusationTickInterval) { clearInterval(accusationTickInterval); accusationTickInterval = null; }
+    // Score everyone
+    const truth = SCENARIO.truth;
+    state.players.forEach(p => {
+        let score = p.coins; // 1x coins
+        let detail = { coins: p.coins, culprit: 0, weapon: 0, location: 0, shares: 0 };
+        if (p.accusation) {
+            if (p.accusation.culpritId === truth.culpritId) { score += 5; detail.culprit = 5; }
+            if (p.accusation.weaponId === truth.weaponId) { score += 3; detail.weapon = 3; }
+            if (p.accusation.locationId === truth.locationId) { score += 2; detail.location = 2; }
+        }
+        // Sharing bonus: 1 per shared clue
+        const sharedCount = (p.privateClues || []).filter(c => c.shared).length;
+        score += sharedCount;
+        detail.shares = sharedCount;
+        p.finalScore = score;
+        p.scoreDetail = detail;
+    });
+    state.phase = 'results';
+    broadcastState();
+    renderAll();
+}
+
+function hostNewGame() {
+    if (!isHost) return;
+    state.phase = 'lobby';
+    state.currentRoomId = null;
+    state.visitedRoomIds = [];
+    state.publicClues = [];
+    state.questionLog = [];
+    state.askedThisRoom = {};
+    state.minigame = null;
+    state.leaderId = null;
+    state.accusations = {};
+    state.askQueue = [];
+    state.currentAskerIdx = -1;
+    state.players.forEach(p => {
+        p.coins = 0; p.privateClues = []; p.ready = false;
+        p.submitted = false; p.accusation = null;
+        p.finalScore = undefined; p.scoreDetail = undefined;
+    });
+    broadcastState();
+    renderAll();
+}
+
+// ============================================================
+// RENDER — dispatches on phase
+// ============================================================
+function renderAll() {
+    updateMuteButton();
+    switch (state.phase) {
+        case 'lobby': showScreen('screen-lobby'); renderLobby(); break;
+        case 'intro': showScreen('screen-intro'); renderIntro(); break;
+        case 'room': showScreen('screen-room'); renderRoom(); break;
+        case 'minigame': showScreen('screen-minigame'); renderMinigame(); break;
+        case 'leader_pick': showScreen('screen-leader-pick'); renderLeaderPick(); break;
+        case 'accusation': showScreen('screen-accusation'); renderAccusation(); break;
+        case 'results': showScreen('screen-results'); renderResults(); break;
+    }
+}
+
+function renderLobby() {
+    const list = document.getElementById('lobby-players');
+    list.innerHTML = '';
+    state.players.forEach(p => {
+        const li = document.createElement('li');
+        li.style.borderLeftColor = p.color;
+        li.innerHTML = '<span class="player-dot" style="background:' + p.color + '"></span>' +
+            '<span>' + escapeHtml(p.name) + '</span>' +
+            (p.disconnected ? ' <span style="color:var(--accent); font-size:0.8rem;">(disconnected)</span>' : '');
+        list.appendChild(li);
+    });
+    document.getElementById('player-count').textContent = state.players.length;
+    // Host-side flags
+    if (isHost) {
+        document.getElementById('lobby-host-panel').style.display = '';
+        document.getElementById('lobby-host-controls').style.display = '';
+        document.getElementById('lobby-room-code').textContent = roomCode;
+        document.getElementById('lobby-room-code-tv').textContent = roomCode;
+    } else {
+        document.getElementById('lobby-host-panel').style.display = 'none';
+        document.getElementById('lobby-host-controls').style.display = 'none';
+        document.getElementById('lobby-guest-status').style.display = '';
+    }
+}
+
+function renderIntro() {
+    document.getElementById('intro-title').textContent = SCENARIO.title;
+    document.getElementById('intro-victim-name').textContent = SCENARIO.victim.name;
+    document.getElementById('intro-backstory').textContent = SCENARIO.victim.backstory;
+    const grid = document.getElementById('intro-suspects');
+    grid.innerHTML = '';
+    SCENARIO.suspects.forEach(s => {
+        const card = document.createElement('div');
+        card.className = 'suspect-card';
+        card.innerHTML =
+            '<div class="portrait large" style="margin:0 auto;">' + s.icon + '</div>' +
+            '<div class="name">' + escapeHtml(s.name) + '</div>' +
+            '<div class="bio">' + escapeHtml(s.bio) + '</div>';
+        grid.appendChild(card);
+    });
+    document.getElementById('btn-begin-investigation').style.display = isHost ? '' : 'none';
+    document.getElementById('intro-guest-status').style.display = isHost ? 'none' : '';
+}
+
+function renderRoom() {
+    const room = SCENARIO.rooms.find(r => r.id === state.currentRoomId);
+    if (!room) return;
+    document.getElementById('room-name').textContent = room.icon + ' ' + room.name;
+    document.getElementById('room-desc').textContent = room.desc;
+
+    // Hotspots
+    const hotspotContainer = document.getElementById('room-hotspots');
+    hotspotContainer.innerHTML = '';
+    const me = getMyPlayer();
+    room.hotspots.forEach(hs => {
+        // "Inspected by anyone" dims on TV; "inspected by me" dims on phone
+        const el = document.createElement('div');
+        el.className = 'hotspot';
+        let inspectedByMe = false;
+        let inspectedByAnyone = false;
+        state.players.forEach(p => {
+            if ((p.privateClues || []).some(c => c.roomId === room.id && c.hotspotId === hs.id)) {
+                inspectedByAnyone = true;
+                if (me && p.id === me.id) inspectedByMe = true;
+            }
+        });
+        const myClue = me && (me.privateClues || []).find(c => c.roomId === room.id && c.hotspotId === hs.id);
+        const dim = isHost ? inspectedByAnyone : inspectedByMe;
+        if (dim) el.classList.add('inspected');
+        let inner = '<span class="icon">' + hs.icon + '</span><div>' + escapeHtml(hs.label) + '</div>';
+        if (isHost) {
+            if (inspectedByAnyone) inner += '<div class="check">✓ inspected</div>';
+        } else if (myClue) {
+            inner += '<div style="margin-top:6px; font-size:0.82rem; color:var(--text-primary);">' + escapeHtml(myClue.text) + '</div>';
+            if (!myClue.shared) {
+                inner += '<button class="btn small success" onclick="event.stopPropagation(); shareClue(\'' + room.id + '\',\'' + hs.id + '\');">Share with Group</button>';
+            } else {
+                inner += '<div class="check">✓ shared</div>';
+            }
+        }
+        el.innerHTML = inner;
+        if (!dim && !isHost) {
+            el.onclick = () => inspectHotspot(room.id, hs.id);
+        } else {
+            el.onclick = null;
+        }
+        hotspotContainer.appendChild(el);
+    });
+
+    // Suspect
+    const suspectEl = document.getElementById('room-suspect');
+    if (room.suspectId) {
+        const suspect = SCENARIO.suspects.find(s => s.id === room.suspectId);
+        if (suspect) {
+            let html = '<div class="suspect-present">' +
+                '<div class="portrait large">' + suspect.icon + '</div>' +
+                '<div class="info">' +
+                    '<div class="label">Present:</div>' +
+                    '<div class="sname">' + escapeHtml(suspect.name) + '</div>' +
+                    '<div style="color:var(--text-secondary); font-size:0.85rem; margin-top:4px;">' + escapeHtml(suspect.bio) + '</div>' +
+                '</div></div>';
+            suspectEl.innerHTML = html;
+            suspectEl.style.display = '';
+        }
+    } else {
+        suspectEl.innerHTML = '';
+        suspectEl.style.display = 'none';
+    }
+
+    // Public clue board (TV)
+    const cb = document.getElementById('room-clue-board');
+    if (cb) {
+        cb.innerHTML = '';
+        if (state.publicClues.length === 0) {
+            cb.innerHTML = '<div style="color:var(--text-secondary); font-style:italic; text-align:center;">No clues shared yet.</div>';
+        } else {
+            state.publicClues.slice().reverse().forEach(c => {
+                const div = document.createElement('div');
+                div.className = 'clue-item shared';
+                div.innerHTML = escapeHtml(c.text) +
+                    '<div class="meta"><span>' + escapeHtml(roomNameById(c.roomId)) + '</span>' +
+                    '<span>via ' + escapeHtml(c.fromPlayerName) + '</span></div>';
+                cb.appendChild(div);
+            });
+        }
+    }
+
+    // Questioning transcript (TV)
+    const transcriptLogs = state.questionLog.filter(q => q.roomId === room.id);
+    const showTranscript = transcriptLogs.length > 0 || (room.suspectId && state.currentAskerIdx >= 0);
+    const trEl = document.getElementById('room-transcript-tv');
+    const trList = document.getElementById('room-transcript-list-tv');
+    if (trEl) trEl.style.display = showTranscript ? '' : 'none';
+    if (trList) {
+        trList.innerHTML = '';
+        transcriptLogs.forEach(q => {
+            const block = document.createElement('div');
+            block.className = 'qa-block';
+            block.innerHTML =
+                '<div class="asker">Asked by ' + escapeHtml(q.askerName) + '</div>' +
+                '<div class="q">' + escapeHtml(q.q) + '</div>' +
+                '<div class="a">' + escapeHtml(q.a) + '</div>';
+            trList.appendChild(block);
+        });
+        if (state.currentAskerIdx >= 0 && room.suspectId) {
+            const askerIdx = state.askQueue[state.currentAskerIdx];
+            const asker = state.players[askerIdx];
+            if (asker) {
+                const block = document.createElement('div');
+                block.className = 'qa-block';
+                block.style.borderLeft = '3px solid #e8c77a';
+                block.innerHTML = '<div class="asker" style="color:#e8c77a;">🎤 ' + escapeHtml(asker.name) + ' is asking...</div>';
+                trList.appendChild(block);
+            }
+        }
+    }
+
+    // Phone-side transcript mirror
+    const trPhone = document.getElementById('room-transcript-phone');
+    const trPhoneList = document.getElementById('room-transcript-list-phone');
+    if (!isHost && trPhone && trPhoneList) {
+        if (transcriptLogs.length > 0 || (room.suspectId && state.currentAskerIdx >= 0)) {
+            trPhone.style.display = '';
+            trPhoneList.innerHTML = '';
+            transcriptLogs.forEach(q => {
+                const block = document.createElement('div');
+                block.className = 'qa-block';
+                block.innerHTML =
+                    '<div class="asker">Asked by ' + escapeHtml(q.askerName) + '</div>' +
+                    '<div class="q">' + escapeHtml(q.q) + '</div>' +
+                    '<div class="a">' + escapeHtml(q.a) + '</div>';
+                trPhoneList.appendChild(block);
+            });
+        } else {
+            trPhone.style.display = 'none';
+        }
+    } else if (trPhone) {
+        trPhone.style.display = 'none';
+    }
+
+    // Player strip
+    renderPlayerStrip();
+
+    // Phone actions (question menu, ready button, notebook, coin shop)
+    renderPhoneActions();
+}
+
+function renderPlayerStrip() {
+    const strip = document.getElementById('room-player-strip');
+    if (!strip) return;
+    strip.innerHTML = '';
+    const currentAskerId = (state.currentAskerIdx >= 0 && state.askQueue[state.currentAskerIdx] != null)
+        ? (state.players[state.askQueue[state.currentAskerIdx]] && state.players[state.askQueue[state.currentAskerIdx]].id)
+        : null;
+    state.players.forEach(p => {
+        const chip = document.createElement('div');
+        chip.className = 'player-chip';
+        if (p.ready) chip.classList.add('ready');
+        if (p.id === currentAskerId) chip.classList.add('asking');
+        chip.innerHTML =
+            '<span class="player-dot" style="background:' + p.color + '"></span>' +
+            '<span>' + escapeHtml(p.name) + '</span>' +
+            '<span class="coin">🪙 ' + p.coins + '</span>' +
+            '<span class="ready-dot" title="ready"></span>' +
+            (p.id === currentAskerId ? '<span style="color:#e8c77a;">🎤</span>' : '');
+        strip.appendChild(chip);
+    });
+}
+
+function renderPhoneActions() {
+    const container = document.getElementById('phone-actions');
+    if (!container) return;
+    if (isHost) { container.innerHTML = ''; return; }
+    const me = getMyPlayer();
+    if (!me) { container.innerHTML = '<div class="status-line">Waiting...</div>'; return; }
+    const room = SCENARIO.rooms.find(r => r.id === state.currentRoomId);
+    if (!room) { container.innerHTML = ''; return; }
+
+    let html = '';
+
+    // Question menu (if my turn)
+    if (state.currentAskerIdx >= 0 && room.suspectId) {
+        const askerIdx = state.askQueue[state.currentAskerIdx];
+        const asker = state.players[askerIdx];
+        if (asker && asker.id === me.id) {
+            const suspect = SCENARIO.suspects.find(s => s.id === room.suspectId);
+            html += '<div class="panel">';
+            html += '<h3>🎤 Ask ' + escapeHtml(suspect.name) + '</h3>';
+            html += '<div class="question-menu">';
+            const pool = SCENARIO.questions[suspect.id] || [];
+            pool.forEach((qa, idx) => {
+                html += '<button class="btn secondary" onclick="askQuestion(' + idx + ')">' + escapeHtml(qa.q) + '</button>';
+            });
+            html += '<button class="btn small" onclick="skipQuestion()">Skip my turn</button>';
+            html += '</div></div>';
+        } else if (asker) {
+            html += '<div class="panel"><div class="status-line">🎤 ' + escapeHtml(asker.name) + ' is questioning ' + escapeHtml(SCENARIO.suspects.find(s => s.id === room.suspectId).name) + '...</div></div>';
+        }
+    }
+
+    // Notebook (collapsible)
+    const mine = (me.privateClues || []).filter(c => c.roomId === room.id || true);
+    html += '<details class="collapsible"><summary>📓 My Notebook (' + (me.privateClues || []).length + ' clues)</summary>';
+    if ((me.privateClues || []).length === 0) {
+        html += '<div style="color:var(--text-secondary); margin-top:8px;">No clues yet. Tap hotspots to investigate.</div>';
+    } else {
+        (me.privateClues || []).forEach(c => {
+            html += '<div class="clue-item ' + (c.shared ? 'shared' : 'private') + '">' +
+                escapeHtml(c.text) +
+                '<div class="meta"><span>' + escapeHtml(roomNameById(c.roomId)) + '</span>' +
+                '<span>' + (c.shared ? 'shared' : 'private') + '</span></div>' +
+                '</div>';
+        });
+    }
+    html += '</details>';
+
+    // Ready to leave (only enabled if suspect questioning is complete OR no suspect here)
+    const askingActive = (state.currentAskerIdx >= 0 && room.suspectId);
+    html += '<button class="btn ' + (me.ready ? 'success' : '') + '" onclick="toggleReady()">' +
+        (me.ready ? '✓ Ready to Leave' : 'Ready to Leave →') + '</button>';
+
+    // Coin shop (optional)
+    html += '<details class="collapsible"><summary>🪙 Coin Shop — balance: ' + me.coins + '</summary>' +
+        '<div style="color:var(--text-secondary); margin:8px 0; font-size:0.85rem;">Spend coins during exploration (coming in a future update).</div>' +
+        '</details>';
+
+    container.innerHTML = html;
+}
+
+function roomNameById(roomId) {
+    const r = SCENARIO.rooms.find(x => x.id === roomId);
+    return r ? (r.icon + ' ' + r.name) : roomId;
+}
+function getMyPlayer() {
+    if (isHost) return null;
+    return state.players.find(p => p.id === myPlayerId);
+}
+
+// ============================================================
+// Minigame render
+// ============================================================
+function renderMinigame() {
+    if (state.phase !== 'minigame') return;
+    const mg = state.minigame;
+    const countEl = document.getElementById('minigame-count');
+    const statusEl = document.getElementById('minigame-status');
+    const phoneUI = document.getElementById('minigame-phone-ui');
+
+    let phase = mg ? mg.phase : 'countdown';
+    const now = Date.now();
+    let remMs = 0;
+    if (mg) {
+        if (mg.phase === 'countdown') remMs = Math.max(0, mg.startTime - now);
+        else if (mg.phase === 'racing') remMs = Math.max(0, mg.endTime - now);
+        else remMs = 0;
+        if (mg.remainingMs != null) remMs = mg.remainingMs; // from network update
+    }
+
+    if (phase === 'countdown') {
+        const secs = Math.ceil(remMs / 1000);
+        countEl.textContent = secs > 0 ? secs : 'GO!';
+        if (statusEl) statusEl.textContent = 'Get ready...';
+    } else if (phase === 'racing') {
+        const secs = Math.max(0, Math.ceil(remMs / 1000));
+        countEl.textContent = secs;
+        if (statusEl) statusEl.textContent = 'TAP! TAP! TAP!';
+    } else if (phase === 'done') {
+        countEl.textContent = '✓';
+        // Show placements
+        if (statusEl && mg && mg.placements && mg.placements.length > 0) {
+            const winner = mg.placements[0];
+            statusEl.innerHTML = '<strong>' + escapeHtml(winner ? winner.name : '') + '</strong> wins! (+5 🪙)';
+        } else if (statusEl) {
+            statusEl.textContent = 'Tap race complete.';
+        }
+    }
+
+    // TV: tap bars
+    const barsEl = document.getElementById('minigame-tap-bars');
+    if (barsEl) {
+        barsEl.innerHTML = '';
+        if (state.players.length === 0) {
+            barsEl.innerHTML = '<div style="color:var(--text-secondary); text-align:center;">No players in race.</div>';
+        } else {
+            const counts = (mg && mg.tapCounts) || {};
+            const maxVal = Math.max(1, ...Object.values(counts));
+            state.players.forEach(p => {
+                const count = counts[p.id] || 0;
+                const pct = Math.min(100, Math.round((count / maxVal) * 100));
+                const bar = document.createElement('div');
+                bar.className = 'tap-bar';
+                bar.innerHTML =
+                    '<div class="tap-bar-fill" style="width:' + pct + '%; background:' + p.color + '"></div>' +
+                    '<div class="tap-bar-label">' + escapeHtml(p.name) + '</div>' +
+                    '<div class="tap-bar-count">' + count + '</div>';
+                barsEl.appendChild(bar);
+            });
+        }
+    }
+
+    // Phone: big tap button (only during racing)
+    if (phoneUI && !isHost) {
+        const me = getMyPlayer();
+        if (!me) { phoneUI.innerHTML = ''; return; }
+        if (phase === 'racing') {
+            const myTaps = (mg && mg.tapCounts && mg.tapCounts[me.id]) || 0;
+            phoneUI.innerHTML = '<button class="tap-button-huge" onclick="tapMinigame()" ontouchstart="tapMinigame(event)">TAP!<br>' + myTaps + '</button>';
+        } else if (phase === 'countdown') {
+            phoneUI.innerHTML = '<div class="panel" style="text-align:center; font-size:1.2rem;">Get ready to tap!</div>';
+        } else {
+            // done: show placements
+            if (mg && mg.placements && mg.placements.length > 0) {
+                let html = '<div class="panel"><h3>Results</h3>';
+                mg.placements.forEach((pl, i) => {
+                    const coins = i === 0 ? 5 : (i === 1 ? 3 : (i === 2 ? 2 : 1));
+                    html += '<div class="leader-row' + (i === 0 ? ' winner' : '') + '">' +
+                        '<span class="rank">' + (i + 1) + '</span>' +
+                        '<span class="name">' + escapeHtml(pl.name) + '</span>' +
+                        '<span class="score">+' + coins + ' 🪙</span>' +
+                        '</div>';
+                });
+                html += '</div>';
+                phoneUI.innerHTML = html;
+            } else {
+                phoneUI.innerHTML = '<div class="panel"><div class="status-line">Moving on...</div></div>';
+            }
+        }
+    }
+}
+
+// ============================================================
+// Leader Pick render
+// ============================================================
+function renderLeaderPick() {
+    const container = document.getElementById('leader-room-map');
+    const statusEl = document.getElementById('leader-pick-status');
+    const me = getMyPlayer();
+    const leader = state.players.find(p => p.id === state.leaderId);
+    if (statusEl) {
+        if (leader) {
+            if (me && me.id === leader.id) {
+                statusEl.innerHTML = '<strong>You won the tap race!</strong> Pick the next room.';
+            } else {
+                statusEl.textContent = leader.name + ' is choosing the next room...';
+            }
+        } else {
+            statusEl.textContent = 'Picking next room...';
+        }
+    }
+    if (!container) return;
+    container.innerHTML = '';
+    SCENARIO.rooms.forEach(r => {
+        const visited = state.visitedRoomIds.includes(r.id);
+        const tile = document.createElement('div');
+        tile.className = 'room-tile' + (visited ? ' visited' : '');
+        if (r.id === state.currentRoomId) tile.classList.add('current');
+        const cost = visited ? 2 : 0;
+        let html = '<div class="icon">' + r.icon + '</div><div>' + escapeHtml(r.name) + '</div>';
+        if (visited) html += '<div class="cost">Revisit: 2 🪙</div>';
+        tile.innerHTML = html;
+        // Only leader (on phone) can click
+        if (me && me.id === state.leaderId) {
+            if (me.coins < cost) {
+                tile.style.opacity = '0.4';
+                tile.onclick = () => showNotification('Not enough coins!', 'warning');
+            } else {
+                tile.onclick = () => pickRoom(r.id);
+            }
+        } else if (isHost) {
+            // no-op on host (display only)
+        } else {
+            tile.style.cursor = 'default';
+            tile.onclick = null;
+        }
+        container.appendChild(tile);
+    });
+}
+
+// ============================================================
+// Accusation render
+// ============================================================
+function renderAccusation() {
+    renderAccusationTimer();
+    const me = getMyPlayer();
+    // Phone form
+    if (!isHost) {
+        buildChoiceGrid('accuse-culprit-grid', SCENARIO.suspects, 'culpritId');
+        buildChoiceGrid('accuse-weapon-grid', SCENARIO.weapons, 'weaponId');
+        buildChoiceGrid('accuse-location-grid', SCENARIO.rooms, 'locationId');
+        const phoneForm = document.getElementById('accusation-phone-form');
+        const status = document.getElementById('accusation-phone-status');
+        if (me && me.submitted) {
+            if (status) status.textContent = '✓ Accusation submitted. Waiting for other players...';
+            const btn = document.getElementById('btn-submit-accusation');
+            if (btn) btn.disabled = true;
+        } else {
+            if (status) status.textContent = '';
+            const btn = document.getElementById('btn-submit-accusation');
+            if (btn) btn.disabled = false;
+        }
+    }
+    // TV submission strip
+    const strip = document.getElementById('accusation-player-strip');
+    if (strip) {
+        strip.innerHTML = '';
+        state.players.forEach(p => {
+            const chip = document.createElement('div');
+            chip.className = 'player-chip' + (p.submitted ? ' ready' : '');
+            chip.innerHTML =
+                '<span class="player-dot" style="background:' + p.color + '"></span>' +
+                '<span>' + escapeHtml(p.name) + '</span>' +
+                '<span style="color:' + (p.submitted ? '#27ae60' : 'var(--text-secondary)') + ';">' +
+                (p.submitted ? '✓ submitted' : 'thinking...') + '</span>';
+            strip.appendChild(chip);
+        });
+    }
+}
+
+let accusationDraft = { culpritId: null, weaponId: null, locationId: null };
+
+function buildChoiceGrid(elId, items, key) {
+    const container = document.getElementById(elId);
+    if (!container) return;
+    container.innerHTML = '';
+    items.forEach(item => {
+        const btn = document.createElement('button');
+        btn.type = 'button';
+        btn.className = 'choice-btn';
+        if (accusationDraft[key] === item.id) btn.classList.add('selected');
+        btn.innerHTML = '<span class="icon">' + item.icon + '</span>' + escapeHtml(item.name);
+        btn.onclick = () => {
+            accusationDraft[key] = item.id;
+            renderAccusation();
+        };
+        container.appendChild(btn);
+    });
+}
+
+function renderAccusationTimer() {
+    const el = document.getElementById('accusation-timer');
+    if (!el) return;
+    let remaining = 0;
+    if (isHost) {
+        remaining = Math.max(0, state.accusationEndTime - Date.now());
+    } else {
+        remaining = state.accusationRemaining != null ? state.accusationRemaining :
+            Math.max(0, (state.accusationEndTime || 0) - Date.now());
+    }
+    const secs = Math.ceil(remaining / 1000);
+    el.textContent = secs + 's';
+    el.style.color = secs <= 10 ? '#e74c3c' : 'var(--accent)';
+}
+
+// ============================================================
+// Results render
+// ============================================================
+function renderResults() {
+    const truth = SCENARIO.truth;
+    const culprit = SCENARIO.suspects.find(s => s.id === truth.culpritId);
+    const weapon = SCENARIO.weapons.find(w => w.id === truth.weaponId);
+    const loc = SCENARIO.rooms.find(r => r.id === truth.locationId);
+    document.getElementById('reveal-answer').innerHTML =
+        escapeHtml(culprit.name) + '<br>' +
+        '<span style="font-size:0.7em;">with the ' + escapeHtml(weapon.name) + ' in the ' + escapeHtml(loc.name) + '</span>';
+    document.getElementById('reveal-motive').textContent = truth.motive;
+
+    const lb = document.getElementById('results-leaderboard');
+    lb.innerHTML = '';
+    const sorted = state.players.slice().sort((a, b) => (b.finalScore || 0) - (a.finalScore || 0));
+    sorted.forEach((p, i) => {
+        const row = document.createElement('div');
+        row.className = 'leader-row' + (i === 0 && (p.finalScore || 0) > 0 ? ' winner' : '');
+        row.style.borderLeftColor = p.color;
+        const d = p.scoreDetail || {};
+        const breakdown = 'coins +' + (d.coins || 0) +
+            ' · culprit +' + (d.culprit || 0) +
+            ' · weapon +' + (d.weapon || 0) +
+            ' · location +' + (d.location || 0) +
+            ' · shares +' + (d.shares || 0);
+        row.innerHTML =
+            '<span class="rank">' + (i + 1) + '</span>' +
+            '<div style="flex:1;">' +
+            '<div class="name">' + escapeHtml(p.name) + '</div>' +
+            '<div class="breakdown">' + breakdown + '</div>' +
+            '</div>' +
+            '<span class="score">' + (p.finalScore || 0) + '</span>';
+        lb.appendChild(row);
+    });
+    if (sorted.length === 0) {
+        lb.innerHTML = '<div style="color:var(--text-secondary); text-align:center;">No players in this game.</div>';
+    }
+    document.getElementById('btn-new-game').style.display = isHost ? '' : 'none';
+}
+
+// ============================================================
+// GUEST actions
+// ============================================================
+function inspectHotspot(roomId, hotspotId) {
+    if (!hostConn || !hostConn.open) return;
+    hostConn.send({ type: 'inspect_hotspot', roomId, hotspotId });
+}
+function shareClue(roomId, hotspotId) {
+    if (!hostConn || !hostConn.open) return;
+    hostConn.send({ type: 'share_clue', roomId, hotspotId });
+}
+function askQuestion(idx) {
+    if (!hostConn || !hostConn.open) return;
+    hostConn.send({ type: 'ask_question', questionIndex: idx });
+}
+function skipQuestion() {
+    if (!hostConn || !hostConn.open) return;
+    hostConn.send({ type: 'skip_question' });
+}
+function toggleReady() {
+    if (!hostConn || !hostConn.open) return;
+    hostConn.send({ type: 'toggle_ready' });
+}
+// Accumulate taps locally and batch-send to reduce traffic
+let tapBatch = 0;
+let tapBatchTimer = null;
+function tapMinigame(ev) {
+    if (ev && ev.preventDefault) ev.preventDefault();
+    if (state.phase !== 'minigame' || !state.minigame || state.minigame.phase !== 'racing') return;
+    tapBatch++;
+    // local optimistic update for feel
+    const me = getMyPlayer();
+    if (me && state.minigame && state.minigame.tapCounts) {
+        state.minigame.tapCounts[me.id] = (state.minigame.tapCounts[me.id] || 0) + 1;
+        renderMinigame();
+    }
+    if (!tapBatchTimer) {
+        tapBatchTimer = setTimeout(() => {
+            if (hostConn && hostConn.open && tapBatch > 0) {
+                hostConn.send({ type: 'tap_minigame', taps: tapBatch });
+            }
+            tapBatch = 0;
+            tapBatchTimer = null;
+        }, 60);
+    }
+}
+function pickRoom(roomId) {
+    if (!hostConn || !hostConn.open) return;
+    hostConn.send({ type: 'pick_room', roomId });
+}
+function submitAccusation() {
+    const d = accusationDraft;
+    if (!d.culpritId || !d.weaponId || !d.locationId) {
+        showNotification('Please pick Culprit, Weapon, and Location', 'warning');
+        return;
+    }
+    if (!hostConn || !hostConn.open) return;
+    hostConn.send({ type: 'submit_accusation',
+        culpritId: d.culpritId, weaponId: d.weaponId, locationId: d.locationId });
+}
+
+// ============================================================
+// Boot
+// ============================================================
+document.addEventListener('touchstart', ensureAudio, { once: true });
+document.addEventListener('click', ensureAudio, { once: true });
+
+// Auto-uppercase room code input
+const rciEl = document.getElementById('room-code-input');
+if (rciEl) rciEl.addEventListener('input', e => { e.target.value = e.target.value.toUpperCase(); });
+const crcEl = document.getElementById('custom-room-code');
+if (crcEl) crcEl.addEventListener('input', e => { e.target.value = e.target.value.toUpperCase(); });
+
+updateMuteButton();
+
+// Attempt URL-based auto-join after short delay
+setTimeout(() => autoJoinFromUrl(), 200);
+</script>
+</body>
+</html>
