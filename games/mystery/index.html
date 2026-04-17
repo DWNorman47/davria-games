@@ -1071,16 +1071,20 @@ const SCENARIO = {
             desc: "Where the body was found. A shattered crystal decanter lies on the floor.",
             suspectId: null, // nobody "lives" here now; body is here
             hotspots: [
-                { id: 'decanter', icon: "🍾", label: "Shattered Decanter",
+                { id: 'decanter', icon: "🍾", label: "Shattered Decanter", tier: 1,
                   clue: "The decanter is shattered — edges bloodied. A crystal shard is missing." },
-                { id: 'carpet',   icon: "🩸", label: "Bloodstained Carpet",
+                { id: 'carpet',   icon: "🩸", label: "Bloodstained Carpet", tier: 1,
                   clue: "Pool of blood where the body lay. A single red silk thread caught in the fibers." },
-                { id: 'window',   icon: "🪟", label: "Open Window",
+                { id: 'window',   icon: "🪟", label: "Open Window", tier: 1,
                   clue: "The window was open. Wet leaves and a faint muddy smudge on the sill." },
-                { id: 'letter',   icon: "✉️", label: "Desk Letter",
+                { id: 'letter',   icon: "✉️", label: "Desk Letter", tier: 1,
                   clue: "An unfinished note: 'Vivian, I can't continue this... -A'" },
-                { id: 'shelf',    icon: "📖", label: "Gap in Bookshelf",
-                  clue: "A clearly empty space. Dust outlines a hidden ledger — now missing." }
+                { id: 'shelf',    icon: "📖", label: "Gap in Bookshelf", tier: 2,
+                  clue: "A clearly empty space. Dust outlines a hidden ledger — now missing." },
+                { id: 'ashes',    icon: "🔥", label: "Fireplace Ashes", tier: 3,
+                  clue: "Fresh ashes in the fireplace. Someone burned papers recently — only scraps remain, too charred to read." },
+                { id: 'clock',    icon: "🕰️", label: "Grandfather Clock", tier: 4,
+                  clue: "Stopped at 10:28. Could have been knocked during a struggle — or the mechanism simply wound down." }
             ]
         },
         {
@@ -1088,14 +1092,20 @@ const SCENARIO = {
             desc: "Silk sofas and a grand piano. The party was held here until 10:15.",
             suspectId: 'eleanor',
             hotspots: [
-                { id: 'wine',     icon: "🍷", label: "Wine Glasses",
+                { id: 'wine',     icon: "🍷", label: "Wine Glasses", tier: 1,
                   clue: "Three wine glasses. Lady Eleanor's lipstick on one." },
-                { id: 'seating',  icon: "🪑", label: "Seating Chart",
+                { id: 'seating',  icon: "🪑", label: "Seating Chart", tier: 1,
                   clue: "Lady Eleanor was seated with three guests from 9:30 to 10:15 PM." },
-                { id: 'fabric',   icon: "🧵", label: "Torn Dress Fabric",
+                { id: 'fabric',   icon: "🧵", label: "Torn Dress Fabric", tier: 1,
                   clue: "A scrap of red silk caught on the chair — color matches Miss Crane's gown." },
-                { id: 'piano',    icon: "🎹", label: "Piano",
-                  clue: "Dr. Montgomery was playing until roughly 10:20, says the hostess." }
+                { id: 'piano',    icon: "🎹", label: "Piano", tier: 1,
+                  clue: "Dr. Montgomery was playing until roughly 10:20, says the hostess." },
+                { id: 'vase',     icon: "🏺", label: "Overturned Vase", tier: 2,
+                  clue: "A porcelain vase knocked sideways. Water stains the carpet — could have happened during the party's commotion." },
+                { id: 'guestbook', icon: "📓", label: "Guest Book", tier: 3,
+                  clue: "Signatures of all attendees. Miss Crane signed with a flourish; Dr. Montgomery's hand looks shaky." },
+                { id: 'painting', icon: "🖼️", label: "Painting Askew", tier: 4,
+                  clue: "The portrait of Lord Alistair hangs crooked. Behind it: solid wall, no hidden compartment. Just a bump from the party." }
             ]
         },
         {
@@ -1103,16 +1113,20 @@ const SCENARIO = {
             desc: "Pans still warm. Back door slightly ajar.",
             suspectId: 'ash',
             hotspots: [
-                { id: 'pantry',  icon: "🗄️", label: "Pantry Inventory",
+                { id: 'pantry',  icon: "🗄️", label: "Pantry Inventory", tier: 1,
                   clue: "The inventory ledger shows crossed-out items — clumsy attempts to hide missing goods." },
-                { id: 'knives',  icon: "🔪", label: "Knife Rack",
+                { id: 'knives',  icon: "🔪", label: "Knife Rack", tier: 2,
                   clue: "All carving knives are present and clean. Not the weapon." },
-                { id: 'boot',    icon: "🥾", label: "Muddy Boot",
+                { id: 'boot',    icon: "🥾", label: "Muddy Boot", tier: 1,
                   clue: "A butler's boot, fresh mud caked on — someone walked in the garden tonight." },
-                { id: 'backdoor',icon: "🚪", label: "Back Door",
+                { id: 'backdoor',icon: "🚪", label: "Back Door", tier: 1,
                   clue: "Unlocked. The butler insists he locked it at 9:00 PM." },
-                { id: 'receipt', icon: "🧾", label: "Crumpled Receipt",
-                  clue: "A receipt for a fine silk scarf — delivered to Miss Vivian Crane." }
+                { id: 'receipt', icon: "🧾", label: "Crumpled Receipt", tier: 1,
+                  clue: "A receipt for a fine silk scarf — delivered to Miss Vivian Crane." },
+                { id: 'spices',  icon: "🧂", label: "Spice Rack", tier: 3,
+                  clue: "Several jars open. Ash checked — they're all cooking spices. No poison, despite what mystery novels suggest." },
+                { id: 'cellarkey', icon: "🔑", label: "Wine Cellar Key", tier: 4,
+                  clue: "A key hanging on a hook labeled 'Cellar'. The cellar is locked and undisturbed — a dead end." }
             ]
         },
         {
@@ -1120,16 +1134,20 @@ const SCENARIO = {
             desc: "Dark and wet. The rain started at 10:00 PM sharp.",
             suspectId: 'vivian',
             hotspots: [
-                { id: 'prints',  icon: "👣", label: "Footprints",
+                { id: 'prints',  icon: "👣", label: "Footprints", tier: 1,
                   clue: "Small, narrow heeled prints leading from the library window to the garden gate." },
-                { id: 'scarf',   icon: "🧣", label: "Torn Scarf Fragment",
+                { id: 'scarf',   icon: "🧣", label: "Torn Scarf Fragment", tier: 1,
                   clue: "A silk scarf fragment, red — snagged on the rosebush near the library window." },
-                { id: 'gloves',  icon: "🧤", label: "Garden Gloves",
+                { id: 'gloves',  icon: "🧤", label: "Garden Gloves", tier: 1,
                   clue: "A pair of lady's gloves, dropped in a puddle. Monogrammed 'V.C.'." },
-                { id: 'puddle',  icon: "💧", label: "Puddle with Red Stain",
+                { id: 'puddle',  icon: "💧", label: "Puddle with Red Stain", tier: 1,
                   clue: "A muddy puddle. The red stain is not blood — it's wine. But mixed with... something sharper." },
-                { id: 'shed',    icon: "🏚️", label: "Tool Shed",
-                  clue: "The shed is undisturbed. Nothing taken." }
+                { id: 'shed',    icon: "🏚️", label: "Tool Shed", tier: 2,
+                  clue: "The shed is undisturbed. Nothing taken." },
+                { id: 'flowerpot', icon: "🪴", label: "Overturned Flower Pot", tier: 3,
+                  clue: "Knocked over near the path. Soil scattered. Could be the wind, or someone running in haste." },
+                { id: 'bench',   icon: "🪑", label: "Garden Bench", tier: 4,
+                  clue: "A wet bench near the roses. A forgotten cigarette, half-smoked. Dr. Montgomery's brand — but he claims he quit months ago." }
             ]
         },
         {
@@ -1137,16 +1155,20 @@ const SCENARIO = {
             desc: "Lord Alistair's private office. Safe open. Papers scattered.",
             suspectId: 'montgomery',
             hotspots: [
-                { id: 'safe',    icon: "🗝️", label: "Open Safe",
+                { id: 'safe',    icon: "🗝️", label: "Open Safe", tier: 1,
                   clue: "Safe was opened tonight — only Alistair and Dr. Montgomery knew the combination." },
-                { id: 'will',    icon: "📃", label: "Recent Will Draft",
+                { id: 'will',    icon: "📃", label: "Recent Will Draft", tier: 1,
                   clue: "A draft will removing Dr. Montgomery as beneficiary — dated today, unsigned." },
-                { id: 'book',    icon: "📅", label: "Appointment Book",
+                { id: 'book',    icon: "📅", label: "Appointment Book", tier: 1,
                   clue: "10:00 PM entry: 'V — it ends tonight.' Underlined twice." },
-                { id: 'whiskey', icon: "🥃", label: "Whiskey Glass",
+                { id: 'whiskey', icon: "🥃", label: "Whiskey Glass", tier: 2,
                   clue: "Half-empty whiskey. Dr. Montgomery's prints on the glass — he was here recently." },
-                { id: 'note',    icon: "📝", label: "Threatening Note",
-                  clue: "A typed note: 'Change the will and you'll regret it — J.M.' (Dr. Montgomery's initials — but typed, not signed.)" }
+                { id: 'note',    icon: "📝", label: "Threatening Note", tier: 1,
+                  clue: "A typed note: 'Change the will and you'll regret it — J.M.' (Dr. Montgomery's initials — but typed, not signed.)" },
+                { id: 'dustypainting', icon: "🖼️", label: "Dusty Painting", tier: 3,
+                  clue: "A painting of Ravenscroft ancestors. Slightly askew. Nothing behind it — checked." },
+                { id: 'telephone', icon: "📞", label: "Telephone Receiver", tier: 4,
+                  clue: "Off the hook. The last call was at 9:45 PM — to an unknown London number. Could be anyone's." }
             ]
         }
     ],
@@ -1314,6 +1336,15 @@ function setStatus(id, text) {
 }
 function escapeHtml(s) {
     return String(s == null ? '' : s).replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+}
+function getHotspotsForRoom(room) {
+    const playerCount = state.players.length;
+    let maxTier;
+    if (playerCount <= 3) maxTier = 1;       // 4 hotspots
+    else if (playerCount <= 6) maxTier = 2;  // 5 hotspots
+    else if (playerCount <= 9) maxTier = 3;  // 6 hotspots
+    else maxTier = 4;                         // 7 hotspots
+    return room.hotspots.filter(hs => (hs.tier || 1) <= maxTier);
 }
 function genRoomCode() {
     const chars = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
@@ -1606,7 +1637,7 @@ function handleGuestMessage(conn, msg) {
             const room = SCENARIO.rooms.find(r => r.id === state.currentRoomId);
             if (!room) return;
             if (msg.roomId !== room.id) return;
-            const hs = room.hotspots.find(h => h.id === msg.hotspotId);
+            const hs = getHotspotsForRoom(room).find(h => h.id === msg.hotspotId);
             if (!hs) return;
             if (player.privateClues.some(c => c.roomId === room.id && c.hotspotId === hs.id)) return;
             const count = state.inspectionsThisRoom[player.id] || 0;
@@ -2245,7 +2276,7 @@ function renderRoom() {
     const hotspotContainer = document.getElementById('room-hotspots');
     hotspotContainer.innerHTML = '';
     const me = getMyPlayer();
-    room.hotspots.forEach(hs => {
+    getHotspotsForRoom(room).forEach(hs => {
         // "Inspected by anyone" dims on TV; "inspected by me" dims on phone
         const el = document.createElement('div');
         el.className = 'hotspot';
@@ -2440,7 +2471,7 @@ function buildPlayerActionsHtml(me, room, forHost) {
         const hostAtLimit = hostInspCount >= 2 + hostExtraCount;
         html += '<div class="panel"><h3>' + room.icon + ' ' + escapeHtml(room.name) + ' — Hotspots (' + hostInspCount + '/' + (2 + hostExtraCount) + ')</h3>';
         html += '<div class="hotspot-grid">';
-        room.hotspots.forEach(hs => {
+        getHotspotsForRoom(room).forEach(hs => {
             const myClue = (me.privateClues || []).find(c => c.roomId === room.id && c.hotspotId === hs.id);
             const inspected = !!myClue;
             const locked = !inspected && hostAtLimit;
@@ -2947,7 +2978,7 @@ function hostPlayerInspect(roomId, hotspotId) {
     if (state.phase !== 'room') return;
     const room = SCENARIO.rooms.find(r => r.id === state.currentRoomId);
     if (!room || roomId !== room.id) return;
-    const hs = room.hotspots.find(h => h.id === hotspotId);
+    const hs = getHotspotsForRoom(room).find(h => h.id === hotspotId);
     if (!hs) return;
     if (player.privateClues.some(c => c.roomId === room.id && c.hotspotId === hs.id)) return;
     const count = state.inspectionsThisRoom[player.id] || 0;
@@ -3054,7 +3085,7 @@ function processSpendCoins(player, action) {
         // Find a clue this player hasn't discovered yet
         const allHotspots = [];
         SCENARIO.rooms.forEach(room => {
-            room.hotspots.forEach(hs => {
+            getHotspotsForRoom(room).forEach(hs => {
                 const alreadyHas = player.privateClues.some(c => c.roomId === room.id && c.hotspotId === hs.id);
                 if (!alreadyHas) {
                     allHotspots.push({ roomId: room.id, hotspotId: hs.id, clue: hs.clue });
