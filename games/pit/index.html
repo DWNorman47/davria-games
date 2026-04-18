@@ -1,0 +1,984 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+<title>Pit</title>
+<script src="https://unpkg.com/peerjs@1.5.4/dist/peerjs.min.js"></script>
+<style>
+:root {
+    --bg-primary: #0f0f1a;
+    --bg-secondary: #1a1a2e;
+    --bg-card: #16213e;
+    --accent: #e94560;
+    --accent-hover: #ff6b81;
+    --text-primary: #eee;
+    --text-secondary: #aaa;
+    --border: #2a2a4a;
+    --gold: #ffd700;
+}
+* { box-sizing: border-box; margin: 0; padding: 0; -webkit-tap-highlight-color: transparent; }
+html, body {
+    width: 100%; height: 100%;
+    background: var(--bg-primary);
+    color: var(--text-primary);
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+    overscroll-behavior: none;
+    touch-action: manipulation;
+    overflow: hidden;
+}
+body { display: flex; flex-direction: column; height: 100vh; }
+.app {
+    flex: 1; display: flex; flex-direction: column;
+    padding: 12px; max-width: 640px; margin: 0 auto; width: 100%;
+    height: 100%; overflow: hidden;
+}
+h1 { text-align: center; font-size: 1.8rem; margin-bottom: 4px; color: var(--accent); letter-spacing: 1px; }
+.subtitle { text-align: center; color: var(--text-secondary); margin-bottom: 12px; font-size: 0.85rem; }
+.screen { display: none; flex: 1; flex-direction: column; overflow: hidden; }
+.screen.active { display: flex; }
+.panel { background: var(--bg-card); border: 1px solid var(--border); border-radius: 12px; padding: 16px; margin-bottom: 12px; }
+.btn {
+    display: block; width: 100%; padding: 16px; min-height: 56px;
+    background: var(--accent); color: white; border: none; border-radius: 10px;
+    font-size: 1.1rem; font-weight: 700; cursor: pointer; text-align: center;
+    transition: background 0.15s, transform 0.1s; -webkit-user-select: none; user-select: none;
+}
+.btn:active { transform: scale(0.97); }
+.btn:disabled { opacity: 0.4; cursor: default; transform: none; }
+.btn-secondary { background: var(--bg-secondary); border: 1px solid var(--border); }
+.btn-gold { background: var(--gold); color: #000; }
+.btn-small { padding: 10px 16px; min-height: 40px; font-size: 0.9rem; width: auto; display: inline-block; }
+.top-bar { display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px; flex-shrink: 0; }
+.top-bar h1 { margin: 0; font-size: 1.4rem; }
+.mute-btn {
+    background: none; border: none; color: var(--text-secondary); font-size: 1.3rem;
+    cursor: pointer; padding: 6px;
+}
+label { display: block; color: var(--text-secondary); font-size: 0.85rem; margin-bottom: 4px; }
+input, select {
+    width: 100%; padding: 12px; background: var(--bg-secondary); border: 1px solid var(--border);
+    border-radius: 8px; color: var(--text-primary); font-size: 1rem; margin-bottom: 10px;
+}
+.room-code { font-size: 1.8rem; font-weight: 900; letter-spacing: 6px; text-align: center; color: var(--gold); margin: 8px 0; }
+.player-list { list-style: none; }
+.player-list li { padding: 10px 12px; border-bottom: 1px solid var(--border); display: flex; align-items: center; gap: 8px; }
+.player-dot { width: 10px; height: 10px; border-radius: 50%; display: inline-block; }
+.back-link { display: inline-block; color: var(--accent); text-decoration: none; padding: 8px 0; font-weight: 500; font-size: 0.9rem; }
+
+/* Hand View */
+.hand-header { display: flex; justify-content: space-between; align-items: center; padding: 4px 0; flex-shrink: 0; }
+.score-display { font-size: 1.1rem; font-weight: 700; color: var(--gold); }
+.selection-info { text-align: center; padding: 6px; flex-shrink: 0; min-height: 36px; font-size: 0.9rem; color: var(--text-secondary); }
+.selection-info.has-selection { color: var(--gold); font-weight: 600; }
+.hand-actions { display: flex; gap: 8px; padding: 4px 0; flex-shrink: 0; }
+.hand-actions .btn { flex: 1; min-height: 44px; padding: 10px; font-size: 0.95rem; }
+
+.card-fan-container { flex: 1; position: relative; overflow: hidden; min-height: 160px; }
+.card-fan { position: absolute; bottom: 10px; left: 50%; transform: translateX(-50%); }
+.card {
+    position: absolute; width: 62px; height: 92px; border-radius: 8px;
+    display: flex; flex-direction: column; align-items: center; justify-content: center;
+    font-size: 0.65rem; font-weight: 700; cursor: pointer;
+    transition: transform 0.15s ease-out, border-color 0.15s, opacity 0.15s;
+    box-shadow: 0 2px 8px rgba(0,0,0,0.3); border: 2px solid rgba(0,0,0,0.2);
+    -webkit-user-select: none; user-select: none;
+}
+.card .emoji { font-size: 1.6rem; margin-bottom: 2px; pointer-events: none; }
+.card .card-name { pointer-events: none; text-shadow: 0 1px 2px rgba(0,0,0,0.3); }
+.card.selected {
+    border: 3px solid var(--gold) !important;
+    filter: brightness(1.15);
+    z-index: 100 !important;
+}
+.card.disabled { opacity: 0.35; pointer-events: none; }
+
+/* Pit button */
+.pit-btn {
+    position: fixed; bottom: 16px; right: 16px; width: 64px; height: 64px;
+    border-radius: 50%; background: var(--accent); color: #fff; border: 3px solid #fff;
+    font-size: 1.1rem; font-weight: 900; cursor: pointer; z-index: 200;
+    box-shadow: 0 4px 16px rgba(233,69,96,0.5); display: none;
+    align-items: center; justify-content: center;
+}
+.pit-btn.show { display: flex; }
+.pit-btn:active { transform: scale(0.9); }
+
+/* Trade Screen */
+.trade-player-btn {
+    display: flex; align-items: center; gap: 12px; width: 100%;
+    padding: 18px 16px; min-height: 64px; background: var(--bg-secondary);
+    border: 2px solid var(--border); border-radius: 12px; color: var(--text-primary);
+    font-size: 1.1rem; font-weight: 600; cursor: pointer; margin-bottom: 10px;
+    transition: border-color 0.15s, background 0.15s; -webkit-user-select: none; user-select: none;
+}
+.trade-player-btn.holding { border-color: var(--accent); background: rgba(233,69,96,0.15); }
+.trade-player-btn.mutual { border-color: #2ecc71; background: rgba(46,204,113,0.2); animation: pulse-green 0.4s infinite alternate; }
+.trade-player-btn .wants-you { font-size: 0.75rem; color: var(--accent); margin-left: auto; }
+@keyframes pulse-green { from { box-shadow: 0 0 0 0 rgba(46,204,113,0.4); } to { box-shadow: 0 0 0 8px rgba(46,204,113,0); } }
+
+/* Round / Game End */
+.result-screen { text-align: center; justify-content: center; align-items: center; gap: 16px; }
+.result-title { font-size: 1.8rem; font-weight: 900; color: var(--gold); }
+.result-commodity { font-size: 3rem; margin: 8px 0; }
+.scoreboard { width: 100%; }
+.scoreboard table { width: 100%; border-collapse: collapse; }
+.scoreboard th, .scoreboard td { padding: 8px 12px; text-align: left; border-bottom: 1px solid var(--border); }
+.scoreboard th { color: var(--text-secondary); font-size: 0.8rem; text-transform: uppercase; }
+.scoreboard .winner { color: var(--gold); font-weight: 700; }
+
+/* Notifications */
+.toast {
+    position: fixed; top: 16px; left: 50%; transform: translateX(-50%);
+    background: var(--bg-card); border: 1px solid var(--border); border-radius: 10px;
+    padding: 12px 20px; font-size: 0.9rem; z-index: 300; opacity: 0;
+    transition: opacity 0.3s; pointer-events: none; text-align: center; max-width: 90%;
+}
+.toast.show { opacity: 1; }
+.toast.error { border-color: var(--accent); }
+.toast.success { border-color: #2ecc71; }
+
+/* Scrollable areas */
+.scroll-area { overflow-y: auto; flex: 1; -webkit-overflow-scrolling: touch; }
+</style>
+</head>
+<body>
+<div class="app">
+    <div class="top-bar">
+        <a href="../../index.html" class="back-link">&larr; Arcade</a>
+        <h1>Pit</h1>
+        <button class="mute-btn" id="muteBtn" title="Toggle sound">🔊</button>
+    </div>
+
+    <!-- JOIN / CREATE SCREEN -->
+    <div class="screen active" id="screenJoin">
+        <p class="subtitle">Real-time commodity trading card game</p>
+        <div class="panel">
+            <label>Your Name</label>
+            <input type="text" id="nameInput" placeholder="Enter your name" maxlength="16" autocomplete="off">
+        </div>
+        <button class="btn" id="createBtn" style="margin-bottom:10px;">Create Game</button>
+        <div class="panel">
+            <label>Or join with a room code</label>
+            <input type="text" id="joinCodeInput" placeholder="Room code" maxlength="6" style="text-transform:uppercase;letter-spacing:3px;text-align:center;" autocomplete="off">
+            <button class="btn btn-secondary" id="joinBtn">Join Game</button>
+        </div>
+    </div>
+
+    <!-- LOBBY SCREEN -->
+    <div class="screen" id="screenLobby">
+        <div class="panel">
+            <label>Room Code</label>
+            <div class="room-code" id="lobbyCode"></div>
+            <button class="btn-small btn-secondary" id="copyCodeBtn" style="display:block;margin:0 auto;">Copy Link</button>
+        </div>
+        <div class="panel" id="hostSettings" style="display:none;">
+            <label>Target Score</label>
+            <select id="targetScoreSelect">
+                <option value="200">200</option>
+                <option value="300">300</option>
+                <option value="500" selected>500</option>
+                <option value="750">750</option>
+            </select>
+        </div>
+        <div class="panel scroll-area" style="flex:1;">
+            <label>Players</label>
+            <ul class="player-list" id="lobbyPlayers"></ul>
+        </div>
+        <button class="btn" id="startGameBtn" style="display:none;">Start Game</button>
+        <p id="lobbyWait" class="subtitle">Waiting for host to start...</p>
+    </div>
+
+    <!-- HAND VIEW -->
+    <div class="screen" id="screenHand">
+        <div class="hand-header">
+            <span id="handPlayerName"></span>
+            <span class="score-display" id="handScore">Score: 0</span>
+        </div>
+        <div class="selection-info" id="selectionInfo">Tap cards to select for trading</div>
+        <div class="hand-actions">
+            <button class="btn btn-secondary btn-small" id="clearSelBtn" disabled>Clear</button>
+            <button class="btn btn-small" id="tradeScreenBtn" disabled>Trade</button>
+        </div>
+        <div class="card-fan-container" id="cardFanContainer">
+            <div class="card-fan" id="cardFan"></div>
+        </div>
+    </div>
+
+    <!-- TRADE SCREEN -->
+    <div class="screen" id="screenTrade">
+        <div style="display:flex;align-items:center;gap:8px;margin-bottom:12px;flex-shrink:0;">
+            <button class="btn btn-secondary btn-small" id="backToHandBtn">&larr; Hand</button>
+            <span id="tradeInfo" style="flex:1;text-align:center;font-weight:600;"></span>
+        </div>
+        <p class="subtitle" style="flex-shrink:0;">Touch &amp; hold to trade — both must hold each other!</p>
+        <div class="scroll-area" id="tradePlayerList"></div>
+    </div>
+
+    <!-- ROUND END -->
+    <div class="screen result-screen" id="screenRoundEnd">
+        <div class="result-title" id="roundResultTitle">PIT!</div>
+        <div class="result-commodity" id="roundResultEmoji"></div>
+        <p id="roundResultText"></p>
+        <div class="panel scoreboard" id="roundScoreboard"></div>
+        <button class="btn" id="nextRoundBtn" style="display:none;">Next Round</button>
+        <p id="roundWait" class="subtitle">Waiting for host...</p>
+    </div>
+
+    <!-- GAME END -->
+    <div class="screen result-screen" id="screenGameEnd">
+        <div class="result-title">GAME OVER!</div>
+        <div class="result-commodity" id="gameResultEmoji"></div>
+        <p id="gameResultText"></p>
+        <div class="panel scoreboard" id="gameScoreboard"></div>
+        <button class="btn" id="newGameBtn" style="display:none;">New Game</button>
+    </div>
+</div>
+
+<button class="pit-btn" id="pitBtn">PIT!</button>
+<div class="toast" id="toast"></div>
+
+<script>
+// ======================== CONSTANTS ========================
+const COMMODITIES = [
+    { id: 'wheat',  name: 'Wheat',  emoji: '🌾', color: '#d4a017', value: 100 },
+    { id: 'barley', name: 'Barley', emoji: '🌿', color: '#8fbc5a', value: 85 },
+    { id: 'coffee', name: 'Coffee', emoji: '☕', color: '#6f4e37', value: 80 },
+    { id: 'corn',   name: 'Corn',   emoji: '🌽', color: '#f0b030', value: 75 },
+    { id: 'sugar',  name: 'Sugar',  emoji: '🍬', color: '#ff69b4', value: 70 },
+    { id: 'flax',   name: 'Flax',   emoji: '🧵', color: '#6495ed', value: 65 },
+    { id: 'oats',   name: 'Oats',   emoji: '🥣', color: '#c4a36e', value: 60 },
+    { id: 'rye',    name: 'Rye',    emoji: '🍞', color: '#a0522d', value: 55 },
+];
+
+const PLAYER_COLORS = ['#5dade2','#ec7063','#2ecc71','#f39c12','#af7ac5','#1abc9c','#e67e22','#3498db'];
+const PEER_PREFIX = 'pit-davria-';
+
+// ======================== STATE ========================
+let peer = null;
+let connections = {}; // guestId -> conn (host only)
+let hostConn = null;  // conn to host (guest only)
+let isHost = false;
+let myId = '';
+let myName = '';
+let roomCode = '';
+let muted = false;
+
+// Game state (host-authoritative)
+let state = {
+    phase: 'lobby',
+    players: [],
+    commodities: [],
+    roundWinner: null,
+    targetScore: 500
+};
+
+// Local client state
+let myHand = [];
+let selectedIndices = [];
+let holdingTarget = null;
+let holdTimer = null;
+let currentScreen = 'screenJoin';
+
+// ======================== HELPERS ========================
+function $(id) { return document.getElementById(id); }
+function show(screenId) {
+    document.querySelectorAll('.screen').forEach(s => s.classList.remove('active'));
+    $(screenId).classList.add('active');
+    currentScreen = screenId;
+    $('pitBtn').classList.toggle('show', screenId === 'screenHand' || screenId === 'screenTrade');
+}
+
+function showToast(msg, type = '', duration = 2500) {
+    const t = $('toast');
+    t.textContent = msg;
+    t.className = 'toast show' + (type ? ' ' + type : '');
+    clearTimeout(t._timer);
+    t._timer = setTimeout(() => t.classList.remove('show'), duration);
+}
+
+function genCode() {
+    const chars = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
+    let c = '';
+    for (let i = 0; i < 5; i++) c += chars[Math.floor(Math.random() * chars.length)];
+    return c;
+}
+
+function vibrate(ms = 80) { try { navigator.vibrate(ms); } catch(e) {} }
+
+function getMyPlayer() { return state.players.find(p => p.id === myId); }
+
+function darkenColor(hex, amount = 0.3) {
+    let r = parseInt(hex.slice(1,3),16), g = parseInt(hex.slice(3,5),16), b = parseInt(hex.slice(5,7),16);
+    r = Math.floor(r * (1-amount)); g = Math.floor(g * (1-amount)); b = Math.floor(b * (1-amount));
+    return `rgb(${r},${g},${b})`;
+}
+
+// ======================== URL AUTO-JOIN ========================
+function checkUrlJoin() {
+    const params = new URLSearchParams(window.location.search);
+    const code = params.get('room');
+    if (code) {
+        $('joinCodeInput').value = code.toUpperCase();
+    }
+}
+
+// ======================== PEERJS SETUP ========================
+function initPeer(id) {
+    return new Promise((resolve, reject) => {
+        peer = new Peer(id, { debug: 0 });
+        peer.on('open', () => resolve());
+        peer.on('error', (err) => {
+            if (err.type === 'unavailable-id') reject(new Error('Room code taken'));
+            else if (err.type === 'peer-unavailable') showToast('Room not found', 'error');
+            else reject(err);
+        });
+    });
+}
+
+// ======================== HOST LOGIC ========================
+async function createGame() {
+    myName = $('nameInput').value.trim();
+    if (!myName) { showToast('Enter your name', 'error'); return; }
+    roomCode = genCode();
+    myId = PEER_PREFIX + roomCode;
+
+    try {
+        await initPeer(myId);
+    } catch(e) {
+        showToast(e.message, 'error'); return;
+    }
+
+    isHost = true;
+    state.players = [{ id: myId, name: myName, color: PLAYER_COLORS[0], hand: [], score: 0, selectedCards: [], holdingTarget: null }];
+    state.targetScore = parseInt($('targetScoreSelect').value) || 500;
+
+    peer.on('connection', handleHostConnection);
+
+    showLobby();
+}
+
+function handleHostConnection(conn) {
+    conn.on('open', () => {
+        conn.on('data', (msg) => handleHostMessage(conn, msg));
+        conn.on('close', () => {
+            delete connections[conn.peer];
+            state.players = state.players.filter(p => p.id !== conn.peer);
+            broadcastState();
+        });
+    });
+}
+
+function handleHostMessage(conn, msg) {
+    switch(msg.type) {
+        case 'join_game': {
+            if (state.phase !== 'lobby') { conn.send({ type: 'error', message: 'Game already started' }); return; }
+            if (state.players.length >= 8) { conn.send({ type: 'error', message: 'Game is full' }); return; }
+            const idx = state.players.length;
+            state.players.push({
+                id: conn.peer, name: msg.name, color: PLAYER_COLORS[idx % PLAYER_COLORS.length],
+                hand: [], score: 0, selectedCards: [], holdingTarget: null
+            });
+            connections[conn.peer] = conn;
+            broadcastState();
+            break;
+        }
+        case 'select_cards': {
+            const p = state.players.find(pl => pl.id === conn.peer);
+            if (p) { p.selectedCards = msg.cardIndices || []; }
+            break;
+        }
+        case 'hold_player': {
+            const p = state.players.find(pl => pl.id === conn.peer);
+            if (p) { p.holdingTarget = msg.targetId; }
+            break;
+        }
+        case 'release_player': {
+            const p = state.players.find(pl => pl.id === conn.peer);
+            if (p) { p.holdingTarget = null; }
+            break;
+        }
+        case 'call_pit': {
+            handleCallPit(conn.peer);
+            break;
+        }
+    }
+}
+
+function broadcastState() {
+    // Send each player only their own hand
+    state.players.forEach(p => {
+        const pState = {
+            type: 'state_update',
+            state: {
+                phase: state.phase,
+                players: state.players.map(pl => ({
+                    id: pl.id, name: pl.name, color: pl.color, score: pl.score,
+                    holdingTarget: pl.holdingTarget,
+                    handSize: pl.hand.length,
+                    selectedCount: pl.selectedCards.length
+                })),
+                commodities: state.commodities,
+                roundWinner: state.roundWinner,
+                targetScore: state.targetScore
+            }
+        };
+        if (p.id === myId) {
+            // Host: update local state directly
+            myHand = [...p.hand];
+            handleStateUpdate(pState.state);
+        } else if (connections[p.id]) {
+            // Send hand only to this player
+            pState.hand = [...p.hand];
+            connections[p.id].send(pState);
+        }
+    });
+}
+
+function startGame() {
+    if (state.players.length < 1) { showToast('Need at least 1 player', 'error'); return; }
+    state.targetScore = parseInt($('targetScoreSelect').value) || 500;
+    startRound();
+}
+
+function startRound() {
+    const numPlayers = state.players.length;
+    const numCommodities = Math.min(numPlayers, 8);
+    state.commodities = COMMODITIES.slice(0, numCommodities);
+    state.roundWinner = null;
+    state.phase = 'playing';
+
+    // Build and shuffle deck
+    let deck = [];
+    state.commodities.forEach(c => {
+        for (let i = 0; i < 9; i++) deck.push(c.id);
+    });
+    // Shuffle
+    for (let i = deck.length - 1; i > 0; i--) {
+        const j = Math.floor(Math.random() * (i+1));
+        [deck[i], deck[j]] = [deck[j], deck[i]];
+    }
+
+    // Deal 9 cards each
+    state.players.forEach((p, idx) => {
+        p.hand = deck.slice(idx * 9, (idx + 1) * 9);
+        p.selectedCards = [];
+        p.holdingTarget = null;
+    });
+
+    // Sort each hand
+    state.players.forEach(p => p.hand.sort());
+
+    selectedIndices = [];
+    holdingTarget = null;
+    broadcastState();
+
+    // Start trade checking interval
+    if (window._tradeInterval) clearInterval(window._tradeInterval);
+    window._tradeInterval = setInterval(checkTrades, 200);
+}
+
+function checkTrades() {
+    if (state.phase !== 'playing') return;
+
+    for (let i = 0; i < state.players.length; i++) {
+        for (let j = i+1; j < state.players.length; j++) {
+            const a = state.players[i], b = state.players[j];
+            if (a.holdingTarget === b.id && b.holdingTarget === a.id) {
+                executeTrade(a, b);
+            }
+        }
+    }
+}
+
+function executeTrade(a, b) {
+    const aCards = a.selectedCards.filter(idx => idx < a.hand.length);
+    const bCards = b.selectedCards.filter(idx => idx < b.hand.length);
+
+    if (aCards.length === 0 || bCards.length === 0) {
+        sendTo(a.id, { type: 'trade_failed', reason: 'No cards selected' });
+        sendTo(b.id, { type: 'trade_failed', reason: 'No cards selected' });
+        a.holdingTarget = null; b.holdingTarget = null;
+        return;
+    }
+
+    if (aCards.length !== bCards.length) {
+        sendTo(a.id, { type: 'trade_failed', reason: `Card count mismatch (you: ${aCards.length}, them: ${bCards.length})` });
+        sendTo(b.id, { type: 'trade_failed', reason: `Card count mismatch (you: ${bCards.length}, them: ${aCards.length})` });
+        a.holdingTarget = null; b.holdingTarget = null;
+        a.selectedCards = []; b.selectedCards = [];
+        broadcastState();
+        return;
+    }
+
+    // Validate same commodity
+    const aComms = aCards.map(idx => a.hand[idx]);
+    const bComms = bCards.map(idx => b.hand[idx]);
+    if (new Set(aComms).size > 1) {
+        sendTo(a.id, { type: 'trade_failed', reason: 'Your selected cards must be the same commodity' });
+        a.holdingTarget = null; b.holdingTarget = null;
+        a.selectedCards = []; b.selectedCards = [];
+        broadcastState();
+        return;
+    }
+    if (new Set(bComms).size > 1) {
+        sendTo(b.id, { type: 'trade_failed', reason: 'Your selected cards must be the same commodity' });
+        a.holdingTarget = null; b.holdingTarget = null;
+        a.selectedCards = []; b.selectedCards = [];
+        broadcastState();
+        return;
+    }
+
+    // Execute swap
+    const aTraded = aCards.map(idx => a.hand[idx]);
+    const bTraded = bCards.map(idx => b.hand[idx]);
+
+    // Remove cards (highest index first to preserve indices)
+    const aSorted = [...aCards].sort((x,y) => y-x);
+    const bSorted = [...bCards].sort((x,y) => y-x);
+    aSorted.forEach(idx => a.hand.splice(idx, 1));
+    bSorted.forEach(idx => b.hand.splice(idx, 1));
+
+    // Add received cards
+    a.hand.push(...bTraded);
+    b.hand.push(...aTraded);
+    a.hand.sort();
+    b.hand.sort();
+
+    // Clear selections and holds
+    a.selectedCards = []; b.selectedCards = [];
+    a.holdingTarget = null; b.holdingTarget = null;
+
+    // Notify
+    sendTo(a.id, { type: 'trade_complete', partnerId: b.id, partnerName: b.name });
+    sendTo(b.id, { type: 'trade_complete', partnerId: a.id, partnerName: a.name });
+
+    broadcastState();
+}
+
+function sendTo(playerId, msg) {
+    if (playerId === myId) {
+        handleClientMessage(msg);
+    } else if (connections[playerId]) {
+        connections[playerId].send(msg);
+    }
+}
+
+function handleCallPit(playerId) {
+    if (state.phase !== 'playing') return;
+    const p = state.players.find(pl => pl.id === playerId);
+    if (!p) return;
+
+    // Check if all 9 cards are the same
+    if (p.hand.length === 9 && new Set(p.hand).size === 1) {
+        const commodity = COMMODITIES.find(c => c.id === p.hand[0]);
+        const points = commodity ? commodity.value : 0;
+        p.score += points;
+        state.roundWinner = { playerId: p.id, playerName: p.name, commodity: commodity, points: points };
+        state.phase = 'round_end';
+
+        if (window._tradeInterval) clearInterval(window._tradeInterval);
+
+        // Check if game over
+        if (p.score >= state.targetScore) {
+            state.phase = 'game_end';
+        }
+
+        broadcastState();
+        // Broadcast round result
+        state.players.forEach(pl => {
+            sendTo(pl.id, { type: 'round_won', winnerId: p.id, winnerName: p.name, commodity: commodity, points: points });
+        });
+    } else {
+        // Penalty
+        p.score = Math.max(0, p.score - 10);
+        sendTo(playerId, { type: 'trade_failed', reason: 'Not a complete set! -10 points' });
+        broadcastState();
+    }
+}
+
+function hostNextRound() {
+    startRound();
+}
+
+function hostNewGame() {
+    state.players.forEach(p => { p.score = 0; p.hand = []; p.selectedCards = []; p.holdingTarget = null; });
+    state.roundWinner = null;
+    state.targetScore = parseInt($('targetScoreSelect').value) || 500;
+    startRound();
+}
+
+// ======================== GUEST LOGIC ========================
+async function joinGame() {
+    myName = $('nameInput').value.trim();
+    if (!myName) { showToast('Enter your name', 'error'); return; }
+    roomCode = $('joinCodeInput').value.trim().toUpperCase();
+    if (!roomCode) { showToast('Enter a room code', 'error'); return; }
+
+    myId = PEER_PREFIX + roomCode + '-' + Math.random().toString(36).substr(2, 6);
+
+    try {
+        await initPeer(myId);
+    } catch(e) {
+        showToast(e.message, 'error'); return;
+    }
+
+    const hostId = PEER_PREFIX + roomCode;
+    hostConn = peer.connect(hostId, { reliable: true });
+
+    hostConn.on('open', () => {
+        hostConn.send({ type: 'join_game', name: myName });
+        hostConn.on('data', (msg) => handleGuestMessage(msg));
+    });
+
+    hostConn.on('error', () => showToast('Connection failed', 'error'));
+    hostConn.on('close', () => { showToast('Disconnected from host', 'error'); });
+
+    showLobby();
+}
+
+function handleGuestMessage(msg) {
+    switch(msg.type) {
+        case 'state_update':
+            if (msg.hand) myHand = msg.hand;
+            handleStateUpdate(msg.state);
+            break;
+        case 'trade_complete':
+            handleClientMessage(msg);
+            break;
+        case 'trade_failed':
+            handleClientMessage(msg);
+            break;
+        case 'round_won':
+            handleClientMessage(msg);
+            break;
+        case 'error':
+            showToast(msg.message, 'error');
+            break;
+    }
+}
+
+function sendToHost(msg) {
+    if (isHost) {
+        // Handle locally
+        handleHostMessage({ peer: myId, send: (m) => handleClientMessage(m) }, msg);
+    } else if (hostConn) {
+        hostConn.send(msg);
+    }
+}
+
+// ======================== CLIENT RENDERING ========================
+function handleStateUpdate(s) {
+    state = { ...state, ...s };
+
+    switch(s.phase) {
+        case 'lobby': showLobby(); break;
+        case 'playing':
+            if (currentScreen === 'screenLobby' || currentScreen === 'screenRoundEnd' || currentScreen === 'screenJoin') {
+                selectedIndices = [];
+                holdingTarget = null;
+                show('screenHand');
+            }
+            renderHand();
+            if (currentScreen === 'screenTrade') renderTradeScreen();
+            break;
+        case 'round_end': show('screenRoundEnd'); renderRoundEnd(); break;
+        case 'game_end': show('screenGameEnd'); renderGameEnd(); break;
+    }
+}
+
+function handleClientMessage(msg) {
+    switch(msg.type) {
+        case 'trade_complete':
+            vibrate(100);
+            showToast(`Traded with ${msg.partnerName}!`, 'success');
+            selectedIndices = [];
+            holdingTarget = null;
+            if (currentScreen === 'screenTrade') show('screenHand');
+            renderHand();
+            break;
+        case 'trade_failed':
+            vibrate([50,50,50]);
+            showToast(msg.reason, 'error');
+            selectedIndices = [];
+            holdingTarget = null;
+            renderHand();
+            if (currentScreen === 'screenTrade') renderTradeScreen();
+            break;
+        case 'round_won':
+            vibrate(200);
+            break;
+    }
+}
+
+function showLobby() {
+    show('screenLobby');
+    $('lobbyCode').textContent = roomCode;
+    $('hostSettings').style.display = isHost ? 'block' : 'none';
+    $('startGameBtn').style.display = isHost ? 'block' : 'none';
+    $('lobbyWait').style.display = isHost ? 'none' : 'block';
+
+    const list = $('lobbyPlayers');
+    list.innerHTML = '';
+    state.players.forEach(p => {
+        const li = document.createElement('li');
+        li.innerHTML = `<span class="player-dot" style="background:${p.color}"></span> ${escHtml(p.name)}${p.id === myId ? ' (you)' : ''}`;
+        list.appendChild(li);
+    });
+}
+
+function renderHand() {
+    const fan = $('cardFan');
+    fan.innerHTML = '';
+
+    const me = getMyPlayer();
+    if (me) {
+        $('handPlayerName').textContent = me.name;
+        $('handScore').textContent = 'Score: ' + me.score;
+    }
+
+    const count = myHand.length;
+    if (count === 0) return;
+
+    const container = $('cardFanContainer');
+    const containerW = container.offsetWidth;
+
+    // Card sizing
+    const cardW = Math.min(62, (containerW - 40) / (count * 0.5));
+    const cardH = cardW * 1.48;
+    const overlap = Math.min(cardW * 0.6, (containerW - cardW) / (count - 1 || 1));
+    const totalW = overlap * (count - 1) + cardW;
+    const maxAngle = Math.min(20, count * 2.5);
+
+    // Determine first selected commodity
+    let firstSelComm = null;
+    if (selectedIndices.length > 0) {
+        firstSelComm = myHand[selectedIndices[0]];
+    }
+
+    myHand.forEach((commId, i) => {
+        const comm = COMMODITIES.find(c => c.id === commId);
+        if (!comm) return;
+
+        const card = document.createElement('div');
+        card.className = 'card';
+        card.style.width = cardW + 'px';
+        card.style.height = cardH + 'px';
+        card.style.background = comm.color + 'dd';
+        card.style.borderColor = darkenColor(comm.color, 0.3);
+        card.style.zIndex = i + 1;
+
+        const isSelected = selectedIndices.includes(i);
+        const isDisabled = firstSelComm && !isSelected && commId !== firstSelComm;
+
+        if (isSelected) card.classList.add('selected');
+        if (isDisabled) card.classList.add('disabled');
+
+        // Position in fan
+        const xOff = i * overlap - totalW / 2 + cardW / 2;
+        const angleFrac = count > 1 ? (i / (count - 1)) * 2 - 1 : 0;
+        const angle = angleFrac * maxAngle;
+        const yUp = isSelected ? -30 : 0;
+        const yArc = Math.abs(angleFrac) * 15;
+
+        card.style.transform = `translateX(${xOff}px) translateY(${yArc + yUp}px) rotate(${angle}deg)`;
+        card.style.transformOrigin = 'bottom center';
+
+        card.innerHTML = `<span class="emoji">${comm.emoji}</span><span class="card-name">${comm.name}</span>`;
+        card.style.fontSize = (cardW * 0.01 + 0.55) + 'rem';
+        card.querySelector('.emoji').style.fontSize = (cardW * 0.025 + 0.3) + 'rem';
+
+        card.addEventListener('click', () => toggleCard(i));
+        fan.appendChild(card);
+    });
+
+    updateSelectionInfo();
+}
+
+function toggleCard(idx) {
+    const commId = myHand[idx];
+    if (selectedIndices.includes(idx)) {
+        selectedIndices = selectedIndices.filter(i => i !== idx);
+    } else {
+        // Check constraints
+        if (selectedIndices.length > 0) {
+            const firstComm = myHand[selectedIndices[0]];
+            if (commId !== firstComm) return; // Different commodity
+        }
+        if (selectedIndices.length >= 4) return; // Max 4
+        selectedIndices.push(idx);
+    }
+    // Notify host
+    sendToHost({ type: 'select_cards', cardIndices: [...selectedIndices] });
+    renderHand();
+}
+
+function updateSelectionInfo() {
+    const info = $('selectionInfo');
+    if (selectedIndices.length === 0) {
+        info.textContent = 'Tap cards to select for trading';
+        info.classList.remove('has-selection');
+        $('clearSelBtn').disabled = true;
+        $('tradeScreenBtn').disabled = true;
+    } else {
+        const comm = COMMODITIES.find(c => c.id === myHand[selectedIndices[0]]);
+        info.textContent = `${selectedIndices.length} ${comm ? comm.name : '?'} selected for trade`;
+        info.classList.add('has-selection');
+        $('clearSelBtn').disabled = false;
+        $('tradeScreenBtn').disabled = false;
+    }
+}
+
+function clearSelection() {
+    selectedIndices = [];
+    sendToHost({ type: 'select_cards', cardIndices: [] });
+    renderHand();
+}
+
+// ======================== TRADE SCREEN ========================
+function showTradeScreen() {
+    if (selectedIndices.length === 0) return;
+    show('screenTrade');
+    renderTradeScreen();
+}
+
+function renderTradeScreen() {
+    const comm = COMMODITIES.find(c => c.id === myHand[selectedIndices[0]]);
+    $('tradeInfo').textContent = `Trading ${selectedIndices.length} ${comm ? comm.name : '?'} card${selectedIndices.length > 1 ? 's' : ''}`;
+
+    const list = $('tradePlayerList');
+    list.innerHTML = '';
+
+    state.players.forEach(p => {
+        if (p.id === myId) return;
+        const btn = document.createElement('button');
+        btn.className = 'trade-player-btn';
+
+        const isHolding = holdingTarget === p.id;
+        const theyHoldMe = p.holdingTarget === myId;
+        if (isHolding && theyHoldMe) btn.classList.add('mutual');
+        else if (isHolding) btn.classList.add('holding');
+
+        let extra = '';
+        if (theyHoldMe && !isHolding) extra = '<span class="wants-you">wants to trade!</span>';
+        else if (isHolding && theyHoldMe) extra = '<span class="wants-you" style="color:#2ecc71">Trading!</span>';
+        else if (isHolding) extra = '<span class="wants-you">holding...</span>';
+
+        btn.innerHTML = `<span class="player-dot" style="background:${p.color}"></span> ${escHtml(p.name)} ${extra}`;
+
+        // Touch-and-hold
+        const startHold = (e) => {
+            e.preventDefault();
+            holdingTarget = p.id;
+            sendToHost({ type: 'hold_player', targetId: p.id });
+            renderTradeScreen();
+        };
+        const endHold = (e) => {
+            e.preventDefault();
+            if (holdingTarget === p.id) {
+                holdingTarget = null;
+                sendToHost({ type: 'release_player' });
+                renderTradeScreen();
+            }
+        };
+
+        btn.addEventListener('mousedown', startHold);
+        btn.addEventListener('mouseup', endHold);
+        btn.addEventListener('mouseleave', endHold);
+        btn.addEventListener('touchstart', startHold, { passive: false });
+        btn.addEventListener('touchend', endHold, { passive: false });
+        btn.addEventListener('touchcancel', endHold, { passive: false });
+
+        list.appendChild(btn);
+    });
+}
+
+function backToHand() {
+    if (holdingTarget) {
+        holdingTarget = null;
+        sendToHost({ type: 'release_player' });
+    }
+    show('screenHand');
+    renderHand();
+}
+
+// ======================== ROUND / GAME END ========================
+function renderRoundEnd() {
+    const w = state.roundWinner;
+    if (!w) return;
+    $('roundResultTitle').textContent = 'PIT!';
+    $('roundResultEmoji').textContent = w.commodity ? w.commodity.emoji : '';
+    $('roundResultText').textContent = `${w.playerName} wins with ${w.commodity ? w.commodity.name : '?'}! +${w.points} points`;
+    renderScoreboard($('roundScoreboard'));
+    $('nextRoundBtn').style.display = isHost ? 'block' : 'none';
+    $('roundWait').style.display = isHost ? 'none' : 'block';
+}
+
+function renderGameEnd() {
+    const winner = [...state.players].sort((a,b) => b.score - a.score)[0];
+    $('gameResultEmoji').textContent = '🏆';
+    $('gameResultText').textContent = `${winner.name} wins with ${winner.score} points!`;
+    renderScoreboard($('gameScoreboard'));
+    $('newGameBtn').style.display = isHost ? 'block' : 'none';
+}
+
+function renderScoreboard(el) {
+    const sorted = [...state.players].sort((a,b) => b.score - a.score);
+    el.innerHTML = `<table>
+        <tr><th>#</th><th>Player</th><th>Score</th></tr>
+        ${sorted.map((p, i) => `<tr class="${p.id === myId ? 'winner' : ''}">
+            <td>${i+1}</td><td><span class="player-dot" style="background:${p.color}"></span> ${escHtml(p.name)}</td><td>${p.score}</td>
+        </tr>`).join('')}
+    </table>`;
+}
+
+// ======================== PIT BUTTON ========================
+function callPit() {
+    sendToHost({ type: 'call_pit' });
+    vibrate(50);
+}
+
+// ======================== UTILS ========================
+function escHtml(s) { const d = document.createElement('div'); d.textContent = s; return d.innerHTML; }
+
+// ======================== COPY LINK ========================
+function copyLink() {
+    const url = window.location.origin + window.location.pathname + '?room=' + roomCode;
+    navigator.clipboard.writeText(url).then(() => showToast('Link copied!', 'success')).catch(() => {
+        // Fallback
+        showToast('Code: ' + roomCode, 'success');
+    });
+}
+
+// ======================== EVENT LISTENERS ========================
+$('createBtn').addEventListener('click', createGame);
+$('joinBtn').addEventListener('click', joinGame);
+$('startGameBtn').addEventListener('click', startGame);
+$('clearSelBtn').addEventListener('click', clearSelection);
+$('tradeScreenBtn').addEventListener('click', showTradeScreen);
+$('backToHandBtn').addEventListener('click', backToHand);
+$('pitBtn').addEventListener('click', callPit);
+$('nextRoundBtn').addEventListener('click', hostNextRound);
+$('newGameBtn').addEventListener('click', hostNewGame);
+$('copyCodeBtn').addEventListener('click', copyLink);
+$('muteBtn').addEventListener('click', () => { muted = !muted; $('muteBtn').textContent = muted ? '🔇' : '🔊'; });
+
+// Enter key on inputs
+$('nameInput').addEventListener('keydown', (e) => { if (e.key === 'Enter') $('createBtn').click(); });
+$('joinCodeInput').addEventListener('keydown', (e) => { if (e.key === 'Enter') $('joinBtn').click(); });
+
+// Resize handler for card fan
+window.addEventListener('resize', () => { if (currentScreen === 'screenHand') renderHand(); });
+
+// Auto-join from URL
+checkUrlJoin();
+
+// Periodic re-render of trade screen (to show mutual holds)
+setInterval(() => {
+    if (currentScreen === 'screenTrade' && state.phase === 'playing') {
+        renderTradeScreen();
+    }
+}, 300);
+</script>
+</body>
+</html>
