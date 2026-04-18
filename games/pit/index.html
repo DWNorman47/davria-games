@@ -651,7 +651,7 @@ async function joinGame() {
     if (!roomCode) { showToast('Enter a room code', 'error'); return; }
 
     // Match Phrase Pass pattern: let PeerJS auto-assign guest ID
-    peer = new Peer(undefined, { debug: 0 });
+    peer = new Peer({ debug: 0 });
     peer.on('open', (id) => {
         myId = id;
         const hostId = PEER_PREFIX + roomCode;
