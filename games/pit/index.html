@@ -385,7 +385,29 @@ function handleHostMessage(conn, msg) {
                 hand: [], score: 0, selectedCards: [], holdingTarget: null
             });
             connections[conn.peer] = conn;
+
+            // Send state directly to the new guest first (ensures they get it immediately)
+            const joinState = {
+                phase: state.phase,
+                players: state.players.map(pl => ({
+                    id: pl.id, name: pl.name, color: pl.color, score: pl.score,
+                    holdingTarget: pl.holdingTarget,
+                    handSize: (pl.hand || []).length,
+                    selectedCount: (pl.selectedCards || []).length
+                })),
+                commodities: state.commodities,
+                roundWinner: state.roundWinner,
+                targetScore: state.targetScore
+            };
+            try { conn.send({ type: 'state_update', state: joinState }); } catch(e) {}
+
+            // Also broadcast to everyone (including re-sending to new guest)
             broadcastState();
+
+            // Retry sending to new guest after a short delay in case first send was too early
+            setTimeout(() => {
+                try { conn.send({ type: 'state_update', state: joinState }); } catch(e) {}
+            }, 500);
             break;
         }
         case 'select_cards': {
