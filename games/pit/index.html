@@ -361,13 +361,16 @@ async function createGame() {
 }
 
 function handleHostConnection(conn) {
-    conn.on('open', () => {
-        conn.on('data', (msg) => handleHostMessage(conn, msg));
-        conn.on('close', () => {
-            delete connections[conn.peer];
-            state.players = state.players.filter(p => p.id !== conn.peer);
-            broadcastState();
-        });
+    // Register handlers immediately — don't wrap in 'open' to avoid race condition
+    // where the connection is already open before the handler is registered
+    conn.on('data', (msg) => handleHostMessage(conn, msg));
+    conn.on('close', () => {
+        delete connections[conn.peer];
+        state.players = state.players.filter(p => p.id !== conn.peer);
+        broadcastState();
+    });
+    conn.on('error', (err) => {
+        console.warn('Connection error from', conn.peer, err);
     });
 }
 
@@ -408,33 +411,38 @@ function handleHostMessage(conn, msg) {
 }
 
 function broadcastState() {
-    // Send each player only their own hand
-    state.players.forEach(p => {
-        const pState = {
-            type: 'state_update',
-            state: {
-                phase: state.phase,
-                players: state.players.map(pl => ({
-                    id: pl.id, name: pl.name, color: pl.color, score: pl.score,
-                    holdingTarget: pl.holdingTarget,
-                    handSize: pl.hand.length,
-                    selectedCount: pl.selectedCards.length
-                })),
-                commodities: state.commodities,
-                roundWinner: state.roundWinner,
-                targetScore: state.targetScore
-            }
-        };
-        if (p.id === myId) {
-            // Host: update local state directly
-            myHand = [...p.hand];
-            handleStateUpdate(pState.state);
-        } else if (connections[p.id]) {
-            // Send hand only to this player
-            pState.hand = [...p.hand];
-            connections[p.id].send(pState);
+    // Build common state (no private info)
+    const commonState = {
+        phase: state.phase,
+        players: state.players.map(pl => ({
+            id: pl.id, name: pl.name, color: pl.color, score: pl.score,
+            holdingTarget: pl.holdingTarget,
+            handSize: pl.hand.length,
+            selectedCount: pl.selectedCards.length
+        })),
+        commodities: state.commodities,
+        roundWinner: state.roundWinner,
+        targetScore: state.targetScore
+    };
+
+    // Update host locally
+    const hostPlayer = state.players.find(p => p.id === myId);
+    if (hostPlayer) {
+        myHand = [...hostPlayer.hand];
+    }
+    handleStateUpdate(commonState);
+
+    // Send to each guest with their private hand
+    for (const [peerId, conn] of Object.entries(connections)) {
+        const player = state.players.find(p => p.id === peerId);
+        const msg = { type: 'state_update', state: commonState };
+        if (player) msg.hand = [...player.hand];
+        try {
+            conn.send(msg);
+        } catch(e) {
+            console.warn('Failed to send to', peerId, e);
         }
-    });
+    }
 }
 
 function startGame() {
