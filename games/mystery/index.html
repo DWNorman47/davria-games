@@ -740,6 +740,22 @@
     }
     .game-clock.warning { color: #f1c40f; border-color: #f1c40f; }
     .game-clock.urgent { color: #e74c3c; border-color: #e74c3c; animation: pulse-red 1s ease-in-out infinite; }
+    .room-timer {
+        position: fixed;
+        top: 12px;
+        left: 140px;
+        background: rgba(0,0,0,0.7);
+        border: 1px solid var(--border);
+        border-radius: 8px;
+        padding: 6px 14px;
+        font-family: 'Courier New', monospace;
+        font-weight: 800;
+        font-size: 1.1rem;
+        color: var(--text-secondary);
+        z-index: 999;
+    }
+    .room-timer.low { color: #f39c12; border-color: #f39c12; }
+    .room-timer.critical { color: #e74c3c; border-color: #e74c3c; animation: pulse-red 1s ease-in-out infinite; }
     @keyframes pulse-red {
         0%, 100% { opacity: 1; }
         50% { opacity: 0.5; }
@@ -795,6 +811,7 @@
 <button id="mute-toggle" type="button" onclick="toggleMute()" aria-label="Toggle sound">🔇</button>
 <div id="notification-container"></div>
 <div id="game-clock" class="game-clock" style="display:none;">45:00</div>
+<div id="room-timer" class="room-timer" style="display:none;">2:00</div>
 <div id="vote-overlay" style="display:none;"></div>
 
 <div class="app">
@@ -1283,6 +1300,7 @@ const state = {
     accusationCalled: false,
     accusationBlocked: false,
     accusationVote: null, // {callerId, votes:{playerId:'yes'|'no'}, startTime, timeout:30000}
+    roomTimerEnd: 0,
     // Final questioning phase
     finalQuestioningDone: false,
     finalAsked: {}, // playerId -> suspectId (which suspect they asked in final phase)
@@ -1859,6 +1877,10 @@ function handleHostMessage(msg) {
         case 'game_clock_update':
             updateGameClockDisplay(msg.remaining);
             return;
+        case 'room_timer':
+            state.roomTimerEnd = msg.endTime;
+            updateRoomTimerDisplay();
+            return;
         case 'error':
             setStatus('entry-status', msg.message || 'Error');
             showScreen('screen-entry');
@@ -1976,14 +1998,24 @@ function enterRoom(roomId) {
     state.accusationBlocked = false;
     state.accusationCalled = false;
     // Clear any leftover ready timer
-    if (readyTimeoutHandle) { clearTimeout(readyTimeoutHandle); readyTimeoutHandle = null; }
-    // 2-minute auto-advance timer
-    readyTimeoutHandle = setTimeout(() => {
-        if (state.phase === 'room') {
-            showNotification('Time to move on!', 'info');
-            beginMinigameOrAccusation();
-        }
-    }, 2 * 60 * 1000);
+    if (readyTimeoutHandle) { clearInterval(readyTimeoutHandle); readyTimeoutHandle = null; }
+    // 2-minute room timer with visible countdown
+    state.roomTimerEnd = Date.now() + 2 * 60 * 1000;
+    updateRoomTimerDisplay();
+    document.getElementById('room-timer').style.display = '';
+    if (isHost) {
+        readyTimeoutHandle = setInterval(() => {
+            updateRoomTimerDisplay();
+            broadcastRoomTimer();
+            if (Date.now() >= state.roomTimerEnd && state.phase === 'room') {
+                clearInterval(readyTimeoutHandle);
+                readyTimeoutHandle = null;
+                document.getElementById('room-timer').style.display = 'none';
+                showNotification('Time to move on!', 'info');
+                beginMinigameOrAccusation();
+            }
+        }, 500);
+    }
     broadcastState();
     renderAll();
 }
@@ -1999,7 +2031,8 @@ function checkAllReady() {
 }
 
 function beginMinigameOrAccusation() {
-    if (readyTimeoutHandle) { clearTimeout(readyTimeoutHandle); readyTimeoutHandle = null; }
+    if (readyTimeoutHandle) { clearInterval(readyTimeoutHandle); readyTimeoutHandle = null; }
+    document.getElementById('room-timer').style.display = 'none';
     // If we've visited all rooms AND haven't done final questioning yet, do that first
     if ((state.visitedRoomIds.length >= state.maxRooms || state.visitedRoomIds.length >= SCENARIO.rooms.length)
         && !state.finalQuestioningDone) {
@@ -3291,6 +3324,32 @@ function updateGameClockDisplay(remaining) {
     } else if (remaining <= 5 * 60 * 1000) {
         el.classList.add('warning');
     }
+}
+
+function updateRoomTimerDisplay() {
+    const el = document.getElementById('room-timer');
+    if (!el) return;
+    if (!state.roomTimerEnd || state.phase !== 'room') {
+        el.style.display = 'none';
+        return;
+    }
+    el.style.display = '';
+    const remaining = Math.max(0, state.roomTimerEnd - Date.now());
+    const totalSecs = Math.ceil(remaining / 1000);
+    const mins = Math.floor(totalSecs / 60);
+    const secs = totalSecs % 60;
+    el.textContent = '🕐 ' + mins + ':' + String(secs).padStart(2, '0');
+    el.className = 'room-timer';
+    if (totalSecs <= 15) {
+        el.classList.add('critical');
+    } else if (totalSecs <= 30) {
+        el.classList.add('low');
+    }
+}
+
+function broadcastRoomTimer() {
+    if (!isHost) return;
+    broadcast({ type: 'room_timer', endTime: state.roomTimerEnd });
 }
 
 // ============================================================
