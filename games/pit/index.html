@@ -429,6 +429,26 @@ function handleHostMessage(conn, msg) {
             handleCallPit(conn.peer);
             break;
         }
+        case 'get_state': {
+            // Guest is polling for state — respond directly on their connection
+            const player = state.players.find(p => p.id === conn.peer);
+            const cs = {
+                phase: state.phase,
+                players: state.players.map(pl => ({
+                    id: pl.id, name: pl.name, color: pl.color, score: pl.score,
+                    holdingTarget: pl.holdingTarget,
+                    handSize: (pl.hand || []).length,
+                    selectedCount: (pl.selectedCards || []).length
+                })),
+                commodities: state.commodities,
+                roundWinner: state.roundWinner,
+                targetScore: state.targetScore
+            };
+            const resp = { type: 'state_update', state: cs };
+            if (player) resp.hand = [...player.hand];
+            try { conn.send(resp); } catch(e) {}
+            break;
+        }
     }
 }
 
@@ -658,9 +678,18 @@ async function joinGame() {
     const hostId = PEER_PREFIX + roomCode;
     hostConn = peer.connect(hostId, { reliable: true });
 
-    hostConn.on('data', (msg) => handleGuestMessage(msg));
+    let guestSynced = false;
+    hostConn.on('data', (msg) => {
+        guestSynced = true;
+        handleGuestMessage(msg);
+    });
     hostConn.on('open', () => {
         hostConn.send({ type: 'join_game', name: myName });
+        // Poll for state until we get a response — ensures sync even if initial pushes are lost
+        const poll = setInterval(() => {
+            if (guestSynced) { clearInterval(poll); return; }
+            try { hostConn.send({ type: 'get_state' }); } catch(e) {}
+        }, 1000);
     });
 
     hostConn.on('error', () => showToast('Connection failed', 'error'));
