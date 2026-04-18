@@ -1,0 +1,1974 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+<title>Garden & Trade</title>
+<script src="https://unpkg.com/peerjs@1.5.4/dist/peerjs.min.js"></script>
+<style>
+:root {
+    --bg-primary: #0f1a0f;
+    --bg-secondary: #1a2e1a;
+    --bg-card: #16301e;
+    --accent: #4caf50;
+    --accent-hover: #66bb6a;
+    --accent-red: #e94560;
+    --text-primary: #eee;
+    --text-secondary: #aaa;
+    --border: #2a4a2a;
+    --gold: #ffd700;
+    --coin: #f0c040;
+    --tp-color: #7c4dff;
+}
+* { box-sizing: border-box; margin: 0; padding: 0; -webkit-tap-highlight-color: transparent; }
+html, body {
+    width: 100%; height: 100%;
+    background: var(--bg-primary);
+    color: var(--text-primary);
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+    overscroll-behavior: none;
+    touch-action: manipulation;
+    overflow: hidden;
+}
+body { display: flex; flex-direction: column; height: 100dvh; }
+.app {
+    flex: 1; display: flex; flex-direction: column;
+    max-width: 640px; margin: 0 auto; width: 100%;
+    height: 100%; overflow: hidden;
+}
+.screen { display: none; flex: 1; flex-direction: column; overflow: hidden; }
+.screen.active { display: flex; }
+
+/* Top bar */
+.top-bar { display: flex; justify-content: space-between; align-items: center; padding: 8px 12px; flex-shrink: 0; }
+.top-bar h1 { font-size: 1.3rem; color: var(--accent); margin: 0; }
+.back-link { color: var(--accent); text-decoration: none; font-weight: 500; font-size: 0.9rem; }
+
+/* HUD */
+.hud { display: flex; justify-content: space-around; align-items: center; padding: 6px 8px; background: var(--bg-secondary); border-bottom: 1px solid var(--border); flex-shrink: 0; font-size: 0.85rem; font-weight: 600; }
+.hud-item { text-align: center; }
+.hud-label { font-size: 0.65rem; color: var(--text-secondary); text-transform: uppercase; }
+.hud-val { font-size: 1rem; }
+.hud-coins { color: var(--coin); }
+.hud-tp { color: var(--tp-color); }
+.hud-day { color: var(--accent); }
+.hud-timer { color: var(--accent-red); }
+
+/* Tabs */
+.tab-bar { display: flex; background: var(--bg-secondary); border-top: 1px solid var(--border); flex-shrink: 0; }
+.tab-btn { flex: 1; padding: 10px 4px; text-align: center; background: none; border: none; color: var(--text-secondary); font-size: 0.7rem; font-weight: 600; cursor: pointer; border-top: 2px solid transparent; }
+.tab-btn.active { color: var(--accent); border-top-color: var(--accent); background: rgba(76,175,80,0.1); }
+.tab-btn .tab-icon { font-size: 1.2rem; display: block; }
+.tab-content { flex: 1; overflow-y: auto; -webkit-overflow-scrolling: touch; padding: 10px 12px; }
+.tab-panel { display: none; }
+.tab-panel.active { display: block; }
+
+/* Common */
+.panel { background: var(--bg-card); border: 1px solid var(--border); border-radius: 12px; padding: 14px; margin-bottom: 10px; }
+.btn {
+    display: block; width: 100%; padding: 14px; min-height: 50px;
+    background: var(--accent); color: white; border: none; border-radius: 10px;
+    font-size: 1rem; font-weight: 700; cursor: pointer; text-align: center;
+    transition: background 0.15s, transform 0.1s; -webkit-user-select: none; user-select: none;
+}
+.btn:active { transform: scale(0.97); }
+.btn:disabled { opacity: 0.4; cursor: default; transform: none; }
+.btn-secondary { background: var(--bg-secondary); border: 1px solid var(--border); }
+.btn-small { padding: 8px 14px; min-height: 36px; font-size: 0.85rem; width: auto; display: inline-block; }
+.btn-red { background: var(--accent-red); }
+.btn-gold { background: var(--gold); color: #000; }
+.btn-purple { background: var(--tp-color); }
+label { display: block; color: var(--text-secondary); font-size: 0.85rem; margin-bottom: 4px; }
+input, select {
+    width: 100%; padding: 12px; background: var(--bg-secondary); border: 1px solid var(--border);
+    border-radius: 8px; color: var(--text-primary); font-size: 1rem; margin-bottom: 10px;
+}
+.room-code { font-size: 1.8rem; font-weight: 900; letter-spacing: 6px; text-align: center; color: var(--gold); margin: 8px 0; }
+.player-list { list-style: none; }
+.player-list li { padding: 8px 12px; border-bottom: 1px solid var(--border); display: flex; align-items: center; gap: 8px; font-size: 0.95rem; }
+.subtitle { text-align: center; color: var(--text-secondary); font-size: 0.85rem; margin-bottom: 10px; }
+
+/* Garden grid */
+.garden-section { margin-bottom: 10px; }
+.garden-section-label { font-size: 0.75rem; color: var(--text-secondary); margin-bottom: 4px; text-transform: uppercase; letter-spacing: 1px; }
+.garden-grid { display: grid; gap: 6px; }
+.garden-grid.tilled { grid-template-columns: repeat(6, 1fr); }
+.garden-grid.beds { grid-template-columns: repeat(4, 1fr); }
+.garden-grid.pots { grid-template-columns: repeat(6, 1fr); }
+.garden-slot {
+    aspect-ratio: 1; border-radius: 8px; display: flex; flex-direction: column;
+    align-items: center; justify-content: center; font-size: 1.5rem;
+    cursor: pointer; border: 2px solid transparent; transition: all 0.15s;
+    position: relative; -webkit-user-select: none; user-select: none;
+}
+.garden-slot .slot-sub { font-size: 0.5rem; color: var(--text-secondary); position: absolute; bottom: 2px; }
+.slot-empty { background: #3e2723; }
+.slot-seeded { background: #2e7d32; }
+.slot-watered { background: #1b5e20; }
+.slot-growing { background: #388e3c; }
+.slot-ready { background: #4caf50; border-color: var(--gold); animation: pulse-ready 1s infinite alternate; }
+.slot-wilting { background: #6d4c41; }
+.slot-dead { background: #37474f; }
+@keyframes pulse-ready { from { box-shadow: 0 0 0 0 rgba(255,215,0,0.4); } to { box-shadow: 0 0 8px 3px rgba(255,215,0,0.2); } }
+
+/* Store */
+.seed-row { display: flex; align-items: center; justify-content: space-between; padding: 10px 0; border-bottom: 1px solid var(--border); }
+.seed-info { display: flex; align-items: center; gap: 8px; }
+.seed-emoji { font-size: 1.4rem; }
+.seed-name { font-weight: 600; }
+.seed-price { color: var(--coin); font-weight: 700; }
+.seed-grow { font-size: 0.75rem; color: var(--text-secondary); }
+.seed-count { font-size: 0.85rem; color: var(--text-secondary); margin-left: 4px; }
+
+/* Market */
+.basket-card { background: var(--bg-secondary); border: 1px solid var(--border); border-radius: 10px; padding: 12px; margin-bottom: 8px; }
+.basket-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 6px; }
+.basket-tp { color: var(--tp-color); font-weight: 900; font-size: 1.1rem; }
+.basket-req { font-size: 0.8rem; color: var(--text-secondary); margin-bottom: 6px; }
+.basket-slots { display: flex; flex-wrap: wrap; gap: 4px; margin-bottom: 8px; }
+.basket-slot { width: 32px; height: 32px; border-radius: 6px; background: var(--bg-primary); border: 1px dashed var(--border); display: flex; align-items: center; justify-content: center; font-size: 1rem; cursor: pointer; }
+.basket-slot.filled { border-style: solid; border-color: var(--accent); background: var(--bg-card); }
+.npc-area { margin-top: 10px; }
+.npc-card { display: flex; align-items: center; justify-content: space-between; padding: 8px 10px; background: var(--bg-secondary); border-radius: 8px; margin-bottom: 6px; border: 1px solid var(--border); }
+
+/* Trade */
+.trade-offer { background: var(--bg-secondary); border: 1px solid var(--border); border-radius: 10px; padding: 12px; margin-bottom: 8px; display: flex; justify-content: space-between; align-items: center; }
+.trade-offer .offer-detail { font-size: 0.9rem; }
+.trade-offer .offer-player { font-size: 0.75rem; color: var(--text-secondary); }
+
+/* DDR */
+.ddr-container { position: relative; width: 100%; height: 100%; overflow: hidden; }
+.ddr-lane { position: absolute; left: 50%; transform: translateX(-50%); width: 60px; height: 100%; }
+.ddr-target { position: absolute; bottom: 60px; left: 50%; transform: translateX(-50%); width: 56px; height: 56px; border: 3px solid var(--accent); border-radius: 12px; display: flex; align-items: center; justify-content: center; font-size: 1.8rem; opacity: 0.5; }
+.ddr-arrow { position: absolute; left: 50%; transform: translateX(-50%); width: 50px; height: 50px; border-radius: 10px; background: var(--accent); display: flex; align-items: center; justify-content: center; font-size: 1.8rem; transition: none; }
+.ddr-arrow.hit { background: var(--gold); }
+.ddr-arrow.miss { background: var(--accent-red); opacity: 0.5; }
+.ddr-controls { position: absolute; bottom: 0; left: 0; right: 0; display: flex; justify-content: space-around; padding: 8px; }
+.ddr-btn { width: 70px; height: 70px; border-radius: 14px; background: var(--bg-secondary); border: 2px solid var(--border); font-size: 2rem; cursor: pointer; display: flex; align-items: center; justify-content: center; color: var(--text-primary); }
+.ddr-btn:active { background: var(--accent); }
+.ddr-score { position: absolute; top: 10px; right: 10px; font-size: 1.2rem; font-weight: 700; color: var(--gold); }
+.ddr-combo { position: absolute; top: 36px; right: 10px; font-size: 0.85rem; color: var(--accent); }
+
+/* Minigame overlay */
+.minigame-overlay { position: fixed; top: 0; left: 0; right: 0; bottom: 0; background: rgba(0,0,0,0.95); z-index: 500; display: none; flex-direction: column; align-items: center; justify-content: center; padding: 20px; }
+.minigame-overlay.active { display: flex; }
+.minigame-header { text-align: center; margin-bottom: 16px; }
+.minigame-header h2 { color: var(--gold); font-size: 1.4rem; }
+.minigame-timer { font-size: 1.1rem; color: var(--accent-red); }
+.minigame-earnings { font-size: 1rem; color: var(--coin); }
+.mg-grid { display: grid; gap: 8px; max-width: 300px; }
+.mg-grid.g3x3 { grid-template-columns: repeat(3, 1fr); }
+.mg-grid.g4x3 { grid-template-columns: repeat(4, 1fr); }
+.mg-cell {
+    aspect-ratio: 1; border-radius: 12px; background: var(--bg-card); border: 2px solid var(--border);
+    display: flex; align-items: center; justify-content: center; font-size: 2rem;
+    cursor: pointer; transition: all 0.15s; min-width: 70px; min-height: 70px;
+}
+.mg-cell:active { transform: scale(0.93); }
+.mg-cell.whacked { background: var(--accent); border-color: var(--gold); }
+.mg-cell.matched { background: var(--tp-color); border-color: var(--tp-color); opacity: 0.6; }
+.mg-cell.flipped { background: var(--bg-secondary); }
+.mg-cell.wrong { background: var(--accent-red); }
+
+/* Toast */
+.toast {
+    position: fixed; top: 16px; left: 50%; transform: translateX(-50%);
+    background: var(--bg-card); border: 1px solid var(--border); border-radius: 10px;
+    padding: 10px 18px; font-size: 0.9rem; z-index: 600; opacity: 0;
+    transition: opacity 0.3s; pointer-events: none; text-align: center; max-width: 90%;
+}
+.toast.show { opacity: 1; }
+.toast.error { border-color: var(--accent-red); }
+.toast.success { border-color: var(--accent); }
+
+/* Inventory selector modal */
+.modal-overlay { position: fixed; top: 0; left: 0; right: 0; bottom: 0; background: rgba(0,0,0,0.8); z-index: 400; display: none; align-items: center; justify-content: center; padding: 20px; }
+.modal-overlay.active { display: flex; }
+.modal { background: var(--bg-card); border: 1px solid var(--border); border-radius: 14px; padding: 16px; max-width: 340px; width: 100%; max-height: 80vh; overflow-y: auto; }
+.modal h3 { margin-bottom: 10px; text-align: center; }
+.modal-item { display: flex; align-items: center; justify-content: space-between; padding: 10px; border-bottom: 1px solid var(--border); cursor: pointer; border-radius: 8px; }
+.modal-item:active { background: var(--bg-secondary); }
+
+/* Finish day */
+.finish-day-bar { padding: 8px 12px; flex-shrink: 0; }
+
+/* Status */
+.leaderboard-row { display: flex; justify-content: space-between; padding: 8px 0; border-bottom: 1px solid var(--border); }
+.lb-rank { width: 24px; color: var(--text-secondary); }
+.lb-name { flex: 1; }
+.lb-tp { color: var(--tp-color); font-weight: 700; width: 50px; text-align: right; }
+.lb-coins { color: var(--coin); width: 60px; text-align: right; }
+
+/* Game end */
+.game-end { text-align: center; padding: 30px 20px; }
+.game-end h2 { font-size: 2rem; color: var(--gold); margin-bottom: 10px; }
+.game-end .winner-emoji { font-size: 4rem; margin: 16px 0; }
+
+/* Scrollbar */
+::-webkit-scrollbar { width: 4px; }
+::-webkit-scrollbar-thumb { background: var(--border); border-radius: 4px; }
+</style>
+</head>
+<body>
+<div class="app">
+    <div class="top-bar">
+        <a href="../../index.html" class="back-link">&larr; Arcade</a>
+        <h1>🌱 Garden & Trade</h1>
+        <span id="soundBtn" style="cursor:pointer;font-size:1.2rem;">🔊</span>
+    </div>
+
+    <!-- JOIN SCREEN -->
+    <div class="screen active" id="screenJoin">
+        <div style="padding:12px;">
+            <p class="subtitle">Grow veggies, trade with friends, win the Exclusive Deal!</p>
+            <div class="panel">
+                <label>Your Name</label>
+                <input type="text" id="nameInput" placeholder="Enter your name" maxlength="16" autocomplete="off">
+            </div>
+            <button class="btn" id="createBtn" style="margin-bottom:10px;">Create Game</button>
+            <div class="panel">
+                <label>Or join with a room code</label>
+                <input type="text" id="joinCodeInput" placeholder="Room code" maxlength="6" style="text-transform:uppercase;letter-spacing:3px;text-align:center;" autocomplete="off">
+                <button class="btn btn-secondary" id="joinBtn">Join Game</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- LOBBY SCREEN -->
+    <div class="screen" id="screenLobby">
+        <div style="padding:12px;">
+            <div class="panel">
+                <label>Room Code</label>
+                <div class="room-code" id="lobbyCode"></div>
+                <div style="display:flex;gap:8px;justify-content:center;margin-top:4px">
+                    <button class="btn-small btn-secondary" id="copyCodeBtn">📋 Copy</button>
+                    <button class="btn-small btn-secondary" id="copyLinkBtn">🔗 Link</button>
+                </div>
+            </div>
+            <div class="panel" style="flex:1;">
+                <label>Players</label>
+                <ul class="player-list" id="lobbyPlayers"></ul>
+            </div>
+            <button class="btn" id="startGameBtn" style="display:none;margin-top:10px;">Start Game</button>
+            <p id="lobbyWait" class="subtitle" style="margin-top:10px;">Waiting for host to start...</p>
+        </div>
+    </div>
+
+    <!-- MAIN GAME SCREEN -->
+    <div class="screen" id="screenMain">
+        <div class="hud" id="hud">
+            <div class="hud-item"><div class="hud-label">Day</div><div class="hud-val hud-day" id="hudDay">1</div></div>
+            <div class="hud-item"><div class="hud-label">Timer</div><div class="hud-val hud-timer" id="hudTimer">90</div></div>
+            <div class="hud-item"><div class="hud-label">Coins</div><div class="hud-val hud-coins" id="hudCoins">30</div></div>
+            <div class="hud-item"><div class="hud-label">TP</div><div class="hud-val hud-tp" id="hudTP">0</div></div>
+            <div class="hud-item"><div class="hud-label">Seeds</div><div class="hud-val" id="hudSeeds">0</div></div>
+        </div>
+
+        <div class="tab-content" id="tabContent">
+            <!-- Garden Tab -->
+            <div class="tab-panel active" id="tabGarden">
+                <div class="garden-section">
+                    <div class="garden-section-label">Tilled Ground</div>
+                    <div class="garden-grid tilled" id="gardenTilled"></div>
+                </div>
+                <div class="garden-section">
+                    <div class="garden-section-label">Raised Beds</div>
+                    <div class="garden-grid beds" id="gardenBeds"></div>
+                </div>
+                <div class="garden-section">
+                    <div class="garden-section-label">Pots</div>
+                    <div class="garden-grid pots" id="gardenPots"></div>
+                </div>
+                <div style="margin-top:8px;">
+                    <div class="garden-section-label">Inventory</div>
+                    <div id="inventoryDisplay" style="font-size:0.85rem;color:var(--text-secondary);"></div>
+                </div>
+            </div>
+
+            <!-- Store Tab -->
+            <div class="tab-panel" id="tabStore">
+                <div class="panel">
+                    <label>Individual Seeds</label>
+                    <div id="seedList"></div>
+                </div>
+                <div class="panel">
+                    <label>Bulk Pack</label>
+                    <p style="font-size:0.85rem;color:var(--text-secondary);margin-bottom:8px;">10 random seeds for 30 coins</p>
+                    <button class="btn btn-gold btn-small" id="bulkBuyBtn">Buy Bulk (30 🪙)</button>
+                </div>
+            </div>
+
+            <!-- Market Tab -->
+            <div class="tab-panel" id="tabMarket">
+                <div id="ddrPrompt" class="panel" style="text-align:center;">
+                    <p style="margin-bottom:8px;">Play the market minigame to attract NPCs!</p>
+                    <button class="btn btn-small" id="playDDRBtn">🎵 Play Market Game</button>
+                </div>
+                <div id="npcSection" style="display:none;">
+                    <label>NPCs at your stall (<span id="npcCount">0</span>)</label>
+                    <div id="npcList" class="npc-area"></div>
+                </div>
+                <div id="basketSection">
+                    <label>Today's Baskets</label>
+                    <div id="basketList"></div>
+                </div>
+            </div>
+
+            <!-- Trade Tab -->
+            <div class="tab-panel" id="tabTrade">
+                <div class="panel">
+                    <label>Post a Trade Offer</label>
+                    <div style="display:flex;gap:8px;margin-bottom:8px;">
+                        <div style="flex:1;">
+                            <label style="font-size:0.75rem;">Offering</label>
+                            <select id="tradeOfferCrop"></select>
+                            <input type="number" id="tradeOfferQty" min="1" max="20" value="1" style="width:60px;">
+                        </div>
+                        <div style="flex:1;">
+                            <label style="font-size:0.75rem;">Want</label>
+                            <select id="tradeWantCrop"></select>
+                            <input type="number" id="tradeWantQty" min="1" max="20" value="1" style="width:60px;">
+                        </div>
+                    </div>
+                    <button class="btn btn-small" id="postTradeBtn">Post Offer</button>
+                </div>
+                <label>Open Offers</label>
+                <div id="tradeBoard"></div>
+            </div>
+
+            <!-- Status Tab -->
+            <div class="tab-panel" id="tabStatus">
+                <div class="panel">
+                    <label>Trust Point Leaderboard</label>
+                    <div id="leaderboard"></div>
+                </div>
+                <div class="panel">
+                    <label>Your Stats</label>
+                    <div id="myStats" style="font-size:0.9rem;"></div>
+                </div>
+            </div>
+        </div>
+
+        <div class="finish-day-bar">
+            <button class="btn btn-red" id="finishDayBtn">Finish Day</button>
+        </div>
+
+        <div class="tab-bar">
+            <button class="tab-btn active" data-tab="tabGarden"><span class="tab-icon">🌱</span>Garden</button>
+            <button class="tab-btn" data-tab="tabStore"><span class="tab-icon">🏪</span>Store</button>
+            <button class="tab-btn" data-tab="tabMarket"><span class="tab-icon">🏬</span>Market</button>
+            <button class="tab-btn" data-tab="tabTrade"><span class="tab-icon">🤝</span>Trade</button>
+            <button class="tab-btn" data-tab="tabStatus"><span class="tab-icon">📊</span>Status</button>
+        </div>
+    </div>
+
+    <!-- DDR SCREEN -->
+    <div class="screen" id="screenDDR">
+        <div class="ddr-container" id="ddrContainer">
+            <div class="ddr-score" id="ddrScore">0</div>
+            <div class="ddr-combo" id="ddrCombo"></div>
+            <div class="ddr-target" id="ddrTarget">▲</div>
+            <div class="ddr-controls">
+                <button class="ddr-btn" data-dir="left">◀</button>
+                <button class="ddr-btn" data-dir="up">▲</button>
+                <button class="ddr-btn" data-dir="down">▼</button>
+                <button class="ddr-btn" data-dir="right">▶</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- GAME END SCREEN -->
+    <div class="screen" id="screenGameEnd">
+        <div class="game-end">
+            <h2 id="endTitle">Exclusive Deal!</h2>
+            <div class="winner-emoji">🏆</div>
+            <p id="endText"></p>
+            <div class="panel" id="endLeaderboard" style="margin-top:16px;text-align:left;"></div>
+            <button class="btn" id="newGameBtn" style="display:none;margin-top:16px;">New Game</button>
+        </div>
+    </div>
+</div>
+
+<!-- Minigame overlay -->
+<div class="minigame-overlay" id="minigameOverlay">
+    <div class="minigame-header">
+        <h2 id="mgTitle">Minigame</h2>
+        <div class="minigame-timer" id="mgTimer">30s</div>
+        <div class="minigame-earnings" id="mgEarnings">Earned: 0 🪙</div>
+    </div>
+    <div class="mg-grid" id="mgGrid"></div>
+</div>
+
+<!-- Modal for selections -->
+<div class="modal-overlay" id="modalOverlay">
+    <div class="modal" id="modalContent">
+        <h3 id="modalTitle">Select</h3>
+        <div id="modalBody"></div>
+        <button class="btn btn-secondary btn-small" id="modalClose" style="margin-top:10px;">Cancel</button>
+    </div>
+</div>
+
+<div class="toast" id="toast"></div>
+
+<script>
+// ======================== CONSTANTS ========================
+const CROPS = [
+    { id: 'lettuce',  name: 'Lettuce',  emoji: '🥬', seedCost: 3, sellPrice: 8,  growDays: 2 },
+    { id: 'carrot',   name: 'Carrot',   emoji: '🥕', seedCost: 4, sellPrice: 10, growDays: 3 },
+    { id: 'corn',     name: 'Corn',     emoji: '🌽', seedCost: 5, sellPrice: 11, growDays: 3 },
+    { id: 'tomato',   name: 'Tomato',   emoji: '🍅', seedCost: 5, sellPrice: 12, growDays: 3 },
+    { id: 'pepper',   name: 'Pepper',   emoji: '🌶', seedCost: 6, sellPrice: 14, growDays: 3 },
+    { id: 'potato',   name: 'Potato',   emoji: '🥔', seedCost: 4, sellPrice: 10, growDays: 4 },
+    { id: 'eggplant', name: 'Eggplant', emoji: '🍆', seedCost: 6, sellPrice: 15, growDays: 4 },
+    { id: 'pumpkin',  name: 'Pumpkin',  emoji: '🎃', seedCost: 7, sellPrice: 18, growDays: 5 },
+];
+
+const SLOT_TYPES = { TILLED: 'tilled', BED: 'bed', POT: 'pot' };
+const PLANT_STATES = { EMPTY: 'empty', SEEDED: 'seeded', NEEDS_WATER: 'needs_water', WATERED: 'watered', GROWING: 'growing', READY: 'ready', WILTING: 'wilting', DEAD: 'dead' };
+const DAY_LENGTH = 90; // seconds
+const WIN_TP = 7;
+const BULK_COST = 30;
+const BULK_COUNT = 10;
+const PEER_PREFIX = 'garden-davria-';
+const DDR_DIRS = ['left', 'up', 'down', 'right'];
+const DDR_ARROWS = { left: '◀', up: '▲', down: '▼', right: '▶' };
+const MINIGAME_TYPES = ['whack', 'memory'];
+const PLAYER_COLORS = ['#5dade2','#ec7063','#2ecc71','#f39c12','#af7ac5','#1abc9c','#e67e22','#3498db','#e74c3c','#9b59b6','#16a085','#d35400'];
+
+// ======================== STATE ========================
+let peer = null;
+const guestConns = new Map();
+let hostConn = null;
+let isHost = false;
+let myId = '';
+let myName = '';
+let roomCode = '';
+let currentScreen = 'screenJoin';
+let currentTab = 'tabGarden';
+let muted = false;
+
+// Host-authoritative game state
+let gameState = null;
+// My private player state (received from host)
+let myPlayerState = null;
+
+// Local UI state
+let dayTimerInterval = null;
+let ddrActive = false;
+let ddrArrows = [];
+let ddrAnimFrame = null;
+let ddrScore = 0;
+let ddrCombo = 0;
+let minigameActive = false;
+let minigameTimer = null;
+let minigameEarnings = 0;
+let memoryFlipped = [];
+let memoryMatched = [];
+let memoryBoard = [];
+let selectedBasketIndex = null;
+let fillingBasket = null; // { basketIdx, slots: [] }
+
+// ======================== HELPERS ========================
+function $(id) { return document.getElementById(id); }
+function show(screenId) {
+    document.querySelectorAll('.screen').forEach(s => s.classList.remove('active'));
+    $(screenId).classList.add('active');
+    currentScreen = screenId;
+}
+function showToast(msg, type = '', duration = 2500) {
+    const t = $('toast');
+    t.textContent = msg;
+    t.className = 'toast show' + (type ? ' ' + type : '');
+    clearTimeout(t._timer);
+    t._timer = setTimeout(() => t.classList.remove('show'), duration);
+}
+function genCode() {
+    const chars = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
+    let c = '';
+    for (let i = 0; i < 5; i++) c += chars[Math.floor(Math.random() * chars.length)];
+    return c;
+}
+function vibrate(ms = 80) { try { navigator.vibrate(ms); } catch(e) {} }
+function escHtml(s) { const d = document.createElement('div'); d.textContent = s; return d.innerHTML; }
+function getCrop(id) { return CROPS.find(c => c.id === id); }
+
+function getMyPlayerId() { return isHost ? 'host' : myId; }
+
+function createSlots() {
+    const slots = [];
+    for (let i = 0; i < 6; i++) slots.push({ type: SLOT_TYPES.TILLED, state: PLANT_STATES.EMPTY, cropId: null, plantedDay: 0, wateredDay: 0, readySinceDay: 0, daysWithoutWater: 0 });
+    for (let i = 0; i < 8; i++) slots.push({ type: SLOT_TYPES.BED, state: PLANT_STATES.EMPTY, cropId: null, plantedDay: 0, wateredDay: 0, readySinceDay: 0, daysWithoutWater: 0 });
+    for (let i = 0; i < 6; i++) slots.push({ type: SLOT_TYPES.POT, state: PLANT_STATES.EMPTY, cropId: null, plantedDay: 0, wateredDay: 0, readySinceDay: 0, daysWithoutWater: 0 });
+    return slots;
+}
+
+function createPlayerState(id, name, colorIdx) {
+    return {
+        id, name, color: PLAYER_COLORS[colorIdx % PLAYER_COLORS.length],
+        coins: 30, tp: 0,
+        seeds: {}, // { cropId: count }
+        inventory: {}, // { cropId: { fresh: count, old: count } }
+        garden: createSlots(),
+        finishedDay: false,
+        ddrPlayed: false,
+        npcCount: 0,
+        minigameEarnings: 0,
+    };
+}
+
+function generateBaskets() {
+    const baskets = [];
+    // 8-veggie basket (4+ types) -> 2 TP
+    baskets.push({ size: 8, minTypes: 4, tp: 2, reward: 20 });
+    // 10-veggie basket (5+ types) -> 2 or 3 TP
+    baskets.push({ size: 10, minTypes: 5, tp: 2, reward: 28 }); // 5 types = 2TP, 6+ = 3TP handled on fill
+    // 12-veggie basket (6+ types) -> 3 TP
+    baskets.push({ size: 12, minTypes: 6, tp: 3, reward: 36 });
+    return baskets;
+}
+
+// ======================== URL AUTO-JOIN ========================
+function checkUrlJoin() {
+    const params = new URLSearchParams(window.location.search);
+    const code = params.get('room');
+    if (code) $('joinCodeInput').value = code.toUpperCase();
+}
+
+// ======================== PEERJS SETUP (MATCHES PIT EXACTLY) ========================
+function initPeer(id) {
+    return new Promise((resolve, reject) => {
+        peer = new Peer(id, { debug: 0 });
+        peer.on('open', () => resolve());
+        peer.on('error', (err) => {
+            if (err.type === 'unavailable-id') reject(new Error('Room code taken'));
+            else if (err.type === 'peer-unavailable') showToast('Room not found', 'error');
+            else reject(err);
+        });
+    });
+}
+
+// ======================== HOST LOGIC ========================
+async function createGame() {
+    myName = $('nameInput').value.trim();
+    if (!myName) { showToast('Enter your name', 'error'); return; }
+    roomCode = genCode();
+    myId = PEER_PREFIX + roomCode;
+
+    try { await initPeer(myId); } catch(e) { showToast(e.message, 'error'); return; }
+
+    isHost = true;
+    gameState = {
+        phase: 'lobby',
+        day: 0,
+        timer: DAY_LENGTH,
+        players: {},
+        baskets: [],
+        tradeOffers: [],
+        minigameType: null,
+        winnerId: null,
+    };
+    gameState.players['host'] = createPlayerState('host', myName, 0);
+    showLobby();
+
+    peer.on('connection', conn => {
+        conn.on('open', () => {
+            guestConns.set(conn.peer, conn);
+        });
+        conn.on('data', (msg) => handleHostMessage(conn, msg));
+        conn.on('close', () => {
+            guestConns.delete(conn.peer);
+            delete gameState.players[conn.peer];
+            broadcastState();
+        });
+        conn.on('error', e => console.warn('conn error', e));
+    });
+}
+
+function handleHostMessage(conn, msg) {
+    const pid = conn.peer;
+    switch(msg.type) {
+        case 'join_game': {
+            if (gameState.phase !== 'lobby') { conn.send({ type: 'error', message: 'Game already started' }); return; }
+            if (Object.keys(gameState.players).length >= 12) { conn.send({ type: 'error', message: 'Game is full' }); return; }
+            const idx = Object.keys(gameState.players).length;
+            gameState.players[pid] = createPlayerState(pid, msg.name, idx);
+            guestConns.set(conn.peer, conn);
+            broadcastState();
+            break;
+        }
+        case 'plant_seed': {
+            const p = gameState.players[pid];
+            if (!p || gameState.phase !== 'playing') return;
+            const { slotIdx, cropId } = msg;
+            if (slotIdx < 0 || slotIdx >= 20) return;
+            const slot = p.garden[slotIdx];
+            if (slot.state !== PLANT_STATES.EMPTY) return;
+            if (!p.seeds[cropId] || p.seeds[cropId] <= 0) return;
+            p.seeds[cropId]--;
+            if (p.seeds[cropId] <= 0) delete p.seeds[cropId];
+            slot.state = PLANT_STATES.SEEDED;
+            slot.cropId = cropId;
+            slot.plantedDay = gameState.day;
+            slot.daysWithoutWater = 0;
+            sendPlayerState(pid);
+            break;
+        }
+        case 'water_slot': {
+            const p = gameState.players[pid];
+            if (!p || gameState.phase !== 'playing') return;
+            const slot = p.garden[msg.slotIdx];
+            if (!slot || (slot.state !== PLANT_STATES.NEEDS_WATER && slot.state !== PLANT_STATES.SEEDED)) return;
+            slot.state = PLANT_STATES.WATERED;
+            slot.wateredDay = gameState.day;
+            slot.daysWithoutWater = 0;
+            sendPlayerState(pid);
+            break;
+        }
+        case 'pick_slot': {
+            const p = gameState.players[pid];
+            if (!p || gameState.phase !== 'playing') return;
+            const slot = p.garden[msg.slotIdx];
+            if (!slot || slot.state !== PLANT_STATES.READY) return;
+            const crop = getCrop(slot.cropId);
+            if (!crop) return;
+            const daysSinceReady = gameState.day - slot.readySinceDay;
+            if (!p.inventory[slot.cropId]) p.inventory[slot.cropId] = { fresh: 0, old: 0 };
+            if (daysSinceReady >= 1) {
+                p.inventory[slot.cropId].old++;
+            } else {
+                p.inventory[slot.cropId].fresh++;
+            }
+            slot.state = PLANT_STATES.EMPTY;
+            slot.cropId = null;
+            slot.plantedDay = 0;
+            slot.wateredDay = 0;
+            slot.readySinceDay = 0;
+            sendPlayerState(pid);
+            break;
+        }
+        case 'buy_seed': {
+            const p = gameState.players[pid];
+            if (!p || gameState.phase !== 'playing') return;
+            const crop = getCrop(msg.cropId);
+            if (!crop || p.coins < crop.seedCost) return;
+            p.coins -= crop.seedCost;
+            p.seeds[crop.id] = (p.seeds[crop.id] || 0) + 1;
+            sendPlayerState(pid);
+            break;
+        }
+        case 'buy_bulk': {
+            const p = gameState.players[pid];
+            if (!p || gameState.phase !== 'playing' || p.coins < BULK_COST) return;
+            p.coins -= BULK_COST;
+            for (let i = 0; i < BULK_COUNT; i++) {
+                const rc = CROPS[Math.floor(Math.random() * CROPS.length)];
+                p.seeds[rc.id] = (p.seeds[rc.id] || 0) + 1;
+            }
+            sendPlayerState(pid);
+            break;
+        }
+        case 'sell_to_npc': {
+            const p = gameState.players[pid];
+            if (!p || gameState.phase !== 'playing') return;
+            const { cropId, quality } = msg; // quality: 'fresh' or 'old'
+            if (!p.inventory[cropId] || !p.inventory[cropId][quality] || p.inventory[cropId][quality] <= 0) return;
+            if (p.npcCount <= 0) return;
+            const crop = getCrop(cropId);
+            if (!crop) return;
+            const price = quality === 'fresh' ? crop.sellPrice : Math.floor(crop.sellPrice * 0.8);
+            p.inventory[cropId][quality]--;
+            p.coins += price;
+            p.npcCount--;
+            sendPlayerState(pid);
+            break;
+        }
+        case 'fill_basket': {
+            const p = gameState.players[pid];
+            if (!p || gameState.phase !== 'playing') return;
+            const { basketIdx, items } = msg; // items: [{cropId, quality}]
+            const basket = gameState.baskets[basketIdx];
+            if (!basket) return;
+            if (items.length !== basket.size) return;
+            // Check types
+            const types = new Set(items.map(i => i.cropId));
+            if (types.size < basket.minTypes) { sendTo(pid, { type: 'error', message: `Need ${basket.minTypes}+ crop types` }); return; }
+            // Verify player has all items
+            const needed = {};
+            items.forEach(i => {
+                const key = i.cropId + '_' + i.quality;
+                needed[key] = (needed[key] || 0) + 1;
+            });
+            for (const [key, count] of Object.entries(needed)) {
+                const [cid, qual] = key.split('_');
+                if (!p.inventory[cid] || !p.inventory[cid][qual] || p.inventory[cid][qual] < count) {
+                    sendTo(pid, { type: 'error', message: 'Not enough veggies' });
+                    return;
+                }
+            }
+            // Remove items
+            for (const [key, count] of Object.entries(needed)) {
+                const [cid, qual] = key.split('_');
+                p.inventory[cid][qual] -= count;
+            }
+            // Award TP and coins
+            let tp = basket.tp;
+            // 10-size basket: 6+ types = 3TP instead of 2
+            if (basket.size === 10 && types.size >= 6) tp = 3;
+            p.tp += tp;
+            p.coins += basket.reward;
+            sendTo(pid, { type: 'toast', message: `Basket sold! +${tp} TP, +${basket.reward} 🪙`, toastType: 'success' });
+            // Check win
+            if (p.tp >= WIN_TP) {
+                gameState.phase = 'game_end';
+                gameState.winnerId = pid;
+                broadcastState();
+                return;
+            }
+            sendPlayerState(pid);
+            break;
+        }
+        case 'ddr_result': {
+            const p = gameState.players[pid];
+            if (!p || gameState.phase !== 'playing') return;
+            p.ddrPlayed = true;
+            const score = Math.max(0, Math.min(100, msg.score || 0));
+            p.npcCount = Math.floor(3 + (score / 100) * 5); // 3-8 NPCs
+            sendPlayerState(pid);
+            break;
+        }
+        case 'finish_day': {
+            const p = gameState.players[pid];
+            if (!p || gameState.phase !== 'playing') return;
+            p.finishedDay = true;
+            p.minigameEarnings = msg.earnings || 0;
+            p.coins += p.minigameEarnings;
+            // Check if all finished
+            const allFinished = Object.values(gameState.players).every(pl => pl.finishedDay);
+            if (allFinished) advanceDay();
+            else broadcastState();
+            break;
+        }
+        case 'post_trade': {
+            const p = gameState.players[pid];
+            if (!p || gameState.phase !== 'playing') return;
+            gameState.tradeOffers.push({
+                id: Date.now() + '_' + pid,
+                playerId: pid,
+                playerName: p.name,
+                offerCrop: msg.offerCrop,
+                offerQty: msg.offerQty,
+                wantCrop: msg.wantCrop,
+                wantQty: msg.wantQty,
+            });
+            broadcastState();
+            break;
+        }
+        case 'accept_trade': {
+            const offer = gameState.tradeOffers.find(o => o.id === msg.offerId);
+            if (!offer) return;
+            const seller = gameState.players[offer.playerId];
+            const buyer = gameState.players[pid];
+            if (!seller || !buyer) return;
+            // Validate seller has items
+            const sellerTotal = (seller.inventory[offer.offerCrop]?.fresh || 0) + (seller.inventory[offer.offerCrop]?.old || 0);
+            if (sellerTotal < offer.offerQty) { sendTo(pid, { type: 'error', message: 'Seller lacks items' }); return; }
+            // Validate buyer has items
+            const buyerTotal = (buyer.inventory[offer.wantCrop]?.fresh || 0) + (buyer.inventory[offer.wantCrop]?.old || 0);
+            if (buyerTotal < offer.wantQty) { sendTo(pid, { type: 'error', message: 'You lack items' }); return; }
+            // Execute: remove from seller, add to buyer and vice versa
+            removeFromInventory(seller, offer.offerCrop, offer.offerQty);
+            removeFromInventory(buyer, offer.wantCrop, offer.wantQty);
+            addToInventory(buyer, offer.offerCrop, offer.offerQty);
+            addToInventory(seller, offer.wantCrop, offer.wantQty);
+            // Remove offer
+            gameState.tradeOffers = gameState.tradeOffers.filter(o => o.id !== msg.offerId);
+            sendTo(pid, { type: 'toast', message: 'Trade complete!', toastType: 'success' });
+            sendTo(offer.playerId, { type: 'toast', message: `${buyer.name} accepted your trade!`, toastType: 'success' });
+            broadcastState();
+            break;
+        }
+        case 'cancel_trade': {
+            gameState.tradeOffers = gameState.tradeOffers.filter(o => !(o.id === msg.offerId && o.playerId === pid));
+            broadcastState();
+            break;
+        }
+        case 'get_state': {
+            sendPlayerState(pid);
+            break;
+        }
+    }
+}
+
+function removeFromInventory(player, cropId, qty) {
+    if (!player.inventory[cropId]) return;
+    let remaining = qty;
+    // Use old first
+    const oldUse = Math.min(remaining, player.inventory[cropId].old || 0);
+    player.inventory[cropId].old -= oldUse;
+    remaining -= oldUse;
+    if (remaining > 0) {
+        const freshUse = Math.min(remaining, player.inventory[cropId].fresh || 0);
+        player.inventory[cropId].fresh -= freshUse;
+    }
+}
+
+function addToInventory(player, cropId, qty) {
+    if (!player.inventory[cropId]) player.inventory[cropId] = { fresh: 0, old: 0 };
+    player.inventory[cropId].fresh += qty;
+}
+
+function sendPlayerState(pid) {
+    const p = gameState.players[pid];
+    if (!p) return;
+    const msg = {
+        type: 'state_update',
+        gameState: buildCommonState(),
+        playerState: { ...p },
+    };
+    sendTo(pid, msg);
+    // Also send common state to others (for leaderboard etc)
+    broadcastCommonToOthers(pid);
+}
+
+function buildCommonState() {
+    return {
+        phase: gameState.phase,
+        day: gameState.day,
+        timer: gameState.timer,
+        baskets: gameState.baskets,
+        tradeOffers: gameState.tradeOffers,
+        minigameType: gameState.minigameType,
+        winnerId: gameState.winnerId,
+        playerSummaries: Object.values(gameState.players).map(p => ({
+            id: p.id, name: p.name, color: p.color, tp: p.tp, coins: p.coins, finishedDay: p.finishedDay,
+        })),
+    };
+}
+
+function broadcastCommonToOthers(excludePid) {
+    const cs = buildCommonState();
+    const allPids = Object.keys(gameState.players);
+    allPids.forEach(pid => {
+        if (pid === excludePid) return;
+        const msg = { type: 'common_update', gameState: cs };
+        sendTo(pid, msg);
+    });
+}
+
+function broadcastState() {
+    const cs = buildCommonState();
+    Object.keys(gameState.players).forEach(pid => {
+        const p = gameState.players[pid];
+        sendTo(pid, { type: 'state_update', gameState: cs, playerState: { ...p } });
+    });
+}
+
+function sendTo(playerId, msg) {
+    if (playerId === 'host') {
+        handleClientMessage(msg);
+    } else {
+        const conn = guestConns.get(playerId);
+        if (conn && conn.open) conn.send(msg);
+    }
+}
+
+function startGame() {
+    if (Object.keys(gameState.players).length < 1) { showToast('Need at least 1 player', 'error'); return; }
+    gameState.phase = 'playing';
+    gameState.day = 1;
+    gameState.timer = DAY_LENGTH;
+    gameState.baskets = generateBaskets();
+    gameState.tradeOffers = [];
+    gameState.minigameType = MINIGAME_TYPES[Math.floor(Math.random() * MINIGAME_TYPES.length)];
+    Object.values(gameState.players).forEach(p => {
+        p.finishedDay = false;
+        p.ddrPlayed = false;
+        p.npcCount = 0;
+    });
+    broadcastState();
+    startDayTimer();
+}
+
+function startDayTimer() {
+    if (dayTimerInterval) clearInterval(dayTimerInterval);
+    gameState.timer = DAY_LENGTH;
+    dayTimerInterval = setInterval(() => {
+        if (gameState.phase !== 'playing') { clearInterval(dayTimerInterval); return; }
+        gameState.timer--;
+        if (gameState.timer <= 0) {
+            // Force finish day for everyone who hasn't
+            Object.values(gameState.players).forEach(p => {
+                if (!p.finishedDay) p.finishedDay = true;
+            });
+            advanceDay();
+        }
+        // Broadcast timer every 5 seconds to keep synced
+        if (gameState.timer % 5 === 0) {
+            const cs = buildCommonState();
+            Object.keys(gameState.players).forEach(pid => {
+                sendTo(pid, { type: 'timer_update', timer: gameState.timer });
+            });
+        }
+    }, 1000);
+}
+
+function advanceDay() {
+    if (dayTimerInterval) clearInterval(dayTimerInterval);
+
+    // Advance plant lifecycle for all players
+    Object.values(gameState.players).forEach(p => {
+        p.garden.forEach(slot => {
+            if (slot.state === PLANT_STATES.EMPTY || slot.state === PLANT_STATES.DEAD) return;
+
+            const crop = getCrop(slot.cropId);
+            if (!crop) return;
+
+            if (slot.state === PLANT_STATES.SEEDED) {
+                // Needs water next day
+                slot.state = PLANT_STATES.NEEDS_WATER;
+                slot.daysWithoutWater = 0;
+            } else if (slot.state === PLANT_STATES.NEEDS_WATER) {
+                slot.daysWithoutWater++;
+                if (slot.daysWithoutWater >= 2) {
+                    slot.state = PLANT_STATES.DEAD;
+                }
+            } else if (slot.state === PLANT_STATES.WATERED) {
+                const daysSincePlant = gameState.day - slot.plantedDay;
+                if (daysSincePlant >= crop.growDays) {
+                    slot.state = PLANT_STATES.READY;
+                    slot.readySinceDay = gameState.day;
+                } else {
+                    slot.state = PLANT_STATES.GROWING;
+                }
+            } else if (slot.state === PLANT_STATES.GROWING) {
+                const daysSincePlant = gameState.day - slot.plantedDay;
+                if (daysSincePlant >= crop.growDays) {
+                    slot.state = PLANT_STATES.READY;
+                    slot.readySinceDay = gameState.day;
+                }
+            } else if (slot.state === PLANT_STATES.READY) {
+                const daysSinceReady = gameState.day - slot.readySinceDay;
+                if (daysSinceReady >= 2) {
+                    slot.state = PLANT_STATES.WILTING;
+                }
+            } else if (slot.state === PLANT_STATES.WILTING) {
+                slot.state = PLANT_STATES.DEAD;
+            }
+        });
+
+        // Age inventory: fresh -> old
+        Object.keys(p.inventory).forEach(cropId => {
+            const inv = p.inventory[cropId];
+            inv.old += inv.fresh;
+            inv.fresh = 0;
+        });
+
+        // Reset day flags
+        p.finishedDay = false;
+        p.ddrPlayed = false;
+        p.npcCount = 0;
+        p.minigameEarnings = 0;
+    });
+
+    // Next day
+    gameState.day++;
+    gameState.baskets = generateBaskets();
+    gameState.tradeOffers = [];
+    gameState.minigameType = MINIGAME_TYPES[Math.floor(Math.random() * MINIGAME_TYPES.length)];
+
+    broadcastState();
+    startDayTimer();
+}
+
+// ======================== GUEST LOGIC (MATCHES PIT EXACTLY) ========================
+async function joinGame() {
+    myName = $('nameInput').value.trim();
+    if (!myName) { showToast('Enter your name', 'error'); return; }
+    roomCode = $('joinCodeInput').value.trim().toUpperCase();
+    if (!roomCode) { showToast('Enter a room code', 'error'); return; }
+
+    // Let PeerJS auto-assign guest ID (NO first argument)
+    peer = new Peer({ debug: 0 });
+    peer.on('open', (id) => {
+        myId = id;
+        const hostId = PEER_PREFIX + roomCode;
+        hostConn = peer.connect(hostId, { reliable: true });
+
+        // Register data handler BEFORE open handler (matches Pit pattern)
+        hostConn.on('data', (msg) => handleGuestMessage(msg));
+        hostConn.on('open', () => {
+            hostConn.send({ type: 'join_game', name: myName });
+        });
+
+        hostConn.on('error', () => showToast('Connection failed', 'error'));
+        hostConn.on('close', () => showToast('Disconnected from host', 'error'));
+    });
+    peer.on('error', (err) => {
+        showToast('Peer error: ' + (err.type || err.message), 'error');
+    });
+
+    showLobby();
+}
+
+function handleGuestMessage(msg) {
+    switch(msg.type) {
+        case 'state_update':
+            myPlayerState = msg.playerState;
+            handleStateUpdate(msg.gameState);
+            break;
+        case 'common_update':
+            handleCommonUpdate(msg.gameState);
+            break;
+        case 'timer_update':
+            if (myPlayerState) {
+                $('hudTimer').textContent = msg.timer;
+            }
+            break;
+        case 'toast':
+            showToast(msg.message, msg.toastType || '');
+            break;
+        case 'error':
+            showToast(msg.message, 'error');
+            break;
+    }
+}
+
+function sendToHost(msg) {
+    if (isHost) {
+        handleHostMessage({ peer: 'host', send: (m) => handleClientMessage(m) }, msg);
+    } else if (hostConn) {
+        hostConn.send(msg);
+    }
+}
+
+// ======================== CLIENT STATE HANDLING ========================
+function handleClientMessage(msg) {
+    switch(msg.type) {
+        case 'state_update':
+            myPlayerState = msg.playerState;
+            handleStateUpdate(msg.gameState);
+            break;
+        case 'common_update':
+            handleCommonUpdate(msg.gameState);
+            break;
+        case 'timer_update':
+            $('hudTimer').textContent = msg.timer;
+            break;
+        case 'toast':
+            showToast(msg.message, msg.toastType || '');
+            break;
+        case 'error':
+            showToast(msg.message, 'error');
+            break;
+    }
+}
+
+function handleStateUpdate(gs) {
+    const prevPhase = gameState ? gameState.phase : 'lobby';
+    gameState = gs;
+
+    switch(gs.phase) {
+        case 'lobby':
+            showLobby();
+            break;
+        case 'playing':
+            if (currentScreen !== 'screenMain' && currentScreen !== 'screenDDR') {
+                show('screenMain');
+            }
+            renderAll();
+            break;
+        case 'game_end':
+            show('screenGameEnd');
+            renderGameEnd();
+            break;
+    }
+}
+
+function handleCommonUpdate(gs) {
+    const oldPhase = gameState ? gameState.phase : 'lobby';
+    gameState = gs;
+    if (gs.phase === 'game_end') {
+        show('screenGameEnd');
+        renderGameEnd();
+    } else if (gs.phase === 'playing' && currentScreen === 'screenMain') {
+        renderHUD();
+        renderStatus();
+        renderTrade();
+    }
+}
+
+// ======================== RENDERING ========================
+function renderAll() {
+    renderHUD();
+    renderGarden();
+    renderStore();
+    renderMarket();
+    renderTrade();
+    renderStatus();
+    renderInventory();
+}
+
+function renderHUD() {
+    if (!myPlayerState || !gameState) return;
+    $('hudDay').textContent = gameState.day;
+    $('hudTimer').textContent = gameState.timer;
+    $('hudCoins').textContent = myPlayerState.coins;
+    $('hudTP').textContent = myPlayerState.tp + '/' + WIN_TP;
+    const seedCount = Object.values(myPlayerState.seeds).reduce((a, b) => a + b, 0);
+    $('hudSeeds').textContent = seedCount;
+}
+
+function renderGarden() {
+    if (!myPlayerState) return;
+    const garden = myPlayerState.garden;
+    renderGardenSection($('gardenTilled'), garden.slice(0, 6), 0);
+    renderGardenSection($('gardenBeds'), garden.slice(6, 14), 6);
+    renderGardenSection($('gardenPots'), garden.slice(14, 20), 14);
+}
+
+function renderGardenSection(container, slots, offset) {
+    container.innerHTML = '';
+    slots.forEach((slot, i) => {
+        const idx = offset + i;
+        const div = document.createElement('div');
+        div.className = 'garden-slot slot-' + slot.state;
+        const crop = getCrop(slot.cropId);
+
+        let emoji = '';
+        let sub = '';
+        switch(slot.state) {
+            case PLANT_STATES.EMPTY: emoji = ''; break;
+            case PLANT_STATES.SEEDED: emoji = '🌱'; sub = crop ? crop.name.slice(0,3) : ''; break;
+            case PLANT_STATES.NEEDS_WATER: emoji = '💧'; sub = 'water!'; break;
+            case PLANT_STATES.WATERED: emoji = '🌱'; sub = '💧'; break;
+            case PLANT_STATES.GROWING: emoji = '🌿'; sub = crop ? crop.name.slice(0,3) : ''; break;
+            case PLANT_STATES.READY: emoji = crop ? crop.emoji : '✅'; sub = 'pick!'; break;
+            case PLANT_STATES.WILTING: emoji = '🥀'; break;
+            case PLANT_STATES.DEAD: emoji = '💀'; break;
+        }
+
+        div.innerHTML = emoji + (sub ? `<span class="slot-sub">${sub}</span>` : '');
+        div.addEventListener('click', () => handleSlotClick(idx, slot));
+        container.appendChild(div);
+    });
+}
+
+function handleSlotClick(idx, slot) {
+    if (!myPlayerState || !gameState || gameState.phase !== 'playing') return;
+
+    switch(slot.state) {
+        case PLANT_STATES.EMPTY:
+            showSeedSelector(idx);
+            break;
+        case PLANT_STATES.SEEDED:
+        case PLANT_STATES.NEEDS_WATER:
+            sendToHost({ type: 'water_slot', slotIdx: idx });
+            vibrate(40);
+            break;
+        case PLANT_STATES.READY:
+            sendToHost({ type: 'pick_slot', slotIdx: idx });
+            vibrate(60);
+            showToast('Picked!', 'success', 1000);
+            break;
+        case PLANT_STATES.DEAD:
+        case PLANT_STATES.WILTING:
+            // Clear dead slot - just treat as a reset on host side
+            // Actually dead slots stay until day advances. Just inform user.
+            showToast('This plant is dead', 'error', 1500);
+            break;
+        default:
+            showToast('Growing...', '', 1000);
+    }
+}
+
+function showSeedSelector(slotIdx) {
+    if (!myPlayerState) return;
+    const seeds = myPlayerState.seeds;
+    const available = Object.entries(seeds).filter(([_, c]) => c > 0);
+    if (available.length === 0) { showToast('No seeds! Visit the Store tab', 'error'); return; }
+
+    const body = $('modalBody');
+    body.innerHTML = '';
+    $('modalTitle').textContent = 'Plant a Seed';
+    available.forEach(([cropId, count]) => {
+        const crop = getCrop(cropId);
+        const div = document.createElement('div');
+        div.className = 'modal-item';
+        div.innerHTML = `<span>${crop.emoji} ${crop.name} (x${count})</span><span style="color:var(--text-secondary);font-size:0.8rem;">${crop.growDays} days</span>`;
+        div.addEventListener('click', () => {
+            sendToHost({ type: 'plant_seed', slotIdx, cropId });
+            vibrate(40);
+            closeModal();
+        });
+        body.appendChild(div);
+    });
+    $('modalOverlay').classList.add('active');
+}
+
+function closeModal() { $('modalOverlay').classList.remove('active'); }
+
+function renderStore() {
+    if (!myPlayerState) return;
+    const list = $('seedList');
+    list.innerHTML = '';
+    CROPS.forEach(crop => {
+        const owned = myPlayerState.seeds[crop.id] || 0;
+        const row = document.createElement('div');
+        row.className = 'seed-row';
+        row.innerHTML = `
+            <div class="seed-info">
+                <span class="seed-emoji">${crop.emoji}</span>
+                <div>
+                    <div class="seed-name">${crop.name}<span class="seed-count">${owned > 0 ? ' (x' + owned + ')' : ''}</span></div>
+                    <div class="seed-grow">${crop.growDays} day grow | Sells for ${crop.sellPrice} 🪙</div>
+                </div>
+            </div>
+            <button class="btn btn-small" ${myPlayerState.coins < crop.seedCost ? 'disabled' : ''}>${crop.seedCost} 🪙</button>
+        `;
+        row.querySelector('button').addEventListener('click', () => {
+            sendToHost({ type: 'buy_seed', cropId: crop.id });
+            vibrate(30);
+        });
+        list.appendChild(row);
+    });
+}
+
+function renderMarket() {
+    if (!myPlayerState || !gameState) return;
+
+    // DDR section
+    const ddrPrompt = $('ddrPrompt');
+    const npcSection = $('npcSection');
+    if (myPlayerState.ddrPlayed) {
+        ddrPrompt.style.display = 'none';
+        npcSection.style.display = 'block';
+        $('npcCount').textContent = myPlayerState.npcCount;
+        renderNPCs();
+    } else {
+        ddrPrompt.style.display = 'block';
+        npcSection.style.display = 'none';
+    }
+
+    // Baskets
+    renderBaskets();
+}
+
+function renderNPCs() {
+    const list = $('npcList');
+    list.innerHTML = '';
+    if (myPlayerState.npcCount <= 0) {
+        list.innerHTML = '<p style="color:var(--text-secondary);font-size:0.85rem;padding:8px;">No more NPCs today. Come back tomorrow!</p>';
+        return;
+    }
+    // Show sellable inventory
+    const inv = myPlayerState.inventory;
+    let hasItems = false;
+    Object.entries(inv).forEach(([cropId, counts]) => {
+        const crop = getCrop(cropId);
+        if (!crop) return;
+        if (counts.fresh > 0) {
+            hasItems = true;
+            const card = document.createElement('div');
+            card.className = 'npc-card';
+            card.innerHTML = `<span>${crop.emoji} ${crop.name} (fresh)</span><button class="btn btn-small">${crop.sellPrice} 🪙</button>`;
+            card.querySelector('button').addEventListener('click', () => {
+                sendToHost({ type: 'sell_to_npc', cropId: crop.id, quality: 'fresh' });
+                vibrate(30);
+            });
+            list.appendChild(card);
+        }
+        if (counts.old > 0) {
+            hasItems = true;
+            const price = Math.floor(crop.sellPrice * 0.8);
+            const card = document.createElement('div');
+            card.className = 'npc-card';
+            card.innerHTML = `<span>${crop.emoji} ${crop.name} (day-old)</span><button class="btn btn-small">${price} 🪙</button>`;
+            card.querySelector('button').addEventListener('click', () => {
+                sendToHost({ type: 'sell_to_npc', cropId: crop.id, quality: 'old' });
+                vibrate(30);
+            });
+            list.appendChild(card);
+        }
+    });
+    if (!hasItems) {
+        list.innerHTML = '<p style="color:var(--text-secondary);font-size:0.85rem;padding:8px;">No veggies to sell. Grow and pick some!</p>';
+    }
+}
+
+function renderBaskets() {
+    if (!gameState || !myPlayerState) return;
+    const list = $('basketList');
+    list.innerHTML = '';
+    gameState.baskets.forEach((basket, bIdx) => {
+        const card = document.createElement('div');
+        card.className = 'basket-card';
+
+        let tpLabel = basket.tp + ' TP';
+        if (basket.size === 10) tpLabel = '2-3 TP';
+
+        card.innerHTML = `
+            <div class="basket-header">
+                <span>🧺 ${basket.size} veggies</span>
+                <span class="basket-tp">${tpLabel}</span>
+            </div>
+            <div class="basket-req">${basket.minTypes}+ different types needed | +${basket.reward} 🪙</div>
+            <button class="btn btn-small btn-purple">Fill Basket</button>
+        `;
+        card.querySelector('button').addEventListener('click', () => openBasketFiller(bIdx));
+        list.appendChild(card);
+    });
+}
+
+function openBasketFiller(basketIdx) {
+    if (!gameState || !myPlayerState) return;
+    const basket = gameState.baskets[basketIdx];
+    if (!basket) return;
+
+    fillingBasket = { basketIdx, items: [] };
+
+    const body = $('modalBody');
+    $('modalTitle').textContent = `Fill Basket (${basket.size} veggies, ${basket.minTypes}+ types)`;
+    renderBasketFillerBody(basket);
+    $('modalOverlay').classList.add('active');
+}
+
+function renderBasketFillerBody(basket) {
+    const body = $('modalBody');
+    body.innerHTML = '';
+
+    // Show current selections
+    const selDiv = document.createElement('div');
+    selDiv.style.cssText = 'margin-bottom:10px;font-size:0.85rem;';
+    const types = new Set(fillingBasket.items.map(i => i.cropId));
+    selDiv.innerHTML = `Selected: ${fillingBasket.items.length}/${basket.size} | Types: ${types.size}/${basket.minTypes}+`;
+    if (fillingBasket.items.length > 0) {
+        const itemsStr = fillingBasket.items.map(i => getCrop(i.cropId)?.emoji || '?').join('');
+        selDiv.innerHTML += `<br>${itemsStr}`;
+    }
+    body.appendChild(selDiv);
+
+    // Available veggies to add
+    const inv = { ...myPlayerState.inventory };
+    // Subtract already selected
+    fillingBasket.items.forEach(item => {
+        if (inv[item.cropId]) {
+            const c = { ...inv[item.cropId] };
+            if (item.quality === 'old') c.old = Math.max(0, (c.old || 0) - 1);
+            else c.fresh = Math.max(0, (c.fresh || 0) - 1);
+            inv[item.cropId] = c;
+        }
+    });
+
+    let hasOptions = false;
+    Object.entries(inv).forEach(([cropId, counts]) => {
+        const crop = getCrop(cropId);
+        if (!crop) return;
+        ['fresh', 'old'].forEach(quality => {
+            if (!counts[quality] || counts[quality] <= 0) return;
+            hasOptions = true;
+            const div = document.createElement('div');
+            div.className = 'modal-item';
+            div.innerHTML = `<span>${crop.emoji} ${crop.name} (${quality}) x${counts[quality]}</span><span style="color:var(--accent);">+ Add</span>`;
+            div.addEventListener('click', () => {
+                if (fillingBasket.items.length >= basket.size) return;
+                fillingBasket.items.push({ cropId, quality });
+                renderBasketFillerBody(basket);
+            });
+            body.appendChild(div);
+        });
+    });
+
+    if (!hasOptions && fillingBasket.items.length < basket.size) {
+        body.innerHTML += '<p style="color:var(--text-secondary);font-size:0.85rem;margin-top:8px;">Not enough veggies!</p>';
+    }
+
+    // Remove last item button
+    if (fillingBasket.items.length > 0) {
+        const undoBtn = document.createElement('button');
+        undoBtn.className = 'btn btn-small btn-secondary';
+        undoBtn.textContent = 'Undo Last';
+        undoBtn.style.marginTop = '8px';
+        undoBtn.addEventListener('click', () => {
+            fillingBasket.items.pop();
+            renderBasketFillerBody(basket);
+        });
+        body.appendChild(undoBtn);
+    }
+
+    // Submit button
+    if (fillingBasket.items.length === basket.size) {
+        const submitBtn = document.createElement('button');
+        submitBtn.className = 'btn btn-purple';
+        submitBtn.textContent = 'Sell Basket!';
+        submitBtn.style.marginTop = '10px';
+        submitBtn.addEventListener('click', () => {
+            sendToHost({ type: 'fill_basket', basketIdx: fillingBasket.basketIdx, items: fillingBasket.items });
+            closeModal();
+            fillingBasket = null;
+        });
+        body.appendChild(submitBtn);
+    }
+}
+
+function renderTrade() {
+    if (!gameState || !myPlayerState) return;
+
+    // Populate dropdowns
+    const offerSel = $('tradeOfferCrop');
+    const wantSel = $('tradeWantCrop');
+    if (offerSel.children.length === 0) {
+        CROPS.forEach(c => {
+            offerSel.innerHTML += `<option value="${c.id}">${c.emoji} ${c.name}</option>`;
+            wantSel.innerHTML += `<option value="${c.id}">${c.emoji} ${c.name}</option>`;
+        });
+    }
+
+    const board = $('tradeBoard');
+    board.innerHTML = '';
+    const myPid = getMyPlayerId();
+
+    if (gameState.tradeOffers.length === 0) {
+        board.innerHTML = '<p class="subtitle">No open offers</p>';
+        return;
+    }
+
+    gameState.tradeOffers.forEach(offer => {
+        const oCrop = getCrop(offer.offerCrop);
+        const wCrop = getCrop(offer.wantCrop);
+        const div = document.createElement('div');
+        div.className = 'trade-offer';
+        const isMine = offer.playerId === myPid;
+        div.innerHTML = `
+            <div>
+                <div class="offer-detail">${oCrop?.emoji || ''} ${offer.offerQty} ${oCrop?.name || '?'} → ${wCrop?.emoji || ''} ${offer.wantQty} ${wCrop?.name || '?'}</div>
+                <div class="offer-player">${isMine ? 'You' : escHtml(offer.playerName)}</div>
+            </div>
+            ${isMine
+                ? '<button class="btn btn-small btn-secondary cancel-offer-btn">Cancel</button>'
+                : '<button class="btn btn-small accept-offer-btn">Accept</button>'
+            }
+        `;
+        if (isMine) {
+            div.querySelector('.cancel-offer-btn').addEventListener('click', () => {
+                sendToHost({ type: 'cancel_trade', offerId: offer.id });
+            });
+        } else {
+            div.querySelector('.accept-offer-btn').addEventListener('click', () => {
+                sendToHost({ type: 'accept_trade', offerId: offer.id });
+                vibrate(40);
+            });
+        }
+        board.appendChild(div);
+    });
+}
+
+function renderStatus() {
+    if (!gameState) return;
+    const lb = $('leaderboard');
+    lb.innerHTML = '';
+    const sorted = [...(gameState.playerSummaries || [])].sort((a, b) => b.tp - a.tp || b.coins - a.coins);
+    sorted.forEach((p, i) => {
+        const row = document.createElement('div');
+        row.className = 'leaderboard-row';
+        const isMe = p.id === getMyPlayerId();
+        row.innerHTML = `
+            <span class="lb-rank">${i + 1}.</span>
+            <span class="lb-name" style="${isMe ? 'font-weight:700;color:var(--gold);' : ''}">${escHtml(p.name)}</span>
+            <span class="lb-tp">${p.tp} TP</span>
+            <span class="lb-coins">${p.coins} 🪙</span>
+        `;
+        lb.appendChild(row);
+    });
+
+    if (myPlayerState) {
+        const stats = $('myStats');
+        const seedCount = Object.values(myPlayerState.seeds).reduce((a, b) => a + b, 0);
+        const veggieCount = Object.values(myPlayerState.inventory).reduce((a, inv) => a + (inv.fresh || 0) + (inv.old || 0), 0);
+        const planted = myPlayerState.garden.filter(s => s.state !== PLANT_STATES.EMPTY && s.state !== PLANT_STATES.DEAD).length;
+        stats.innerHTML = `
+            <div>Seeds: ${seedCount} | Veggies: ${veggieCount} | Planted: ${planted}/20</div>
+            <div>Coins: ${myPlayerState.coins} 🪙 | Trust Points: ${myPlayerState.tp}/${WIN_TP}</div>
+        `;
+    }
+}
+
+function renderInventory() {
+    if (!myPlayerState) return;
+    const div = $('inventoryDisplay');
+    const inv = myPlayerState.inventory;
+    const entries = Object.entries(inv).filter(([_, c]) => (c.fresh || 0) + (c.old || 0) > 0);
+    if (entries.length === 0) {
+        div.textContent = 'No veggies picked yet';
+        return;
+    }
+    div.innerHTML = entries.map(([cropId, counts]) => {
+        const crop = getCrop(cropId);
+        const total = (counts.fresh || 0) + (counts.old || 0);
+        let detail = '';
+        if (counts.fresh > 0 && counts.old > 0) detail = ` (${counts.fresh} fresh, ${counts.old} old)`;
+        else if (counts.old > 0) detail = ' (day-old)';
+        return `${crop?.emoji || '?'} ${crop?.name || cropId}: ${total}${detail}`;
+    }).join(' | ');
+}
+
+function renderGameEnd() {
+    if (!gameState) return;
+    const winner = (gameState.playerSummaries || []).find(p => p.id === gameState.winnerId);
+    $('endTitle').textContent = winner ? `${winner.name} wins the Exclusive Deal!` : 'Game Over!';
+    $('endText').textContent = winner ? `${winner.name} reached ${WIN_TP} Trust Points!` : '';
+
+    const lb = $('endLeaderboard');
+    lb.innerHTML = '<label>Final Standings</label>';
+    const sorted = [...(gameState.playerSummaries || [])].sort((a, b) => b.tp - a.tp || b.coins - a.coins);
+    sorted.forEach((p, i) => {
+        const row = document.createElement('div');
+        row.className = 'leaderboard-row';
+        row.innerHTML = `<span class="lb-rank">${i + 1}.</span><span class="lb-name">${escHtml(p.name)}</span><span class="lb-tp">${p.tp} TP</span><span class="lb-coins">${p.coins} 🪙</span>`;
+        lb.appendChild(row);
+    });
+
+    $('newGameBtn').style.display = isHost ? 'block' : 'none';
+}
+
+// ======================== LOBBY ========================
+function showLobby() {
+    show('screenLobby');
+    $('lobbyCode').textContent = roomCode;
+    $('startGameBtn').style.display = isHost ? 'block' : 'none';
+    $('lobbyWait').style.display = isHost ? 'none' : 'block';
+
+    const list = $('lobbyPlayers');
+    list.innerHTML = '';
+    const players = gameState ? (gameState.playerSummaries || Object.values(gameState.players).map(p => ({ id: p.id, name: p.name }))) : [];
+    players.forEach(p => {
+        const li = document.createElement('li');
+        const isMe = p.id === getMyPlayerId();
+        li.textContent = `${p.name}${isMe ? ' (you)' : ''}`;
+        list.appendChild(li);
+    });
+}
+
+// ======================== DDR MINIGAME ========================
+function startDDR() {
+    show('screenDDR');
+    ddrActive = true;
+    ddrScore = 0;
+    ddrCombo = 0;
+    $('ddrScore').textContent = '0';
+    $('ddrCombo').textContent = '';
+
+    const container = $('ddrContainer');
+    // Remove old arrows
+    container.querySelectorAll('.ddr-arrow').forEach(a => a.remove());
+
+    ddrArrows = [];
+    const totalArrows = 18;
+    const interval = 800; // ms between arrows
+
+    // Generate arrows
+    for (let i = 0; i < totalArrows; i++) {
+        const dir = DDR_DIRS[Math.floor(Math.random() * DDR_DIRS.length)];
+        ddrArrows.push({
+            dir,
+            spawnTime: Date.now() + i * interval + 1000,
+            y: -60,
+            hit: false,
+            missed: false,
+            el: null,
+        });
+    }
+
+    const targetY = container.clientHeight - 120;
+    const speed = 0.2; // px per ms
+
+    function animateDDR() {
+        if (!ddrActive) return;
+        const now = Date.now();
+        let allDone = true;
+
+        ddrArrows.forEach(arrow => {
+            if (now < arrow.spawnTime) { allDone = false; return; }
+            if (arrow.hit || arrow.missed) return;
+
+            if (!arrow.el) {
+                arrow.el = document.createElement('div');
+                arrow.el.className = 'ddr-arrow';
+                arrow.el.textContent = DDR_ARROWS[arrow.dir];
+                arrow.el.style.top = '-60px';
+                container.appendChild(arrow.el);
+                arrow.startTime = now;
+            }
+
+            const elapsed = now - arrow.startTime;
+            arrow.y = elapsed * speed - 60;
+            arrow.el.style.top = arrow.y + 'px';
+
+            if (arrow.y > targetY + 80) {
+                // Missed
+                arrow.missed = true;
+                arrow.el.classList.add('miss');
+                ddrCombo = 0;
+                $('ddrCombo').textContent = '';
+                setTimeout(() => { if (arrow.el.parentNode) arrow.el.remove(); }, 300);
+            } else {
+                allDone = false;
+            }
+        });
+
+        if (allDone && ddrArrows.every(a => a.hit || a.missed || Date.now() >= a.spawnTime)) {
+            finishDDR();
+            return;
+        }
+
+        ddrAnimFrame = requestAnimationFrame(animateDDR);
+    }
+
+    ddrAnimFrame = requestAnimationFrame(animateDDR);
+}
+
+function handleDDRInput(dir) {
+    if (!ddrActive) return;
+    const container = $('ddrContainer');
+    const targetY = container.clientHeight - 120;
+    const hitWindow = 50;
+
+    // Find nearest unhit arrow of this direction near the target
+    let best = null;
+    let bestDist = Infinity;
+    ddrArrows.forEach(arrow => {
+        if (arrow.hit || arrow.missed || arrow.dir !== dir || !arrow.el) return;
+        const dist = Math.abs(arrow.y - targetY);
+        if (dist < bestDist && dist < hitWindow) {
+            bestDist = dist;
+            best = arrow;
+        }
+    });
+
+    if (best) {
+        best.hit = true;
+        best.el.classList.add('hit');
+        ddrScore += 5 + ddrCombo;
+        ddrCombo++;
+        $('ddrScore').textContent = ddrScore;
+        $('ddrCombo').textContent = ddrCombo > 1 ? `${ddrCombo}x combo!` : '';
+        vibrate(30);
+        setTimeout(() => { if (best.el.parentNode) best.el.remove(); }, 200);
+    }
+}
+
+function finishDDR() {
+    ddrActive = false;
+    if (ddrAnimFrame) cancelAnimationFrame(ddrAnimFrame);
+    sendToHost({ type: 'ddr_result', score: ddrScore });
+    showToast(`Market score: ${ddrScore}!`, 'success');
+    show('screenMain');
+    switchTab('tabMarket');
+}
+
+// ======================== FINISH DAY MINIGAMES ========================
+function startFinishDay() {
+    if (!gameState || !myPlayerState) return;
+    if (myPlayerState.finishedDay) { showToast('Already finished today', 'error'); return; }
+
+    const mgType = gameState.minigameType;
+    if (mgType === 'whack') startWhackAMole();
+    else startMemoryMatch();
+}
+
+function startWhackAMole() {
+    minigameActive = true;
+    minigameEarnings = 0;
+    $('mgTitle').textContent = '🐛 Whack-a-Pest!';
+    $('mgEarnings').textContent = 'Earned: 0 🪙';
+    $('minigameOverlay').classList.add('active');
+
+    const grid = $('mgGrid');
+    grid.className = 'mg-grid g3x3';
+    grid.innerHTML = '';
+
+    const cells = [];
+    for (let i = 0; i < 9; i++) {
+        const cell = document.createElement('div');
+        cell.className = 'mg-cell';
+        cell.addEventListener('click', () => whackCell(i));
+        grid.appendChild(cell);
+        cells.push(cell);
+    }
+
+    let timeLeft = 30;
+    $('mgTimer').textContent = timeLeft + 's';
+
+    // Spawn pests randomly
+    const spawnInterval = setInterval(() => {
+        if (!minigameActive) { clearInterval(spawnInterval); return; }
+        const idx = Math.floor(Math.random() * 9);
+        const cell = cells[idx];
+        if (cell.dataset.active) return;
+        cell.dataset.active = '1';
+        const pests = ['🐛', '🐜', '🪲', '🐞', '🦗'];
+        cell.textContent = pests[Math.floor(Math.random() * pests.length)];
+        cell.style.background = 'var(--accent-red)';
+        setTimeout(() => {
+            if (cell.dataset.active) {
+                cell.dataset.active = '';
+                cell.textContent = '';
+                cell.style.background = '';
+                cell.classList.remove('whacked');
+            }
+        }, 1200);
+    }, 600);
+
+    minigameTimer = setInterval(() => {
+        timeLeft--;
+        $('mgTimer').textContent = timeLeft + 's';
+        if (timeLeft <= 0) {
+            clearInterval(minigameTimer);
+            clearInterval(spawnInterval);
+            endMinigame();
+        }
+    }, 1000);
+
+    function whackCell(i) {
+        const cell = cells[i];
+        if (!cell.dataset.active) return;
+        cell.dataset.active = '';
+        cell.textContent = '💥';
+        cell.classList.add('whacked');
+        minigameEarnings++;
+        $('mgEarnings').textContent = `Earned: ${minigameEarnings} 🪙`;
+        vibrate(30);
+        setTimeout(() => {
+            cell.textContent = '';
+            cell.style.background = '';
+            cell.classList.remove('whacked');
+        }, 300);
+    }
+}
+
+function startMemoryMatch() {
+    minigameActive = true;
+    minigameEarnings = 0;
+    $('mgTitle').textContent = '🧠 Memory Match!';
+    $('mgEarnings').textContent = 'Earned: 0 🪙';
+    $('minigameOverlay').classList.add('active');
+
+    const grid = $('mgGrid');
+    grid.className = 'mg-grid g4x3';
+    grid.innerHTML = '';
+
+    // 6 pairs from crops
+    const emojis = CROPS.slice(0, 6).map(c => c.emoji);
+    memoryBoard = [...emojis, ...emojis];
+    // Shuffle
+    for (let i = memoryBoard.length - 1; i > 0; i--) {
+        const j = Math.floor(Math.random() * (i + 1));
+        [memoryBoard[i], memoryBoard[j]] = [memoryBoard[j], memoryBoard[i]];
+    }
+
+    memoryFlipped = [];
+    memoryMatched = new Array(12).fill(false);
+
+    for (let i = 0; i < 12; i++) {
+        const cell = document.createElement('div');
+        cell.className = 'mg-cell';
+        cell.textContent = '?';
+        cell.addEventListener('click', () => memoryClick(i));
+        grid.appendChild(cell);
+    }
+
+    let timeLeft = 45;
+    $('mgTimer').textContent = timeLeft + 's';
+
+    minigameTimer = setInterval(() => {
+        timeLeft--;
+        $('mgTimer').textContent = timeLeft + 's';
+        if (timeLeft <= 0) {
+            clearInterval(minigameTimer);
+            endMinigame();
+        }
+    }, 1000);
+}
+
+function memoryClick(idx) {
+    if (!minigameActive) return;
+    if (memoryMatched[idx]) return;
+    if (memoryFlipped.includes(idx)) return;
+    if (memoryFlipped.length >= 2) return;
+
+    const cells = $('mgGrid').children;
+    cells[idx].textContent = memoryBoard[idx];
+    cells[idx].classList.add('flipped');
+    memoryFlipped.push(idx);
+
+    if (memoryFlipped.length === 2) {
+        const [a, b] = memoryFlipped;
+        if (memoryBoard[a] === memoryBoard[b]) {
+            memoryMatched[a] = true;
+            memoryMatched[b] = true;
+            cells[a].classList.add('matched');
+            cells[b].classList.add('matched');
+            minigameEarnings += 2;
+            $('mgEarnings').textContent = `Earned: ${minigameEarnings} 🪙`;
+            vibrate(40);
+            memoryFlipped = [];
+            // Check all matched
+            if (memoryMatched.every(m => m)) {
+                clearInterval(minigameTimer);
+                setTimeout(() => endMinigame(), 500);
+            }
+        } else {
+            setTimeout(() => {
+                cells[a].textContent = '?';
+                cells[b].textContent = '?';
+                cells[a].classList.remove('flipped');
+                cells[b].classList.remove('flipped');
+                memoryFlipped = [];
+            }, 700);
+        }
+    }
+}
+
+function endMinigame() {
+    minigameActive = false;
+    $('minigameOverlay').classList.remove('active');
+    showToast(`Minigame done! Earned ${minigameEarnings} 🪙`, 'success');
+    sendToHost({ type: 'finish_day', earnings: minigameEarnings });
+}
+
+// ======================== TABS ========================
+function switchTab(tabId) {
+    currentTab = tabId;
+    document.querySelectorAll('.tab-btn').forEach(b => b.classList.toggle('active', b.dataset.tab === tabId));
+    document.querySelectorAll('.tab-panel').forEach(p => p.classList.toggle('active', p.id === tabId));
+    // Re-render active tab
+    if (tabId === 'tabGarden') { renderGarden(); renderInventory(); }
+    else if (tabId === 'tabStore') renderStore();
+    else if (tabId === 'tabMarket') renderMarket();
+    else if (tabId === 'tabTrade') renderTrade();
+    else if (tabId === 'tabStatus') renderStatus();
+}
+
+// ======================== COPY CODE/LINK ========================
+function copyCode() {
+    navigator.clipboard.writeText(roomCode).then(() => showToast('Code copied!', 'success')).catch(() => showToast(roomCode, 'success'));
+}
+function copyJoinLink() {
+    const url = window.location.origin + window.location.pathname + '?room=' + roomCode;
+    navigator.clipboard.writeText(url).then(() => showToast('Link copied!', 'success')).catch(() => showToast('Code: ' + roomCode, 'success'));
+}
+
+// ======================== NEW GAME ========================
+function newGame() {
+    if (!isHost) return;
+    // Reset all players
+    Object.values(gameState.players).forEach(p => {
+        p.coins = 30; p.tp = 0; p.seeds = {}; p.inventory = {};
+        p.garden = createSlots();
+        p.finishedDay = false; p.ddrPlayed = false; p.npcCount = 0;
+    });
+    gameState.winnerId = null;
+    startGame();
+}
+
+// ======================== HOST TIMER DISPLAY ========================
+// Local timer for host
+setInterval(() => {
+    if (isHost && gameState && gameState.phase === 'playing') {
+        $('hudTimer').textContent = gameState.timer;
+    }
+}, 1000);
+
+// ======================== EVENT LISTENERS ========================
+$('createBtn').addEventListener('click', createGame);
+$('joinBtn').addEventListener('click', joinGame);
+$('startGameBtn').addEventListener('click', startGame);
+$('copyCodeBtn').addEventListener('click', copyCode);
+$('copyLinkBtn').addEventListener('click', copyJoinLink);
+$('bulkBuyBtn').addEventListener('click', () => {
+    sendToHost({ type: 'buy_bulk' });
+    vibrate(30);
+});
+$('playDDRBtn').addEventListener('click', startDDR);
+$('finishDayBtn').addEventListener('click', startFinishDay);
+$('postTradeBtn').addEventListener('click', () => {
+    const offerCrop = $('tradeOfferCrop').value;
+    const offerQty = parseInt($('tradeOfferQty').value) || 1;
+    const wantCrop = $('tradeWantCrop').value;
+    const wantQty = parseInt($('tradeWantQty').value) || 1;
+    if (!offerCrop || !wantCrop) return;
+    sendToHost({ type: 'post_trade', offerCrop, offerQty, wantCrop, wantQty });
+    showToast('Offer posted!', 'success');
+});
+$('modalClose').addEventListener('click', closeModal);
+$('newGameBtn').addEventListener('click', newGame);
+$('soundBtn').addEventListener('click', () => { muted = !muted; $('soundBtn').textContent = muted ? '🔇' : '🔊'; });
+
+// Tab buttons
+document.querySelectorAll('.tab-btn').forEach(btn => {
+    btn.addEventListener('click', () => switchTab(btn.dataset.tab));
+});
+
+// DDR controls
+document.querySelectorAll('.ddr-btn').forEach(btn => {
+    btn.addEventListener('click', () => handleDDRInput(btn.dataset.dir));
+});
+
+// Keyboard DDR controls
+document.addEventListener('keydown', (e) => {
+    if (!ddrActive) return;
+    const map = { ArrowLeft: 'left', ArrowUp: 'up', ArrowDown: 'down', ArrowRight: 'right' };
+    if (map[e.key]) { handleDDRInput(map[e.key]); e.preventDefault(); }
+});
+
+// Enter key on inputs
+$('nameInput').addEventListener('keydown', (e) => { if (e.key === 'Enter') $('createBtn').click(); });
+$('joinCodeInput').addEventListener('keydown', (e) => { if (e.key === 'Enter') $('joinBtn').click(); });
+
+// Auto-join from URL
+checkUrlJoin();
+
+// Dead slot cleanup: allow tapping dead/wilting to clear them
+// (Host clears on day advance, but let's add a clear-dead feature)
+// This is handled in handleSlotClick already — dead slots just show a message.
+// On day advance, dead slots get cleared by lifecycle naturally (they stay dead, player can replant).
+// Actually let's allow clearing dead slots:
+const origHandleSlotClick = handleSlotClick;
+// We override to allow clearing dead slots
+window._handleSlotClick = function(idx, slot) {
+    if (slot.state === PLANT_STATES.DEAD) {
+        // Send a special clear message - we'll just reuse plant with a dummy and the host ignores invalid
+        // Actually, let's add a clear_dead message type
+        sendToHost({ type: 'clear_dead', slotIdx: idx });
+        vibrate(30);
+        return;
+    }
+    origHandleSlotClick(idx, slot);
+};
+
+// Patch handleHostMessage to handle clear_dead
+const origHandleHostMsg = handleHostMessage;
+handleHostMessage = function(conn, msg) {
+    if (msg.type === 'clear_dead') {
+        const pid = conn.peer;
+        const p = gameState.players[pid];
+        if (!p || gameState.phase !== 'playing') return;
+        const slot = p.garden[msg.slotIdx];
+        if (!slot || (slot.state !== PLANT_STATES.DEAD && slot.state !== PLANT_STATES.WILTING)) return;
+        slot.state = PLANT_STATES.EMPTY;
+        slot.cropId = null;
+        slot.plantedDay = 0;
+        slot.wateredDay = 0;
+        slot.readySinceDay = 0;
+        sendPlayerState(pid);
+        return;
+    }
+    origHandleHostMsg(conn, msg);
+};
+
+// Also update the garden slot click to use the patched version
+// We need to re-bind the garden rendering to use window._handleSlotClick
+// Actually, let's just update handleSlotClick directly:
+handleSlotClick = window._handleSlotClick;
+</script>
+</body>
+</html>
