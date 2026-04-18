@@ -172,7 +172,10 @@ input, select {
         <div class="panel">
             <label>Room Code</label>
             <div class="room-code" id="lobbyCode"></div>
-            <button class="btn-small btn-secondary" id="copyCodeBtn" style="display:block;margin:0 auto;">Copy Link</button>
+            <div style="display:flex;gap:8px;justify-content:center;margin-top:4px">
+                <button class="btn-small btn-secondary" id="copyCodeBtn">📋 Copy Code</button>
+                <button class="btn-small btn-secondary" id="copyLinkBtn">🔗 Copy Join Link</button>
+            </div>
         </div>
         <div class="panel" id="hostSettings" style="display:none;">
             <label>Target Score</label>
@@ -974,11 +977,15 @@ function callPit() {
 // ======================== UTILS ========================
 function escHtml(s) { const d = document.createElement('div'); d.textContent = s; return d.innerHTML; }
 
-// ======================== COPY LINK ========================
-function copyLink() {
+// ======================== COPY CODE / LINK ========================
+function copyCode() {
+    navigator.clipboard.writeText(roomCode).then(() => showToast('Code copied!', 'success')).catch(() => {
+        showToast(roomCode, 'success');
+    });
+}
+function copyJoinLink() {
     const url = window.location.origin + window.location.pathname + '?room=' + roomCode;
-    navigator.clipboard.writeText(url).then(() => showToast('Link copied!', 'success')).catch(() => {
-        // Fallback
+    navigator.clipboard.writeText(url).then(() => showToast('Join link copied!', 'success')).catch(() => {
         showToast('Code: ' + roomCode, 'success');
     });
 }
@@ -993,7 +1000,8 @@ $('backToHandBtn').addEventListener('click', backToHand);
 $('pitBtn').addEventListener('click', callPit);
 $('nextRoundBtn').addEventListener('click', hostNextRound);
 $('newGameBtn').addEventListener('click', hostNewGame);
-$('copyCodeBtn').addEventListener('click', copyLink);
+$('copyCodeBtn').addEventListener('click', copyCode);
+$('copyLinkBtn').addEventListener('click', copyJoinLink);
 $('muteBtn').addEventListener('click', () => { muted = !muted; $('muteBtn').textContent = muted ? '🔇' : '🔊'; });
 
 // Enter key on inputs
