@@ -361,8 +361,10 @@ async function createGame() {
 }
 
 function handleHostConnection(conn) {
-    // Register handlers immediately — don't wrap in 'open' to avoid race condition
-    // where the connection is already open before the handler is registered
+    // Match Phrase Pass pattern: store connection only after 'open' fires
+    conn.on('open', () => {
+        connections[conn.peer] = conn;
+    });
     conn.on('data', (msg) => handleHostMessage(conn, msg));
     conn.on('close', () => {
         delete connections[conn.peer];
@@ -384,30 +386,10 @@ function handleHostMessage(conn, msg) {
                 id: conn.peer, name: msg.name, color: PLAYER_COLORS[idx % PLAYER_COLORS.length],
                 hand: [], score: 0, selectedCards: [], holdingTarget: null
             });
+            // Connection is stored via conn.on('open') in handleHostConnection
+            // Ensure it's stored now too (it may already be open)
             connections[conn.peer] = conn;
-
-            // Send state directly to the new guest first (ensures they get it immediately)
-            const joinState = {
-                phase: state.phase,
-                players: state.players.map(pl => ({
-                    id: pl.id, name: pl.name, color: pl.color, score: pl.score,
-                    holdingTarget: pl.holdingTarget,
-                    handSize: (pl.hand || []).length,
-                    selectedCount: (pl.selectedCards || []).length
-                })),
-                commodities: state.commodities,
-                roundWinner: state.roundWinner,
-                targetScore: state.targetScore
-            };
-            try { conn.send({ type: 'state_update', state: joinState }); } catch(e) {}
-
-            // Also broadcast to everyone (including re-sending to new guest)
             broadcastState();
-
-            // Retry sending to new guest after a short delay in case first send was too early
-            setTimeout(() => {
-                try { conn.send({ type: 'state_update', state: joinState }); } catch(e) {}
-            }, 500);
             break;
         }
         case 'select_cards': {
@@ -474,8 +456,9 @@ function broadcastState() {
     }
     handleStateUpdate(commonState);
 
-    // Send to each guest with their private hand
+    // Send to each guest with their private hand (only if connection is open)
     for (const [peerId, conn] of Object.entries(connections)) {
+        if (!conn.open) continue;
         const player = state.players.find(p => p.id === peerId);
         const msg = { type: 'state_update', state: commonState };
         if (player) msg.hand = [...player.hand];
@@ -667,33 +650,24 @@ async function joinGame() {
     roomCode = $('joinCodeInput').value.trim().toUpperCase();
     if (!roomCode) { showToast('Enter a room code', 'error'); return; }
 
-    myId = PEER_PREFIX + roomCode + '-' + Math.random().toString(36).substr(2, 6);
+    // Match Phrase Pass pattern: let PeerJS auto-assign guest ID
+    peer = new Peer(undefined, { debug: 0 });
+    peer.on('open', (id) => {
+        myId = id;
+        const hostId = PEER_PREFIX + roomCode;
+        hostConn = peer.connect(hostId, { reliable: true });
 
-    try {
-        await initPeer(myId);
-    } catch(e) {
-        showToast(e.message, 'error'); return;
-    }
+        hostConn.on('data', (msg) => handleGuestMessage(msg));
+        hostConn.on('open', () => {
+            hostConn.send({ type: 'join_game', name: myName });
+        });
 
-    const hostId = PEER_PREFIX + roomCode;
-    hostConn = peer.connect(hostId, { reliable: true });
-
-    let guestSynced = false;
-    hostConn.on('data', (msg) => {
-        guestSynced = true;
-        handleGuestMessage(msg);
+        hostConn.on('error', () => showToast('Connection failed', 'error'));
+        hostConn.on('close', () => showToast('Disconnected from host', 'error'));
     });
-    hostConn.on('open', () => {
-        hostConn.send({ type: 'join_game', name: myName });
-        // Poll for state until we get a response — ensures sync even if initial pushes are lost
-        const poll = setInterval(() => {
-            if (guestSynced) { clearInterval(poll); return; }
-            try { hostConn.send({ type: 'get_state' }); } catch(e) {}
-        }, 1000);
+    peer.on('error', (err) => {
+        showToast('Error: ' + (err.type || err.message), 'error');
     });
-
-    hostConn.on('error', () => showToast('Connection failed', 'error'));
-    hostConn.on('close', () => { showToast('Disconnected from host', 'error'); });
 
     showLobby();
 }
