@@ -649,17 +649,15 @@ async function joinGame() {
     peer = new Peer({ debug: 0 });
     peer.on('open', (id) => {
         myId = id;
-        showToast('Peer open: ' + id, 'success');
         const hostId = PEER_PREFIX + roomCode;
         hostConn = peer.connect(hostId, { reliable: true });
 
         hostConn.on('data', (msg) => handleGuestMessage(msg));
         hostConn.on('open', () => {
-            showToast('Connection open, sending join...', 'success');
             hostConn.send({ type: 'join_game', name: myName });
         });
 
-        hostConn.on('error', (e) => showToast('Conn error: ' + (e.type || e.message || e), 'error'));
+        hostConn.on('error', () => showToast('Connection failed', 'error'));
         hostConn.on('close', () => showToast('Disconnected from host', 'error'));
     });
     peer.on('error', (err) => {
@@ -670,7 +668,6 @@ async function joinGame() {
 }
 
 function handleGuestMessage(msg) {
-    showToast('Received: ' + msg.type + (msg.state ? ' phase=' + msg.state.phase : ''), 'success');
     switch(msg.type) {
         case 'state_update':
             if (msg.hand) myHand = msg.hand;
@@ -884,13 +881,14 @@ function renderTradeScreen() {
     const list = $('tradePlayerList');
     list.innerHTML = '';
 
+    const myPlayerId = isHost ? 'host' : myId;
     state.players.forEach(p => {
-        if (p.id === myId) return;
+        if (p.id === myPlayerId) return;
         const btn = document.createElement('button');
         btn.className = 'trade-player-btn';
 
         const isHolding = holdingTarget === p.id;
-        const theyHoldMe = p.holdingTarget === myId;
+        const theyHoldMe = p.holdingTarget === myPlayerId;
         if (isHolding && theyHoldMe) btn.classList.add('mutual');
         else if (isHolding) btn.classList.add('holding');
 
@@ -961,7 +959,7 @@ function renderScoreboard(el) {
     const sorted = [...state.players].sort((a,b) => b.score - a.score);
     el.innerHTML = `<table>
         <tr><th>#</th><th>Player</th><th>Score</th></tr>
-        ${sorted.map((p, i) => `<tr class="${p.id === myId ? 'winner' : ''}">
+        ${sorted.map((p, i) => `<tr class="${p.id === (isHost ? 'host' : myId) ? 'winner' : ''}">
             <td>${i+1}</td><td><span class="player-dot" style="background:${p.color}"></span> ${escHtml(p.name)}</td><td>${p.score}</td>
         </tr>`).join('')}
     </table>`;
