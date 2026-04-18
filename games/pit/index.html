@@ -258,7 +258,7 @@ const PEER_PREFIX = 'pit-davria-';
 
 // ======================== STATE ========================
 let peer = null;
-let connections = {}; // guestId -> conn (host only)
+const guestConns = new Map(); // peerId -> conn (host only, matches Phrase Pass pattern)
 let hostConn = null;  // conn to host (guest only)
 let isHost = false;
 let myId = '';
@@ -308,7 +308,10 @@ function genCode() {
 
 function vibrate(ms = 80) { try { navigator.vibrate(ms); } catch(e) {} }
 
-function getMyPlayer() { return state.players.find(p => p.id === myId); }
+function getMyPlayer() {
+    if (isHost) return state.players.find(p => p.id === 'host');
+    return state.players.find(p => p.id === myId);
+}
 
 function darkenColor(hex, amount = 0.3) {
     let r = parseInt(hex.slice(1,3),16), g = parseInt(hex.slice(3,5),16), b = parseInt(hex.slice(5,7),16);
@@ -352,28 +355,23 @@ async function createGame() {
     }
 
     isHost = true;
-    state.players = [{ id: myId, name: myName, color: PLAYER_COLORS[0], hand: [], score: 0, selectedCards: [], holdingTarget: null }];
+    state.players = [{ id: 'host', name: myName, color: PLAYER_COLORS[0], hand: [], score: 0, selectedCards: [], holdingTarget: null }];
     state.targetScore = parseInt($('targetScoreSelect').value) || 500;
 
-    peer.on('connection', handleHostConnection);
+    peer.on('connection', conn => {
+        conn.on('open', () => {
+            guestConns.set(conn.peer, conn);
+        });
+        conn.on('data', (msg) => handleHostMessage(conn, msg));
+        conn.on('close', () => {
+            guestConns.delete(conn.peer);
+            state.players = state.players.filter(p => p.id !== conn.peer);
+            broadcastState();
+        });
+        conn.on('error', e => console.warn('conn error', e));
+    });
 
     showLobby();
-}
-
-function handleHostConnection(conn) {
-    // Match Phrase Pass pattern: store connection only after 'open' fires
-    conn.on('open', () => {
-        connections[conn.peer] = conn;
-    });
-    conn.on('data', (msg) => handleHostMessage(conn, msg));
-    conn.on('close', () => {
-        delete connections[conn.peer];
-        state.players = state.players.filter(p => p.id !== conn.peer);
-        broadcastState();
-    });
-    conn.on('error', (err) => {
-        console.warn('Connection error from', conn.peer, err);
-    });
 }
 
 function handleHostMessage(conn, msg) {
@@ -386,9 +384,8 @@ function handleHostMessage(conn, msg) {
                 id: conn.peer, name: msg.name, color: PLAYER_COLORS[idx % PLAYER_COLORS.length],
                 hand: [], score: 0, selectedCards: [], holdingTarget: null
             });
-            // Connection is stored via conn.on('open') in handleHostConnection
-            // Ensure it's stored now too (it may already be open)
-            connections[conn.peer] = conn;
+            // Ensure connection is stored (may already be from conn.on('open'))
+            guestConns.set(conn.peer, conn);
             broadcastState();
             break;
         }
@@ -434,40 +431,37 @@ function handleHostMessage(conn, msg) {
     }
 }
 
-function broadcastState() {
-    // Build common state (no private info)
-    const commonState = {
+function buildCommonState() {
+    return {
         phase: state.phase,
         players: state.players.map(pl => ({
             id: pl.id, name: pl.name, color: pl.color, score: pl.score,
             holdingTarget: pl.holdingTarget,
-            handSize: pl.hand.length,
-            selectedCount: pl.selectedCards.length
+            handSize: (pl.hand || []).length,
+            selectedCount: (pl.selectedCards || []).length
         })),
         commodities: state.commodities,
         roundWinner: state.roundWinner,
         targetScore: state.targetScore
     };
+}
 
-    // Update host locally
-    const hostPlayer = state.players.find(p => p.id === myId);
-    if (hostPlayer) {
-        myHand = [...hostPlayer.hand];
-    }
-    handleStateUpdate(commonState);
+function broadcastState() {
+    const cs = buildCommonState();
 
-    // Send to each guest with their private hand (only if connection is open)
-    for (const [peerId, conn] of Object.entries(connections)) {
-        if (!conn.open) continue;
+    // Send to each guest with their private hand
+    guestConns.forEach((conn, peerId) => {
+        if (!conn.open) return;
         const player = state.players.find(p => p.id === peerId);
-        const msg = { type: 'state_update', state: commonState };
+        const msg = { type: 'state_update', state: cs };
         if (player) msg.hand = [...player.hand];
-        try {
-            conn.send(msg);
-        } catch(e) {
-            console.warn('Failed to send to', peerId, e);
-        }
-    }
+        conn.send(msg);
+    });
+
+    // Update host locally (after sending to guests)
+    const hostPlayer = state.players.find(p => p.id === 'host');
+    if (hostPlayer) myHand = [...hostPlayer.hand];
+    handleStateUpdate(cs);
 }
 
 function startGame() {
@@ -592,10 +586,11 @@ function executeTrade(a, b) {
 }
 
 function sendTo(playerId, msg) {
-    if (playerId === myId) {
+    if (playerId === 'host') {
         handleClientMessage(msg);
-    } else if (connections[playerId]) {
-        connections[playerId].send(msg);
+    } else {
+        const conn = guestConns.get(playerId);
+        if (conn && conn.open) conn.send(msg);
     }
 }
 
@@ -695,8 +690,8 @@ function handleGuestMessage(msg) {
 
 function sendToHost(msg) {
     if (isHost) {
-        // Handle locally
-        handleHostMessage({ peer: myId, send: (m) => handleClientMessage(m) }, msg);
+        // Handle locally — use 'host' as the peer id
+        handleHostMessage({ peer: 'host', send: (m) => handleClientMessage(m) }, msg);
     } else if (hostConn) {
         hostConn.send(msg);
     }
@@ -757,7 +752,8 @@ function showLobby() {
     list.innerHTML = '';
     state.players.forEach(p => {
         const li = document.createElement('li');
-        li.innerHTML = `<span class="player-dot" style="background:${p.color}"></span> ${escHtml(p.name)}${p.id === myId ? ' (you)' : ''}`;
+        const isMe = (isHost && p.id === 'host') || (!isHost && p.id === myId);
+        li.innerHTML = `<span class="player-dot" style="background:${p.color}"></span> ${escHtml(p.name)}${isMe ? ' (you)' : ''}`;
         list.appendChild(li);
     });
 }
