@@ -561,6 +561,7 @@ async function createGame() {
         winnerId: null,
     };
     gameState.players['host'] = createPlayerState('host', myName, 0);
+    saveSession();
     showLobby();
 
     peer.on('connection', conn => {
@@ -822,6 +823,7 @@ function sendPlayerState(pid) {
     sendTo(pid, msg);
     // Also send common state to others (for leaderboard etc)
     broadcastCommonToOthers(pid);
+    autoSaveState();
 }
 
 function buildCommonState() {
@@ -855,6 +857,7 @@ function broadcastState() {
         const p = gameState.players[pid];
         sendTo(pid, { type: 'state_update', gameState: cs, playerState: JSON.parse(JSON.stringify(p)) });
     });
+    autoSaveState();
 }
 
 function sendTo(playerId, msg) {
@@ -992,6 +995,7 @@ async function joinGame() {
         hostConn.on('data', (msg) => handleGuestMessage(msg));
         hostConn.on('open', () => {
             hostConn.send({ type: 'join_game', name: myName });
+            saveSession();
         });
 
         hostConn.on('error', () => showToast('Connection failed', 'error'));
@@ -1525,6 +1529,7 @@ function renderInventory() {
 
 function renderGameEnd() {
     if (!gameState) return;
+    clearSession();
     const winner = (gameState.playerSummaries || []).find(p => p.id === gameState.winnerId);
     $('endTitle').textContent = winner ? `${winner.name} wins the Exclusive Deal!` : 'Game Over!';
     $('endText').textContent = winner ? `${winner.name} reached ${WIN_TP} Trust Points!` : '';
@@ -1872,6 +1877,7 @@ function copyJoinLink() {
 // ======================== NEW GAME ========================
 function newGame() {
     if (!isHost) return;
+    clearSession();
     // Reset all players
     Object.values(gameState.players).forEach(p => {
         p.coins = 30; p.tp = 0; p.seeds = {}; p.inventory = {};
@@ -1977,6 +1983,157 @@ handleHostMessage = function(conn, msg) {
 // We need to re-bind the garden rendering to use window._handleSlotClick
 // Actually, let's just update handleSlotClick directly:
 handleSlotClick = window._handleSlotClick;
+
+// ======================== SESSION STORAGE FOR AUTO-RECONNECT ========================
+function saveSession() {
+    try {
+        sessionStorage.setItem('garden-session', JSON.stringify({
+            roomCode: roomCode,
+            isHost: isHost,
+            myName: myName,
+            myId: myId,
+        }));
+    } catch (e) { /* ignore */ }
+}
+
+function clearSession() {
+    try {
+        sessionStorage.removeItem('garden-session');
+        sessionStorage.removeItem('garden-autosave');
+    } catch (e) { /* ignore */ }
+}
+
+function getSession() {
+    try {
+        const raw = sessionStorage.getItem('garden-session');
+        return raw ? JSON.parse(raw) : null;
+    } catch (e) { return null; }
+}
+
+function autoSaveState() {
+    if (!isHost) return;
+    try {
+        sessionStorage.setItem('garden-autosave', JSON.stringify(gameState));
+    } catch (e) { /* ignore */ }
+}
+
+function reconnectAsHost(session) {
+    isHost = true;
+    myName = session.myName;
+    myId = PEER_PREFIX + session.roomCode;
+    roomCode = session.roomCode;
+
+    // Restore game state from autosave
+    const saved = sessionStorage.getItem('garden-autosave');
+    if (saved) {
+        try {
+            gameState = JSON.parse(saved);
+        } catch (e) {
+            clearSession();
+            return;
+        }
+    } else {
+        clearSession();
+        return;
+    }
+
+    const timeout = setTimeout(() => {
+        showToast('Reconnection failed', 'error');
+        clearSession();
+        if (peer) { peer.destroy(); peer = null; }
+    }, 12000);
+
+    initPeer(PEER_PREFIX + roomCode).then(() => {
+        clearTimeout(timeout);
+
+        // Set up connection listener for returning guests
+        peer.on('connection', conn => {
+            conn.on('open', () => {
+                guestConns.set(conn.peer, conn);
+            });
+            conn.on('data', (msg) => handleHostMessage(conn, msg));
+            conn.on('close', () => {
+                guestConns.delete(conn.peer);
+                delete gameState.players[conn.peer];
+                broadcastState();
+            });
+            conn.on('error', e => console.warn('conn error', e));
+        });
+
+        myPlayerState = gameState.players['host'] ? JSON.parse(JSON.stringify(gameState.players['host'])) : null;
+
+        if (gameState.phase === 'playing') {
+            show('screenMain');
+            renderAll();
+            startDayTimer();
+        } else if (gameState.phase === 'lobby') {
+            showLobby();
+        } else if (gameState.phase === 'game_end') {
+            show('screenGameEnd');
+            renderGameEnd();
+        }
+        showToast('Reconnected! Room: ' + roomCode, 'success');
+    }).catch(() => {
+        clearTimeout(timeout);
+        showToast('Could not reclaim room', 'error');
+        clearSession();
+    });
+}
+
+function reconnectAsGuest(session) {
+    myName = session.myName;
+    roomCode = session.roomCode;
+
+    showToast('Reconnecting...', '', 5000);
+
+    const timeout = setTimeout(() => {
+        showToast('Reconnection failed. Please rejoin manually.', 'error');
+        clearSession();
+        if (peer) { peer.destroy(); peer = null; }
+    }, 12000);
+
+    peer = new Peer({ debug: 0 });
+    peer.on('open', (id) => {
+        myId = id;
+        // Update session with new peer id
+        session.myId = id;
+        saveSession();
+
+        hostConn = peer.connect(PEER_PREFIX + roomCode, { reliable: true });
+        hostConn.on('data', (msg) => handleGuestMessage(msg));
+        hostConn.on('open', () => {
+            clearTimeout(timeout);
+            hostConn.send({ type: 'join_game', name: myName });
+        });
+        hostConn.on('close', () => {
+            showToast('Host not available', 'error');
+            clearSession();
+        });
+        hostConn.on('error', () => {
+            clearTimeout(timeout);
+            showToast('Connection failed', 'error');
+            clearSession();
+        });
+    });
+    peer.on('error', (err) => {
+        clearTimeout(timeout);
+        showToast('Reconnection failed: ' + (err.message || err.type), 'error');
+        clearSession();
+    });
+}
+
+// Check for saved session on page load and auto-reconnect
+(function checkAutoReconnect() {
+    const session = getSession();
+    if (!session) return;
+    setTimeout(() => {
+        if (session.isHost) {
+            reconnectAsHost(session);
+        } else {
+            reconnectAsGuest(session);
+        }
+    }, 500);
+})();
 </script>
 </body>
 </html>
