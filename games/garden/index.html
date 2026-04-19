@@ -288,13 +288,8 @@ input, select {
             <!-- Store Tab -->
             <div class="tab-panel" id="tabStore">
                 <div class="panel">
-                    <label>Individual Seeds</label>
+                    <label>Seed Shop</label>
                     <div id="seedList"></div>
-                </div>
-                <div class="panel">
-                    <label>Bulk Pack</label>
-                    <p style="font-size:0.85rem;color:var(--text-secondary);margin-bottom:8px;">10 random seeds for 30 coins</p>
-                    <button class="btn btn-gold btn-small" id="bulkBuyBtn">Buy Bulk (30 🪙)</button>
                 </div>
             </div>
 
@@ -427,8 +422,6 @@ const SLOT_TYPES = { TILLED: 'tilled', BED: 'bed', POT: 'pot' };
 const PLANT_STATES = { EMPTY: 'empty', SEEDED: 'seeded', NEEDS_WATER: 'needs_water', WATERED: 'watered', GROWING: 'growing', READY: 'ready', WILTING: 'wilting', DEAD: 'dead' };
 const DAY_LENGTH = 90; // seconds
 const WIN_TP = 7;
-const BULK_COST = 30;
-const BULK_COUNT = 10;
 const PEER_PREFIX = 'garden-davria-';
 const DDR_DIRS = ['left', 'up', 'down', 'right'];
 const DDR_ARROWS = { left: '◀', up: '▲', down: '▼', right: '▶' };
@@ -658,12 +651,13 @@ function handleHostMessage(conn, msg) {
         }
         case 'buy_bulk': {
             const p = gameState.players[pid];
-            if (!p || gameState.phase !== 'playing' || p.coins < BULK_COST) return;
-            p.coins -= BULK_COST;
-            for (let i = 0; i < BULK_COUNT; i++) {
-                const rc = CROPS[Math.floor(Math.random() * CROPS.length)];
-                p.seeds[rc.id] = (p.seeds[rc.id] || 0) + 1;
-            }
+            if (!p || gameState.phase !== 'playing') return;
+            const bulkCrop = getCrop(msg.cropId);
+            if (!bulkCrop) return;
+            const bulkPrice = Math.floor(bulkCrop.seedCost * 10 * 0.7);
+            if (p.coins < bulkPrice) return;
+            p.coins -= bulkPrice;
+            p.seeds[bulkCrop.id] = (p.seeds[bulkCrop.id] || 0) + 10;
             sendPlayerState(pid);
             break;
         }
@@ -823,7 +817,7 @@ function sendPlayerState(pid) {
     const msg = {
         type: 'state_update',
         gameState: buildCommonState(),
-        playerState: { ...p },
+        playerState: JSON.parse(JSON.stringify(p)),
     };
     sendTo(pid, msg);
     // Also send common state to others (for leaderboard etc)
@@ -859,7 +853,7 @@ function broadcastState() {
     const cs = buildCommonState();
     Object.keys(gameState.players).forEach(pid => {
         const p = gameState.players[pid];
-        sendTo(pid, { type: 'state_update', gameState: cs, playerState: { ...p } });
+        sendTo(pid, { type: 'state_update', gameState: cs, playerState: JSON.parse(JSON.stringify(p)) });
     });
 }
 
@@ -1114,7 +1108,7 @@ function renderHUD() {
     $('hudTimer').textContent = gameState.timer;
     $('hudCoins').textContent = myPlayerState.coins;
     $('hudTP').textContent = myPlayerState.tp + '/' + WIN_TP;
-    const seedCount = Object.values(myPlayerState.seeds).reduce((a, b) => a + b, 0);
+    const seedCount = Object.values(myPlayerState.seeds || {}).reduce((a, b) => a + b, 0);
     $('hudSeeds').textContent = seedCount;
 }
 
@@ -1183,7 +1177,7 @@ function handleSlotClick(idx, slot) {
 
 function showSeedSelector(slotIdx) {
     if (!myPlayerState) return;
-    const seeds = myPlayerState.seeds;
+    const seeds = myPlayerState.seeds || {};
     const available = Object.entries(seeds).filter(([_, c]) => c > 0);
     if (available.length === 0) { showToast('No seeds! Visit the Store tab', 'error'); return; }
 
@@ -1212,7 +1206,8 @@ function renderStore() {
     const list = $('seedList');
     list.innerHTML = '';
     CROPS.forEach(crop => {
-        const owned = myPlayerState.seeds[crop.id] || 0;
+        const owned = (myPlayerState.seeds || {})[crop.id] || 0;
+        const bulkPrice = Math.floor(crop.seedCost * 10 * 0.7);
         const row = document.createElement('div');
         row.className = 'seed-row';
         row.innerHTML = `
@@ -1223,10 +1218,17 @@ function renderStore() {
                     <div class="seed-grow">${crop.growDays} day grow | Sells for ${crop.sellPrice} 🪙</div>
                 </div>
             </div>
-            <button class="btn btn-small" ${myPlayerState.coins < crop.seedCost ? 'disabled' : ''}>${crop.seedCost} 🪙</button>
+            <div style="display:flex;gap:6px;align-items:center;flex-shrink:0;">
+                <button class="btn btn-small buy-one" ${myPlayerState.coins < crop.seedCost ? 'disabled' : ''}>${crop.seedCost}🪙 x1</button>
+                <button class="btn btn-small btn-gold buy-bulk" ${myPlayerState.coins < bulkPrice ? 'disabled' : ''}>${bulkPrice}🪙 x10</button>
+            </div>
         `;
-        row.querySelector('button').addEventListener('click', () => {
+        row.querySelector('.buy-one').addEventListener('click', () => {
             sendToHost({ type: 'buy_seed', cropId: crop.id });
+            vibrate(30);
+        });
+        row.querySelector('.buy-bulk').addEventListener('click', () => {
+            sendToHost({ type: 'buy_bulk', cropId: crop.id });
             vibrate(30);
         });
         list.appendChild(row);
@@ -1261,7 +1263,7 @@ function renderNPCs() {
         return;
     }
     // Show sellable inventory
-    const inv = myPlayerState.inventory;
+    const inv = myPlayerState.inventory || {};
     let hasItems = false;
     Object.entries(inv).forEach(([cropId, counts]) => {
         const crop = getCrop(cropId);
@@ -1348,7 +1350,7 @@ function renderBasketFillerBody(basket) {
     body.appendChild(selDiv);
 
     // Available veggies to add
-    const inv = { ...myPlayerState.inventory };
+    const inv = { ...(myPlayerState.inventory || {}) };
     // Subtract already selected
     fillingBasket.items.forEach(item => {
         if (inv[item.cropId]) {
@@ -1482,8 +1484,8 @@ function renderStatus() {
 
     if (myPlayerState) {
         const stats = $('myStats');
-        const seedCount = Object.values(myPlayerState.seeds).reduce((a, b) => a + b, 0);
-        const veggieCount = Object.values(myPlayerState.inventory).reduce((a, inv) => a + (inv.fresh || 0) + (inv.old || 0), 0);
+        const seedCount = Object.values(myPlayerState.seeds || {}).reduce((a, b) => a + b, 0);
+        const veggieCount = Object.values(myPlayerState.inventory || {}).reduce((a, inv) => a + (inv.fresh || 0) + (inv.old || 0), 0);
         const planted = myPlayerState.garden.filter(s => s.state !== PLANT_STATES.EMPTY && s.state !== PLANT_STATES.DEAD).length;
         stats.innerHTML = `
             <div>Seeds: ${seedCount} | Veggies: ${veggieCount} | Planted: ${planted}/20</div>
@@ -1495,7 +1497,7 @@ function renderStatus() {
 function renderInventory() {
     if (!myPlayerState) return;
     const div = $('inventoryDisplay');
-    const inv = myPlayerState.inventory;
+    const inv = myPlayerState.inventory || {};
     const entries = Object.entries(inv).filter(([_, c]) => (c.fresh || 0) + (c.old || 0) > 0);
     if (entries.length === 0) {
         div.textContent = 'No veggies picked yet';
@@ -1884,10 +1886,6 @@ $('joinBtn').addEventListener('click', joinGame);
 $('startGameBtn').addEventListener('click', startGame);
 $('copyCodeBtn').addEventListener('click', copyCode);
 $('copyLinkBtn').addEventListener('click', copyJoinLink);
-$('bulkBuyBtn').addEventListener('click', () => {
-    sendToHost({ type: 'buy_bulk' });
-    vibrate(30);
-});
 $('playDDRBtn').addEventListener('click', startDDR);
 $('finishDayBtn').addEventListener('click', startFinishDay);
 $('postTradeBtn').addEventListener('click', () => {
