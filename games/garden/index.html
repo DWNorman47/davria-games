@@ -1058,8 +1058,14 @@ function handleClientMessage(msg) {
 }
 
 function handleStateUpdate(gs) {
-    const prevPhase = gameState ? gameState.phase : 'lobby';
-    gameState = gs;
+    if (isHost) {
+        // Host: DON'T overwrite gameState — it's the authoritative server state.
+        // Instead, merge display-only fields (playerSummaries) into gameState for renderers.
+        gameState.playerSummaries = gs.playerSummaries;
+    } else {
+        // Guest: replace gameState entirely (it only has display data anyway)
+        gameState = gs;
+    }
 
     switch(gs.phase) {
         case 'lobby':
@@ -1079,8 +1085,12 @@ function handleStateUpdate(gs) {
 }
 
 function handleCommonUpdate(gs) {
-    const oldPhase = gameState ? gameState.phase : 'lobby';
-    gameState = gs;
+    if (isHost) {
+        // Host: only merge display-only fields
+        gameState.playerSummaries = gs.playerSummaries;
+    } else {
+        gameState = gs;
+    }
     if (gs.phase === 'game_end') {
         show('screenGameEnd');
         renderGameEnd();
@@ -1541,7 +1551,7 @@ function showLobby() {
 
     const list = $('lobbyPlayers');
     list.innerHTML = '';
-    const players = gameState ? (gameState.playerSummaries || Object.values(gameState.players).map(p => ({ id: p.id, name: p.name }))) : [];
+    const players = gameState ? (gameState.playerSummaries || (gameState.players ? Object.values(gameState.players).map(p => ({ id: p.id, name: p.name, color: p.color })) : [])) : [];
     players.forEach(p => {
         const li = document.createElement('li');
         const isMe = p.id === getMyPlayerId();
