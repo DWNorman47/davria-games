@@ -557,7 +557,7 @@
         </div>
         <div class="panel" id="pregame-host-settings" style="display:none;">
             <label for="buzzer-duration" style="display:block; font-size:0.9rem; margin-bottom:6px;">Buzzer duration: <span id="buzzer-duration-value">1.6</span>s</label>
-            <input type="range" id="buzzer-duration" min="0.3" max="3" step="0.1" value="1.6" style="width:100%;" oninput="onBuzzerDurationChange()">
+            <input type="range" id="buzzer-duration" min="0.5" max="2.5" step="0.1" value="1.5" style="width:100%;" oninput="onBuzzerDurationChange()">
         </div>
         <button class="btn" id="btn-start-new-game" onclick="hostStartNewGame()" style="display:none;">Start New Game</button>
         <button class="btn secondary" id="btn-continue-game" onclick="hostContinueGame()" style="display:none;">Continue Game</button>
@@ -797,23 +797,25 @@ function playBeep(freq, duration, volume) {
     gain.gain.exponentialRampToValueAtTime(0.0001, audioCtx.currentTime + duration);
     osc.stop(audioCtx.currentTime + duration);
 }
-let buzzerDuration = 1.6; // seconds, configurable from pregame menu
+let buzzerDuration = 1.5; // seconds, configurable from pregame menu
 
 function playBuzzer() {
-    // Total duration: buzzerDuration seconds, 3 pulses with gaps
+    // 3 evenly-spaced pulses; first starts at 0, last ends at exactly totalDur.
+    // pulseLen = totalDur/5, gap (start-to-start) = totalDur*2/5.
+    // Pulses at 0, 0.4*T, 0.8*T; each 0.2*T long → last ends at 1.0*T ✓
     const totalDur = buzzerDuration;
     const pulseCount = 3;
-    const gap = totalDur / pulseCount; // time between pulse starts
-    const pulseLen = Math.min(gap * 0.83, 0.5); // pulse length, max 0.5s
+    const pulseLen = totalDur / 5;
+    const gap = totalDur * 2 / 5;
+    const silence = gap - pulseLen;
 
-    // Vibration: scale pattern to total duration
     if (navigator.vibrate) {
         const pattern = [];
         const vibPulse = Math.round(pulseLen * 1000);
-        const vibGap = Math.round((gap - pulseLen) * 1000);
+        const vibSilence = Math.round(silence * 1000);
         for (let i = 0; i < pulseCount; i++) {
             pattern.push(vibPulse);
-            if (i < pulseCount - 1) pattern.push(vibGap);
+            if (i < pulseCount - 1) pattern.push(vibSilence);
         }
         navigator.vibrate(pattern);
     }
@@ -822,16 +824,17 @@ function playBuzzer() {
     if (!audioCtx) return;
     const now = audioCtx.currentTime;
     for (let i = 0; i < pulseCount; i++) {
+        const start = now + i * gap;
         const osc = audioCtx.createOscillator();
         const gain = audioCtx.createGain();
         osc.type = 'sawtooth';
         osc.frequency.value = 90;
-        gain.gain.setValueAtTime(0.4, now + i * gap);
-        gain.gain.exponentialRampToValueAtTime(0.0001, now + i * gap + pulseLen);
+        gain.gain.setValueAtTime(0.4, start);
+        gain.gain.exponentialRampToValueAtTime(0.0001, start + pulseLen);
         osc.connect(gain);
         gain.connect(audioCtx.destination);
-        osc.start(now + i * gap);
-        osc.stop(now + i * gap + pulseLen + 0.05);
+        osc.start(start);
+        osc.stop(start + pulseLen + 0.02);
     }
 }
 
