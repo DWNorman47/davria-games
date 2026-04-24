@@ -892,11 +892,24 @@ function handleGuestMessage(conn, msg) {
     if (!isHost) return;
     switch (msg.type) {
         case 'join_lobby': {
-            const existing = state.players.find(p => p.id === conn.peer);
+            const incomingName = (msg.name || 'Player').trim();
+            // First, check if this peer ID already exists (rare, but possible)
+            let existing = state.players.find(p => p.id === conn.peer);
+            // If not, check for a returning player by name (case-insensitive)
             if (!existing) {
-                state.players.push({ id: conn.peer, name: msg.name || 'Player', slot: -1, team: -1, isATG: false });
+                existing = state.players.find(p =>
+                    p.name && p.name.toLowerCase() === incomingName.toLowerCase()
+                );
+                if (existing) {
+                    // Returning player — restore their slot/team by updating the peer ID
+                    existing.id = conn.peer;
+                }
+            }
+            if (!existing) {
+                // Brand-new player
+                state.players.push({ id: conn.peer, name: incomingName, slot: -1, team: -1, isATG: false });
             } else {
-                existing.name = msg.name || existing.name;
+                existing.name = incomingName;
             }
             recalcTeamConfig();
             broadcastState();
