@@ -556,8 +556,11 @@
             <div class="pregame-recap" id="pregame-recap"></div>
         </div>
         <div class="panel" id="pregame-host-settings" style="display:none;">
-            <label for="buzzer-duration" style="display:block; font-size:0.9rem; margin-bottom:6px;">Buzzer duration: <span id="buzzer-duration-value">1.6</span>s</label>
-            <input type="range" id="buzzer-duration" min="0.5" max="2.5" step="0.1" value="1.5" style="width:100%;" oninput="onBuzzerDurationChange()">
+            <label for="round-min-slider" style="display:block; font-size:0.9rem; margin-bottom:6px;">Min round time: <span id="round-min-value">45</span>s</label>
+            <input type="range" id="round-min-slider" min="30" max="90" step="5" value="45" style="width:100%;" oninput="onRoundTimeChange()">
+            <label for="round-max-slider" style="display:block; font-size:0.9rem; margin-bottom:6px; margin-top:10px;">Max round time: <span id="round-max-value">75</span>s</label>
+            <input type="range" id="round-max-slider" min="30" max="90" step="5" value="75" style="width:100%;" oninput="onRoundTimeChange()">
+            <div style="font-size:0.75rem; color:var(--text-secondary); margin-top:6px;">Round ends at a random time between min and max.</div>
         </div>
         <button class="btn" id="btn-start-new-game" onclick="hostStartNewGame()" style="display:none;">Start New Game</button>
         <button class="btn secondary" id="btn-continue-game" onclick="hostContinueGame()" style="display:none;">Continue Game</button>
@@ -797,55 +800,50 @@ function playBeep(freq, duration, volume) {
     gain.gain.exponentialRampToValueAtTime(0.0001, audioCtx.currentTime + duration);
     osc.stop(audioCtx.currentTime + duration);
 }
-let buzzerDuration = 1.5; // seconds, configurable from pregame menu
-
 function playBuzzer() {
-    // 3 evenly-spaced pulses; first starts at 0, last ends at exactly totalDur.
-    // pulseLen = totalDur/5, gap (start-to-start) = totalDur*2/5.
-    // Pulses at 0, 0.4*T, 0.8*T; each 0.2*T long → last ends at 1.0*T ✓
-    const totalDur = buzzerDuration;
-    const pulseCount = 3;
-    const pulseLen = totalDur / 5;
-    const gap = totalDur * 2 / 5;
-    const silence = gap - pulseLen;
-
-    if (navigator.vibrate) {
-        const pattern = [];
-        const vibPulse = Math.round(pulseLen * 1000);
-        const vibSilence = Math.round(silence * 1000);
-        for (let i = 0; i < pulseCount; i++) {
-            pattern.push(vibPulse);
-            if (i < pulseCount - 1) pattern.push(vibSilence);
-        }
-        navigator.vibrate(pattern);
-    }
+    // Vibration is silent haptic feedback — always fire regardless of mute state
+    if (navigator.vibrate) navigator.vibrate([200, 100, 200, 100, 500]);
     if (soundMuted) return;
     ensureAudio();
     if (!audioCtx) return;
+    // Low harsh buzz
     const now = audioCtx.currentTime;
-    for (let i = 0; i < pulseCount; i++) {
-        const start = now + i * gap;
+    for (let i = 0; i < 3; i++) {
         const osc = audioCtx.createOscillator();
         const gain = audioCtx.createGain();
         osc.type = 'sawtooth';
         osc.frequency.value = 90;
-        gain.gain.setValueAtTime(0.4, start);
-        gain.gain.exponentialRampToValueAtTime(0.0001, start + pulseLen);
+        gain.gain.setValueAtTime(0.4, now + i * 0.6);
+        gain.gain.exponentialRampToValueAtTime(0.0001, now + i * 0.6 + 0.5);
         osc.connect(gain);
         gain.connect(audioCtx.destination);
-        osc.start(start);
-        osc.stop(start + pulseLen + 0.02);
+        osc.start(now + i * 0.6);
+        osc.stop(now + i * 0.6 + 0.55);
     }
 }
 
-function onBuzzerDurationChange() {
+function onRoundTimeChange() {
     if (!isHost) return;
-    const slider = document.getElementById('buzzer-duration');
-    const v = parseFloat(slider.value);
-    buzzerDuration = v;
-    document.getElementById('buzzer-duration-value').textContent = v.toFixed(1);
-    // Broadcast to all guests so their buzzers match
-    broadcast({ type: 'buzzer_duration', value: v });
+    const minSlider = document.getElementById('round-min-slider');
+    const maxSlider = document.getElementById('round-max-slider');
+    let minV = parseInt(minSlider.value);
+    let maxV = parseInt(maxSlider.value);
+    // Ensure max >= min
+    if (maxV < minV) {
+        // If user moved min above max, push max up
+        if (document.activeElement === minSlider) {
+            maxV = minV;
+            maxSlider.value = maxV;
+        } else {
+            minV = maxV;
+            minSlider.value = minV;
+        }
+    }
+    document.getElementById('round-min-value').textContent = minV;
+    document.getElementById('round-max-value').textContent = maxV;
+    state.roundMinMs = minV * 1000;
+    state.roundMaxMs = maxV * 1000;
+    broadcastState();
 }
 
 // ============================================================
@@ -916,8 +914,6 @@ function handleGuestMessage(conn, msg) {
             }
             recalcTeamConfig();
             broadcastState();
-            // Send current buzzer duration to the new guest
-            try { conn.send({ type: 'buzzer_duration', value: buzzerDuration }); } catch(e) {}
             renderLobby();
             break;
         }
@@ -1343,9 +1339,6 @@ function handleHostMessage(msg) {
         case 'round_end_buzz':
             playBuzzer();
             break;
-        case 'buzzer_duration':
-            buzzerDuration = msg.value;
-            break;
     }
 }
 
@@ -1604,14 +1597,20 @@ function renderPregame() {
         startBtn.style.display = '';
         continueBtn.style.display = hasPaused ? '' : 'none';
         guestStatus.style.display = 'none';
-        // Show host settings (buzzer duration)
+        // Show host settings (round time min/max)
         const hostSettings = document.getElementById('pregame-host-settings');
         if (hostSettings) {
             hostSettings.style.display = '';
-            const slider = document.getElementById('buzzer-duration');
-            const val = document.getElementById('buzzer-duration-value');
-            if (slider) slider.value = buzzerDuration;
-            if (val) val.textContent = buzzerDuration.toFixed(1);
+            const minSlider = document.getElementById('round-min-slider');
+            const maxSlider = document.getElementById('round-max-slider');
+            const minVal = document.getElementById('round-min-value');
+            const maxVal = document.getElementById('round-max-value');
+            const minS = Math.round((state.roundMinMs || 45000) / 1000);
+            const maxS = Math.round((state.roundMaxMs || 75000) / 1000);
+            if (minSlider) minSlider.value = minS;
+            if (maxSlider) maxSlider.value = maxS;
+            if (minVal) minVal.textContent = minS;
+            if (maxVal) maxVal.textContent = maxS;
         }
     } else {
         startBtn.style.display = 'none';
