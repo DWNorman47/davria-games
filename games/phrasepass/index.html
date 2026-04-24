@@ -406,9 +406,64 @@
         -webkit-tap-highlight-color: transparent;
     }
     #mute-toggle:active { background: rgba(0, 0, 0, 0.65); }
+    #arcade-back {
+        position: fixed;
+        top: 12px;
+        left: 12px;
+        width: 36px;
+        height: 36px;
+        border-radius: 50%;
+        background: rgba(0, 0, 0, 0.45);
+        color: #fff;
+        font-size: 1.1rem;
+        line-height: 1;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        text-decoration: none;
+        z-index: 1000;
+        opacity: 0.7;
+        -webkit-tap-highlight-color: transparent;
+    }
+    #arcade-back:hover, #arcade-back:active {
+        background: rgba(0, 0, 0, 0.7);
+        opacity: 1;
+    }
+    .pause-btn {
+        position: fixed;
+        top: 14px;
+        left: 60px;
+        padding: 6px 12px;
+        border-radius: 16px;
+        background: rgba(0, 0, 0, 0.55);
+        color: #fff;
+        border: 1px solid rgba(255,255,255,0.2);
+        font-size: 0.8rem;
+        cursor: pointer;
+        z-index: 999;
+        opacity: 0.75;
+    }
+    .pause-btn:hover, .pause-btn:active {
+        opacity: 1;
+        background: rgba(0, 0, 0, 0.8);
+    }
+    .pregame-recap {
+        background: var(--bg-secondary);
+        border-radius: 8px;
+        padding: 10px;
+        margin: 10px 0;
+        font-size: 0.85rem;
+        color: var(--text-secondary);
+    }
+    .pregame-recap .recap-row {
+        display: flex;
+        justify-content: space-between;
+        padding: 4px 0;
+    }
 </style>
 </head>
 <body>
+<a id="arcade-back" href="../../index.html" aria-label="Back to Arcade" title="Back to Arcade">←</a>
 <button id="mute-toggle" type="button" onclick="toggleMute()" aria-label="Toggle sound">🔇</button>
 <div class="app">
     <h1>📱 Phrase Pass</h1>
@@ -434,7 +489,6 @@
             <button class="btn" onclick="joinGame()">Join</button>
         </div>
         <div id="entry-status" class="status-line"></div>
-        <a href="../../index.html" class="back-link">← Back to Arcade</a>
     </div>
 
     <!-- ============ LOBBY SCREEN ============ -->
@@ -490,8 +544,20 @@
             <h3 style="text-align:center; margin-bottom:10px;">Turn Order & Teams</h3>
             <ul class="player-list" id="reveal-players"></ul>
         </div>
-        <button class="btn" id="btn-start-round" onclick="hostStartRound()" style="display:none;">Start Round</button>
-        <div id="reveal-guest-status" class="status-line" style="display:none;">Waiting for host to start the round...</div>
+        <button class="btn" id="btn-start-round" onclick="hostGoToPregame()" style="display:none;">Continue</button>
+        <div id="reveal-guest-status" class="status-line" style="display:none;">Waiting for host...</div>
+    </div>
+
+    <!-- ============ PRE-GAME MENU (NEW) ============ -->
+    <div id="screen-pregame" class="screen">
+        <div class="panel">
+            <h3 style="text-align:center; margin-bottom:6px;">Pre-Game Menu</h3>
+            <p class="subtitle" id="pregame-subtitle" style="margin-bottom:6px;">Ready to play.</p>
+            <div class="pregame-recap" id="pregame-recap"></div>
+        </div>
+        <button class="btn" id="btn-start-new-game" onclick="hostStartNewGame()" style="display:none;">Start New Game</button>
+        <button class="btn secondary" id="btn-continue-game" onclick="hostContinueGame()" style="display:none;">Continue Game</button>
+        <div id="pregame-guest-status" class="status-line" style="display:none;">Waiting for host...</div>
     </div>
 
     <!-- ============ PLAYING - current player ============ -->
@@ -499,6 +565,7 @@
         <div class="score-board" id="pc-scoreboard"></div>
         <div class="phrase-display" id="phrase-text">PHRASE</div>
         <button class="btn got-it" onclick="gotIt()">GOT IT! Pass →</button>
+        <button class="pause-btn" type="button" onclick="requestPause()">⏸ Pause</button>
     </div>
 
     <!-- ============ PLAYING - waiting ============ -->
@@ -510,6 +577,7 @@
             <div class="hint" id="wait-team-label">Team A</div>
             <div class="hint" style="margin-top:30px;">Listen for the buzzer!</div>
         </div>
+        <button class="pause-btn" type="button" onclick="requestPause()">⏸ Pause</button>
     </div>
 
     <!-- ============ ROUND END ============ -->
@@ -520,6 +588,7 @@
         </div>
         <button class="btn" id="btn-next-round" onclick="hostStartRound()" style="display:none;">Next Round</button>
         <div id="round-end-guest-status" class="status-line" style="display:none;">Waiting for host...</div>
+        <button class="pause-btn" type="button" onclick="requestPause()">⏸ Pause</button>
     </div>
 
     <!-- ============ GAME END ============ -->
@@ -529,7 +598,6 @@
             <div class="score-board" id="ge-scoreboard"></div>
         </div>
         <button class="btn" id="btn-new-game" onclick="hostNewGame()" style="display:none;">New Game</button>
-        <a href="../../index.html" class="back-link">← Back to Arcade</a>
     </div>
 </div>
 
@@ -606,7 +674,9 @@ const state = {
     losingTeam: -1,
     lastRoundMessage: '',
     winningTeam: -1,
-    passesThisRound: 0
+    passesThisRound: 0,
+    roundNumber: 0,
+    pausedSnapshot: null
 };
 
 const TEAM_COLORS = ['var(--team-a)', 'var(--team-b)', 'var(--team-c)', 'var(--team-d)'];
@@ -834,6 +904,13 @@ function handleGuestMessage(conn, msg) {
             advanceTurn();
             break;
         }
+        case 'pause_game': {
+            // Any player can request a pause during gameplay
+            if (state.phase === 'playing' || state.phase === 'round_end') {
+                pauseGame();
+            }
+            break;
+        }
     }
 }
 
@@ -929,6 +1006,7 @@ function hostStartRound() {
     state.phase = 'playing';
     state.roundActive = true;
     state.passesThisRound = 0;
+    state.roundNumber = (state.roundNumber || 0) + 1;
     const totalSlots = state.players.length;
     if (state.currentPlayerSlot < 1 || state.currentPlayerSlot > totalSlots) {
         state.currentPlayerSlot = 1;
@@ -1055,6 +1133,8 @@ function hostNewGame() {
     state.atgClaimedCount = 0;
     state.winningTeam = -1;
     state.losingTeam = -1;
+    state.roundNumber = 0;
+    state.pausedSnapshot = null;
     state.players.forEach(p => { p.slot = -1; p.team = -1; p.isATG = false; p._claimLocked = false; });
     recalcTeamConfig();
     phraseDeck = [];
@@ -1063,6 +1143,74 @@ function hostNewGame() {
     document.getElementById('lobby-host-panel').style.display = '';
     document.getElementById('lobby-settings').style.display = '';
     renderLobby();
+}
+
+// ============================================================
+// PRE-GAME MENU / PAUSE / CONTINUE
+// ============================================================
+function hostGoToPregame() {
+    // Host transitions from reveal → pregame
+    if (!isHost) return;
+    state.phase = 'pregame';
+    broadcastState();
+    renderPregame();
+}
+
+function hostStartNewGame() {
+    // From the pregame screen, fresh start (round 1, scores reset)
+    if (!isHost) return;
+    state.scores = new Array(state.numTeams).fill(0);
+    state.currentPlayerSlot = 0;
+    state.roundNumber = 0;
+    state.passesThisRound = 0;
+    state.winningTeam = -1;
+    state.losingTeam = -1;
+    state.pausedSnapshot = null;
+    phraseDeck = [];
+    hostStartRound();
+}
+
+function hostContinueGame() {
+    // Restore from pausedSnapshot and resume gameplay
+    if (!isHost) return;
+    const snap = state.pausedSnapshot;
+    if (!snap) return;
+    state.scores = (snap.scores || []).slice();
+    state.currentPlayerSlot = snap.currentPlayerSlot || 1;
+    state.roundNumber = snap.roundNumber || 0;
+    state.passesThisRound = 0;
+    state.pausedSnapshot = null;
+    // Begin a fresh round with the same current player slot
+    // hostStartRound() advances by one — undo that by stepping back so it lands on the snapshot slot
+    const totalSlots = state.players.length || 1;
+    state.currentPlayerSlot = ((state.currentPlayerSlot - 2 + totalSlots) % totalSlots) + 1;
+    hostStartRound();
+}
+
+function pauseGame() {
+    // Host-only: snapshot current state and broadcast a transition to pregame
+    if (!isHost) return;
+    if (state.phase !== 'playing' && state.phase !== 'round_end') return;
+    state.roundActive = false;
+    stopHostTimer();
+    state.pausedSnapshot = {
+        scores: (state.scores || []).slice(),
+        currentPlayerSlot: state.currentPlayerSlot,
+        roundNumber: state.roundNumber,
+        passesThisRound: state.passesThisRound
+    };
+    state.phase = 'pregame';
+    broadcastState();
+    renderPregame();
+}
+
+function requestPause() {
+    // Called from pause buttons by host or guest
+    if (isHost) {
+        pauseGame();
+    } else if (hostConn && hostConn.open) {
+        hostConn.send({ type: 'pause_game' });
+    }
 }
 
 function broadcast(msg) {
@@ -1087,7 +1235,9 @@ function broadcastState() {
             losingTeam: state.losingTeam,
             winningTeam: state.winningTeam,
             lastRoundMessage: state.lastRoundMessage,
-            passesThisRound: state.passesThisRound
+            passesThisRound: state.passesThisRound,
+            roundNumber: state.roundNumber || 0,
+            hasPausedSnapshot: !!state.pausedSnapshot
         }
     };
     broadcast(clean);
@@ -1346,6 +1496,7 @@ function renderSelection() {
     });
 }
 
+let revealAutoAdvanceTimer = null;
 function renderReveal() {
     if (state.phase !== 'reveal') return;
     showScreen('screen-reveal');
@@ -1362,6 +1513,54 @@ function renderReveal() {
     });
     document.getElementById('btn-start-round').style.display = isHost ? '' : 'none';
     document.getElementById('reveal-guest-status').style.display = isHost ? 'none' : '';
+    // Host: auto-advance to pregame after 3s (also clickable via "Continue")
+    if (isHost) {
+        if (revealAutoAdvanceTimer) clearTimeout(revealAutoAdvanceTimer);
+        revealAutoAdvanceTimer = setTimeout(() => {
+            if (state.phase === 'reveal') hostGoToPregame();
+        }, 3000);
+    }
+}
+
+function renderPregame() {
+    showScreen('screen-pregame');
+    // Reset any team theme leftover from gameplay
+    document.body.classList.remove('theme-a', 'theme-b', 'theme-c', 'theme-d', 'theme-atg');
+    const recap = document.getElementById('pregame-recap');
+    recap.innerHTML = '';
+    const sorted = state.players.slice().filter(p => p.slot !== -1).sort((a, b) => a.slot - b.slot);
+    sorted.forEach(p => {
+        const row = document.createElement('div');
+        row.className = 'recap-row';
+        const left = p.isATG ? 'ATG' : ('#' + p.slot);
+        const right = p.isATG ? 'All-Time Guesser' : (state.numTeams === 1 ? 'Player' : 'Team ' + TEAM_LETTERS[p.team]);
+        row.innerHTML = '<span>' + left + ' ' + escapeHtml(p.name) + '</span><span style="color:' + teamColorFor(p) + ';">' + right + '</span>';
+        recap.appendChild(row);
+    });
+    const hasPaused = isHost ? !!state.pausedSnapshot : !!state.hasPausedSnapshot;
+    const subtitle = document.getElementById('pregame-subtitle');
+    if (hasPaused) {
+        subtitle.textContent = isHost
+            ? 'Game paused. Continue or start over.'
+            : 'Game paused. Waiting for host...';
+    } else {
+        subtitle.textContent = isHost ? 'Ready to play.' : 'Waiting for host to start...';
+    }
+    const startBtn = document.getElementById('btn-start-new-game');
+    const continueBtn = document.getElementById('btn-continue-game');
+    const guestStatus = document.getElementById('pregame-guest-status');
+    if (isHost) {
+        startBtn.style.display = '';
+        continueBtn.style.display = hasPaused ? '' : 'none';
+        guestStatus.style.display = 'none';
+    } else {
+        startBtn.style.display = 'none';
+        continueBtn.style.display = 'none';
+        guestStatus.style.display = '';
+        guestStatus.textContent = hasPaused
+            ? 'Game paused — waiting for host to continue or restart...'
+            : 'Waiting for host to start...';
+    }
 }
 
 function buildScoreboard(containerId) {
@@ -1464,6 +1663,9 @@ function updateUIFromState() {
             break;
         case 'reveal':
             renderReveal();
+            break;
+        case 'pregame':
+            renderPregame();
             break;
         case 'playing':
             showHostPlayingScreen();
