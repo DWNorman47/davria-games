@@ -555,6 +555,10 @@
             <p class="subtitle" id="pregame-subtitle" style="margin-bottom:6px;">Ready to play.</p>
             <div class="pregame-recap" id="pregame-recap"></div>
         </div>
+        <div class="panel" id="pregame-host-settings" style="display:none;">
+            <label for="buzzer-duration" style="display:block; font-size:0.9rem; margin-bottom:6px;">Buzzer duration: <span id="buzzer-duration-value">1.6</span>s</label>
+            <input type="range" id="buzzer-duration" min="0.3" max="3" step="0.1" value="1.6" style="width:100%;" oninput="onBuzzerDurationChange()">
+        </div>
         <button class="btn" id="btn-start-new-game" onclick="hostStartNewGame()" style="display:none;">Start New Game</button>
         <button class="btn secondary" id="btn-continue-game" onclick="hostContinueGame()" style="display:none;">Continue Game</button>
         <div id="pregame-guest-status" class="status-line" style="display:none;">Waiting for host...</div>
@@ -793,26 +797,52 @@ function playBeep(freq, duration, volume) {
     gain.gain.exponentialRampToValueAtTime(0.0001, audioCtx.currentTime + duration);
     osc.stop(audioCtx.currentTime + duration);
 }
+let buzzerDuration = 1.6; // seconds, configurable from pregame menu
+
 function playBuzzer() {
-    // Vibration is silent haptic feedback — always fire regardless of mute state
-    if (navigator.vibrate) navigator.vibrate([200, 100, 200, 100, 500]);
+    // Total duration: buzzerDuration seconds, 3 pulses with gaps
+    const totalDur = buzzerDuration;
+    const pulseCount = 3;
+    const gap = totalDur / pulseCount; // time between pulse starts
+    const pulseLen = Math.min(gap * 0.83, 0.5); // pulse length, max 0.5s
+
+    // Vibration: scale pattern to total duration
+    if (navigator.vibrate) {
+        const pattern = [];
+        const vibPulse = Math.round(pulseLen * 1000);
+        const vibGap = Math.round((gap - pulseLen) * 1000);
+        for (let i = 0; i < pulseCount; i++) {
+            pattern.push(vibPulse);
+            if (i < pulseCount - 1) pattern.push(vibGap);
+        }
+        navigator.vibrate(pattern);
+    }
     if (soundMuted) return;
     ensureAudio();
     if (!audioCtx) return;
-    // Low harsh buzz
     const now = audioCtx.currentTime;
-    for (let i = 0; i < 3; i++) {
+    for (let i = 0; i < pulseCount; i++) {
         const osc = audioCtx.createOscillator();
         const gain = audioCtx.createGain();
         osc.type = 'sawtooth';
         osc.frequency.value = 90;
-        gain.gain.setValueAtTime(0.4, now + i * 0.6);
-        gain.gain.exponentialRampToValueAtTime(0.0001, now + i * 0.6 + 0.5);
+        gain.gain.setValueAtTime(0.4, now + i * gap);
+        gain.gain.exponentialRampToValueAtTime(0.0001, now + i * gap + pulseLen);
         osc.connect(gain);
         gain.connect(audioCtx.destination);
-        osc.start(now + i * 0.6);
-        osc.stop(now + i * 0.6 + 0.55);
+        osc.start(now + i * gap);
+        osc.stop(now + i * gap + pulseLen + 0.05);
     }
+}
+
+function onBuzzerDurationChange() {
+    if (!isHost) return;
+    const slider = document.getElementById('buzzer-duration');
+    const v = parseFloat(slider.value);
+    buzzerDuration = v;
+    document.getElementById('buzzer-duration-value').textContent = v.toFixed(1);
+    // Broadcast to all guests so their buzzers match
+    broadcast({ type: 'buzzer_duration', value: v });
 }
 
 // ============================================================
@@ -870,6 +900,8 @@ function handleGuestMessage(conn, msg) {
             }
             recalcTeamConfig();
             broadcastState();
+            // Send current buzzer duration to the new guest
+            try { conn.send({ type: 'buzzer_duration', value: buzzerDuration }); } catch(e) {}
             renderLobby();
             break;
         }
@@ -1295,6 +1327,9 @@ function handleHostMessage(msg) {
         case 'round_end_buzz':
             playBuzzer();
             break;
+        case 'buzzer_duration':
+            buzzerDuration = msg.value;
+            break;
     }
 }
 
@@ -1553,6 +1588,15 @@ function renderPregame() {
         startBtn.style.display = '';
         continueBtn.style.display = hasPaused ? '' : 'none';
         guestStatus.style.display = 'none';
+        // Show host settings (buzzer duration)
+        const hostSettings = document.getElementById('pregame-host-settings');
+        if (hostSettings) {
+            hostSettings.style.display = '';
+            const slider = document.getElementById('buzzer-duration');
+            const val = document.getElementById('buzzer-duration-value');
+            if (slider) slider.value = buzzerDuration;
+            if (val) val.textContent = buzzerDuration.toFixed(1);
+        }
     } else {
         startBtn.style.display = 'none';
         continueBtn.style.display = 'none';
@@ -1560,6 +1604,8 @@ function renderPregame() {
         guestStatus.textContent = hasPaused
             ? 'Game paused — waiting for host to continue or restart...'
             : 'Waiting for host to start...';
+        const hostSettings = document.getElementById('pregame-host-settings');
+        if (hostSettings) hostSettings.style.display = 'none';
     }
 }
 
