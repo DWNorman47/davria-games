@@ -796,6 +796,18 @@
         <button class="pause-btn" type="button" onclick="requestPause()">⏸ Pause</button>
     </div>
 
+    <!-- ============ HOST DISCONNECTED ============ -->
+    <div id="screen-host-disconnected" class="screen">
+        <div class="panel" style="text-align:center;">
+            <h2 style="color:var(--accent);">Host Disconnected</h2>
+            <p style="color:var(--text-secondary); margin:12px 0;">The host has lost connection. You can take over and continue the game with everyone else.</p>
+            <p id="host-disconnected-status" class="status-line" style="margin-top:8px;"></p>
+        </div>
+        <button class="btn" id="btn-take-over" onclick="takeOverAsHost()">Take Over as Host</button>
+        <button class="btn secondary" onclick="tryReconnectGuest()">Try Reconnect</button>
+        <button class="btn secondary" onclick="leaveGame()">Leave to Main Menu</button>
+    </div>
+
     <!-- ============ GAME END ============ -->
     <div id="screen-game-end" class="screen">
         <div class="winner-screen">
@@ -1486,6 +1498,37 @@ function broadcastState() {
         }
     };
     broadcast(clean);
+    // Send a full authoritative-state backup to all guests so they can take over as host if needed.
+    // Strip transient flags (functions, intervals etc.) but preserve everything else including _claimLocked.
+    try {
+        const fullState = {
+            phase: state.phase,
+            players: state.players.map(p => ({
+                id: p.id, name: p.name, slot: p.slot, team: p.team,
+                isATG: !!p.isATG, _claimLocked: !!p._claimLocked
+            })),
+            numTeams: state.numTeams,
+            teamSize: state.teamSize,
+            atgCount: state.atgCount,
+            atgClaimedCount: state.atgClaimedCount,
+            currentSelectionSlot: state.currentSelectionSlot,
+            currentPlayerSlot: state.currentPlayerSlot,
+            currentPhrase: state.currentPhrase,
+            scores: state.scores,
+            roundActive: state.roundActive,
+            roundEndTime: state.roundEndTime,
+            scoreToWin: state.scoreToWin,
+            roundMinMs: state.roundMinMs,
+            roundMaxMs: state.roundMaxMs,
+            losingTeam: state.losingTeam,
+            winningTeam: state.winningTeam,
+            lastRoundMessage: state.lastRoundMessage,
+            passesThisRound: state.passesThisRound,
+            roundNumber: state.roundNumber || 0,
+            pausedSnapshot: state.pausedSnapshot
+        };
+        broadcast({ type: 'host_state_backup', state: fullState });
+    } catch (e) { /* ignore */ }
     // Auto-save for reconnect-on-refresh
     autoSaveState();
     // Also update host UI based on phase
@@ -1516,8 +1559,7 @@ function joinGame() {
         });
         hostConn.on('data', data => handleHostMessage(data));
         hostConn.on('close', () => {
-            setStatus('entry-status', 'Disconnected from host');
-            showScreen('screen-entry');
+            handleHostDisconnect();
         });
         hostConn.on('error', e => {
             setStatus('entry-status', 'Connection error');
@@ -1530,6 +1572,7 @@ function joinGame() {
 }
 
 let guestCurrentPhrase = '';
+const PP_HOST_BACKUP_KEY = 'phrasepass-host-backup';
 function handleHostMessage(msg) {
     switch (msg.type) {
         case 'state_update':
@@ -1542,6 +1585,11 @@ function handleHostMessage(msg) {
             break;
         case 'round_end_buzz':
             playBuzzer();
+            break;
+        case 'host_state_backup':
+            try {
+                sessionStorage.setItem(PP_HOST_BACKUP_KEY, JSON.stringify(msg.state));
+            } catch (e) { /* ignore */ }
             break;
     }
 }
@@ -2207,9 +2255,7 @@ function reconnectAsGuest(session) {
         });
         hostConn.on('data', data => handleHostMessage(data));
         hostConn.on('close', () => {
-            setStatus('entry-status', 'Disconnected from host');
-            clearSession();
-            showScreen('screen-entry');
+            handleHostDisconnect();
         });
         hostConn.on('error', e => {
             clearTimeout(timeout);
@@ -2225,6 +2271,198 @@ function reconnectAsGuest(session) {
         clearSession();
         showScreen('screen-entry');
     });
+}
+
+// ============================================================
+// HOST DISCONNECT / MANUAL TAKEOVER
+// ============================================================
+function handleHostDisconnect() {
+    // Called when a guest's hostConn closes. Show the host-disconnected screen
+    // with options: take over as host, retry reconnect, or leave.
+    if (isHost) return; // safety
+    setStatus('entry-status', '');
+    const statusEl = document.getElementById('host-disconnected-status');
+    if (statusEl) statusEl.textContent = '';
+    const btnTakeOver = document.getElementById('btn-take-over');
+    if (btnTakeOver) btnTakeOver.disabled = false;
+    showScreen('screen-host-disconnected');
+}
+
+function leaveGame() {
+    // Original "disconnected" behavior: clear session, tear down peer, back to entry
+    try { if (hostConn) hostConn.close(); } catch (e) {}
+    try { if (peer) peer.destroy(); } catch (e) {}
+    hostConn = null;
+    peer = null;
+    clearSession();
+    try { sessionStorage.removeItem(PP_HOST_BACKUP_KEY); } catch (e) {}
+    setStatus('entry-status', 'Left game');
+    showScreen('screen-entry');
+}
+
+function tryReconnectGuest() {
+    // Re-run guest reconnect using saved session (in case a new host has claimed the room)
+    const session = getSession();
+    if (!session || !session.roomCode) {
+        // Fall back to leaving
+        leaveGame();
+        return;
+    }
+    const statusEl = document.getElementById('host-disconnected-status');
+    if (statusEl) statusEl.textContent = 'Trying to reconnect...';
+    // Tear down current peer first
+    try { if (hostConn) hostConn.close(); } catch (e) {}
+    try { if (peer) peer.destroy(); } catch (e) {}
+    hostConn = null;
+    peer = null;
+    reconnectAsGuest(session);
+}
+
+function takeOverAsHost() {
+    // Read full backup from sessionStorage
+    let backup = null;
+    try {
+        const raw = sessionStorage.getItem(PP_HOST_BACKUP_KEY);
+        backup = raw ? JSON.parse(raw) : null;
+    } catch (e) { backup = null; }
+
+    if (!backup || !Array.isArray(backup.players)) {
+        const statusEl = document.getElementById('host-disconnected-status');
+        if (statusEl) statusEl.textContent = 'No backup available — cannot take over.';
+        // Treat as leave
+        setTimeout(leaveGame, 1500);
+        return;
+    }
+
+    const btnTakeOver = document.getElementById('btn-take-over');
+    if (btnTakeOver) btnTakeOver.disabled = true;
+    const statusEl = document.getElementById('host-disconnected-status');
+    if (statusEl) statusEl.textContent = 'Claiming room as new host...';
+
+    // Tear down current peer
+    try { if (hostConn) hostConn.close(); } catch (e) {}
+    try { if (peer) peer.destroy(); } catch (e) {}
+    hostConn = null;
+    peer = null;
+    guestConns.clear();
+
+    // Find own entry in backup by name (case-insensitive). myPeerId will change.
+    const myNameLower = (myName || '').toLowerCase();
+    const myEntry = backup.players.find(p => p.name && p.name.toLowerCase() === myNameLower);
+
+    // Drop any existing 'host' entry from the backup (the old host is gone).
+    // Then promote our entry to id='host'.
+    backup.players = backup.players.filter(p => p.id !== 'host');
+    if (myEntry) {
+        myEntry.id = 'host';
+    } else {
+        // Fallback: insert a new host entry — preserves us in the player list.
+        backup.players.push({ id: 'host', name: myName || 'Host', slot: -1, team: -1, isATG: false, _claimLocked: false });
+    }
+
+    // Restore state from backup
+    Object.keys(state).forEach(k => { delete state[k]; });
+    Object.assign(state, backup);
+    state.players = backup.players.map(p => Object.assign({}, p));
+
+    // If mid-round, pause the game so the new host resumes manually
+    if (state.phase === 'playing' && state.roundActive) {
+        state.roundActive = false;
+        state.pausedSnapshot = {
+            scores: (state.scores || []).slice(),
+            currentPlayerSlot: state.currentPlayerSlot,
+            roundNumber: state.roundNumber,
+            passesThisRound: state.passesThisRound
+        };
+        state.phase = 'pregame';
+    }
+    stopHostTimer();
+
+    // Become host
+    isHost = true;
+    soundMuted = false;
+    updateMuteButton();
+    myPeerId = 'phrasepass-' + roomCode;
+
+    // Try to claim the host peer ID, retrying on unavailable-id for up to 30s
+    const startTs = Date.now();
+    const MAX_TAKEOVER_MS = 30000;
+
+    function attempt() {
+        try { if (peer) peer.destroy(); } catch (e) {}
+        peer = new Peer(myPeerId, { debug: 1 });
+
+        peer.on('open', id => {
+            if (statusEl) statusEl.textContent = '';
+            // Save session under our (new) host identity
+            saveSession();
+            // Drive UI from restored phase
+            switch (state.phase) {
+                case 'lobby':
+                    showScreen('screen-lobby');
+                    document.getElementById('lobby-host-panel').style.display = '';
+                    document.getElementById('lobby-settings').style.display = '';
+                    document.getElementById('lobby-room-code').textContent = roomCode;
+                    renderLobby();
+                    break;
+                case 'selection':
+                    showScreen('screen-selection');
+                    renderSelection();
+                    break;
+                case 'reveal':
+                    showScreen('screen-reveal');
+                    renderReveal();
+                    break;
+                case 'pregame':
+                    showScreen('screen-pregame');
+                    renderPregame();
+                    break;
+                case 'round_end':
+                    showScreen('screen-round-end');
+                    renderRoundEnd();
+                    break;
+                case 'game_end':
+                    showScreen('screen-game-end');
+                    renderRoundEnd();
+                    break;
+                default:
+                    showScreen('screen-lobby');
+                    renderLobby();
+                    break;
+            }
+            // Send full state to any guests that may already reconnect; also seeds backup
+            broadcastState();
+        });
+        peer.on('connection', conn => {
+            conn.on('open', () => {
+                guestConns.set(conn.peer, conn);
+            });
+            conn.on('data', data => handleGuestMessage(conn, data));
+            conn.on('close', () => {
+                guestConns.delete(conn.peer);
+                removePlayerByPeerId(conn.peer);
+            });
+            conn.on('error', e => console.warn('conn error', e));
+        });
+        peer.on('error', err => {
+            console.error('takeover peer error', err);
+            if (err.type === 'unavailable-id') {
+                const elapsed = Date.now() - startTs;
+                if (elapsed < MAX_TAKEOVER_MS) {
+                    if (statusEl) statusEl.textContent = 'Old host still tracked — retrying (' + Math.ceil((MAX_TAKEOVER_MS - elapsed) / 1000) + 's left)...';
+                    setTimeout(attempt, 2000);
+                } else {
+                    if (statusEl) statusEl.textContent = 'Could not claim room. Please try again or leave.';
+                    if (btnTakeOver) btnTakeOver.disabled = false;
+                    isHost = false; // revert
+                }
+            } else {
+                if (statusEl) statusEl.textContent = 'Error: ' + (err.type || 'unknown');
+                if (btnTakeOver) btnTakeOver.disabled = false;
+            }
+        });
+    }
+    attempt();
 }
 
 // Auto-reconnect on page load if a session was saved
