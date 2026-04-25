@@ -42,6 +42,10 @@
         display: flex;
         flex-direction: column;
         padding: 16px;
+        padding-top: max(16px, env(safe-area-inset-top));
+        padding-bottom: max(16px, env(safe-area-inset-bottom));
+        padding-left: max(16px, env(safe-area-inset-left));
+        padding-right: max(16px, env(safe-area-inset-right));
         max-width: 640px;
         margin: 0 auto;
         width: 100%;
@@ -68,55 +72,147 @@
     .panel {
         background: var(--bg-card);
         border: 1px solid var(--border);
-        border-radius: 12px;
+        border-radius: 14px;
         padding: 20px;
-        margin-bottom: 16px;
+        margin-bottom: 14px;
+        box-shadow: 0 4px 16px rgba(0, 0, 0, 0.25), inset 0 1px 0 rgba(255,255,255,0.03);
+    }
+    .panel h3 {
+        font-size: 1.05rem;
+        letter-spacing: 0.3px;
     }
     .btn {
         display: block;
         width: 100%;
         padding: 18px;
-        min-height: 60px;
+        min-height: 64px;
         background: var(--accent);
         color: white;
         border: none;
-        border-radius: 10px;
+        border-radius: 12px;
         font-size: 1.2rem;
         font-weight: bold;
         cursor: pointer;
         margin-top: 12px;
-        transition: background 0.15s, transform 0.05s;
+        transition: background 0.15s, transform 0.05s, box-shadow 0.15s;
+        box-shadow: 0 4px 14px rgba(233, 69, 96, 0.25);
     }
     .btn:active { transform: scale(0.98); }
     .btn:hover { background: var(--accent-hover); }
-    .btn:disabled { background: #555; cursor: not-allowed; }
-    .btn.secondary { background: var(--bg-secondary); border: 1px solid var(--border); }
+    .btn:disabled { background: #555; cursor: not-allowed; box-shadow: none; opacity: 0.7; }
+    .btn.secondary { background: var(--bg-secondary); border: 1px solid var(--border); box-shadow: none; }
     .btn.secondary:hover { background: var(--border); }
     .btn.huge {
-        min-height: 120px;
-        font-size: 2rem;
+        min-height: 240px;
+        font-size: 3rem;
+        letter-spacing: 4px;
+        border-radius: 18px;
+        margin-top: 18px;
+        box-shadow: 0 8px 28px rgba(233, 69, 96, 0.4);
     }
     .btn.got-it {
-        min-height: 100px;
-        font-size: 1.8rem;
+        min-height: 96px;
+        font-size: 1.7rem;
         background: #27ae60;
+        box-shadow: 0 6px 20px rgba(39, 174, 96, 0.35);
+        margin-bottom: max(8px, env(safe-area-inset-bottom));
     }
     .btn.got-it:hover { background: #2ecc71; }
     input[type="text"], input[type="number"], select {
         width: 100%;
-        padding: 14px;
+        padding: 16px;
+        min-height: 56px;
         background: var(--bg-secondary);
         color: var(--text-primary);
         border: 1px solid var(--border);
-        border-radius: 8px;
+        border-radius: 10px;
         font-size: 1.1rem;
         margin-top: 6px;
     }
     label {
         display: block;
-        margin-top: 12px;
+        margin-top: 14px;
         color: var(--text-secondary);
         font-size: 0.9rem;
+        font-weight: 500;
+    }
+    /* Stepper: +/- buttons with central numeric value */
+    .stepper {
+        display: flex;
+        align-items: stretch;
+        gap: 8px;
+        margin-top: 6px;
+    }
+    .stepper .step-btn {
+        flex: 0 0 60px;
+        min-height: 60px;
+        background: var(--bg-secondary);
+        color: var(--text-primary);
+        border: 1px solid var(--border);
+        border-radius: 12px;
+        font-size: 1.6rem;
+        font-weight: bold;
+        cursor: pointer;
+        line-height: 1;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        user-select: none;
+        transition: background 0.1s, transform 0.05s;
+    }
+    .stepper .step-btn:active { transform: scale(0.94); background: var(--border); }
+    .stepper .step-btn:disabled { opacity: 0.35; cursor: not-allowed; }
+    .stepper .step-value {
+        flex: 1;
+        min-height: 60px;
+        background: var(--bg-secondary);
+        border: 1px solid var(--border);
+        border-radius: 12px;
+        font-size: 1.5rem;
+        font-weight: bold;
+        color: var(--text-primary);
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        font-variant-numeric: tabular-nums;
+    }
+    .stepper .step-value .unit {
+        font-size: 0.85rem;
+        font-weight: normal;
+        color: var(--text-secondary);
+        margin-left: 6px;
+    }
+    /* Range sliders — chunky thumbs for touch */
+    input[type="range"] {
+        -webkit-appearance: none;
+        appearance: none;
+        width: 100%;
+        height: 8px;
+        background: var(--bg-secondary);
+        border-radius: 8px;
+        outline: none;
+        margin: 12px 0 4px;
+        border: 1px solid var(--border);
+    }
+    input[type="range"]::-webkit-slider-thumb {
+        -webkit-appearance: none;
+        appearance: none;
+        width: 44px;
+        height: 44px;
+        border-radius: 50%;
+        background: var(--accent);
+        border: 3px solid var(--bg-card);
+        cursor: pointer;
+        box-shadow: 0 3px 10px rgba(233, 69, 96, 0.45);
+    }
+    input[type="range"]::-moz-range-thumb {
+        width: 44px;
+        height: 44px;
+        border-radius: 50%;
+        background: var(--accent);
+        border: 3px solid var(--bg-card);
+        cursor: pointer;
+        box-shadow: 0 3px 10px rgba(233, 69, 96, 0.45);
     }
     .tabs {
         display: flex;
@@ -153,19 +249,23 @@
         list-style: none;
     }
     .player-list li {
-        padding: 12px;
+        padding: 16px 14px;
+        min-height: 56px;
         background: var(--bg-secondary);
-        border-radius: 8px;
+        border-radius: 10px;
         margin-bottom: 8px;
         display: flex;
         align-items: center;
         justify-content: space-between;
+        font-size: 1.05rem;
+        font-weight: 500;
+        border-left: 4px solid transparent;
     }
-    .player-list li.team-a { border-left: 4px solid var(--team-a); }
-    .player-list li.team-b { border-left: 4px solid var(--team-b); }
-    .player-list li.team-c { border-left: 4px solid var(--team-c); }
-    .player-list li.team-d { border-left: 4px solid var(--team-d); }
-    .player-list li.team-atg { border-left: 4px solid var(--team-atg); }
+    .player-list li.team-a { border-left-color: var(--team-a); }
+    .player-list li.team-b { border-left-color: var(--team-b); }
+    .player-list li.team-c { border-left-color: var(--team-c); }
+    .player-list li.team-d { border-left-color: var(--team-d); }
+    .player-list li.team-atg { border-left-color: var(--team-atg); }
     .team-label-tag {
         font-weight: bold;
         padding: 2px 8px;
@@ -193,42 +293,52 @@
     }
     .team-count-selector {
         display: flex;
-        gap: 6px;
+        gap: 8px;
         margin-top: 6px;
     }
     .team-count-selector .tc-btn {
         flex: 1;
+        min-height: 60px;
         padding: 12px;
         background: var(--bg-secondary);
         border: 1px solid var(--border);
-        border-radius: 8px;
+        border-radius: 10px;
         text-align: center;
         cursor: pointer;
         font-weight: bold;
+        font-size: 1.25rem;
         color: var(--text-primary);
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        transition: background 0.1s, border-color 0.1s, transform 0.05s;
     }
+    .team-count-selector .tc-btn:active { transform: scale(0.96); }
     .team-count-selector .tc-btn.active {
         background: var(--accent);
         border-color: var(--accent);
+        box-shadow: 0 4px 12px rgba(233, 69, 96, 0.3);
     }
     .claim-header {
         text-align: center;
-        font-size: 1.3rem;
-        color: var(--text-secondary);
-        margin-bottom: 6px;
+        font-size: 1.4rem;
+        color: var(--text-primary);
+        margin-bottom: 4px;
+        font-weight: 600;
     }
     .claim-counts {
         display: flex;
         justify-content: center;
         gap: 8px;
         flex-wrap: wrap;
-        margin: 10px 0;
+        margin: 8px 0 4px;
         font-size: 0.85rem;
     }
     .claim-counts span {
-        padding: 4px 10px;
-        border-radius: 6px;
+        padding: 6px 12px;
+        border-radius: 8px;
         background: var(--bg-secondary);
+        border: 1px solid var(--border);
     }
     .slot-badge {
         background: var(--accent);
@@ -240,25 +350,27 @@
     }
     .big-number {
         text-align: center;
-        font-size: 10rem;
-        font-weight: bold;
+        font-size: 9rem;
+        font-weight: 900;
         color: var(--accent);
-        margin: 20px 0;
+        margin: 8px 0 4px;
         line-height: 1;
+        text-shadow: 0 4px 28px rgba(233, 69, 96, 0.35);
     }
     .phrase-display {
         flex: 1;
         display: flex;
         align-items: center;
         justify-content: center;
-        padding: 20px;
+        padding: 12px 8px;
         text-align: center;
-        font-size: 4.5rem;
-        font-weight: bold;
-        line-height: 1.1;
+        font-size: 4.8rem;
+        font-weight: 900;
+        line-height: 1.05;
         text-transform: uppercase;
         word-break: break-word;
         hyphens: auto;
+        letter-spacing: -0.5px;
     }
     .waiting-screen {
         flex: 1;
@@ -282,29 +394,35 @@
         display: flex;
         justify-content: space-around;
         align-items: center;
-        padding: 16px;
+        padding: 10px 12px;
         background: var(--bg-card);
+        border: 1px solid var(--border);
         border-radius: 12px;
-        margin-bottom: 16px;
+        margin-bottom: 12px;
+        margin-top: max(0px, env(safe-area-inset-top));
     }
     .score-box {
         text-align: center;
         flex: 1;
     }
     .score-box .team-label {
-        font-size: 0.9rem;
+        font-size: 0.75rem;
         color: var(--text-secondary);
         text-transform: uppercase;
+        letter-spacing: 1px;
+        font-weight: 600;
     }
     .score-box .score {
-        font-size: 3rem;
-        font-weight: bold;
+        font-size: 2.4rem;
+        font-weight: 900;
+        line-height: 1.1;
+        font-variant-numeric: tabular-nums;
     }
     .score-box.team-a .score { color: var(--team-a); }
     .score-box.team-b .score { color: var(--team-b); }
     .score-box.team-c .score { color: var(--team-c); }
     .score-box.team-d .score { color: var(--team-d); }
-    .score-sep { font-size: 2rem; color: var(--text-secondary); padding: 0 10px; }
+    .score-sep { font-size: 1.4rem; color: var(--text-secondary); padding: 0 4px; }
 
     .theme-a .phrase-display { color: var(--team-a); }
     .theme-b .phrase-display { color: var(--team-b); }
@@ -361,13 +479,30 @@
     .team-colors-preview .team-box.b { background: var(--team-b); color: #0f0f1a; }
 
     @media (max-width: 480px) {
-        .big-number { font-size: 8rem; }
-        .phrase-display { font-size: 3.5rem; }
+        .app { padding-left: max(12px, env(safe-area-inset-left)); padding-right: max(12px, env(safe-area-inset-right)); }
+        .big-number { font-size: 7rem; }
+        .phrase-display { font-size: 3.8rem; }
         h1 { font-size: 1.6rem; }
+        .panel { padding: 16px; margin-bottom: 12px; }
+        .btn.huge { min-height: 200px; font-size: 2.5rem; }
+        .score-box .score { font-size: 2rem; }
+    }
+    @media (max-width: 360px) {
+        .phrase-display { font-size: 3rem; }
+        .big-number { font-size: 6rem; }
+        .btn.huge { min-height: 170px; font-size: 2.2rem; }
+        .panel { padding: 14px; }
+    }
+    @media (max-height: 700px) {
+        .panel { padding: 14px; margin-bottom: 10px; }
+        .big-number { font-size: 6rem; margin: 4px 0; }
+        .btn.huge { min-height: 160px; font-size: 2.2rem; }
     }
     @media (max-height: 600px) {
         .phrase-display { font-size: 3rem; }
-        .big-number { font-size: 6rem; }
+        .big-number { font-size: 5rem; }
+        .btn.huge { min-height: 130px; font-size: 1.9rem; }
+        h1 { font-size: 1.3rem; margin-bottom: 4px; }
     }
 
     .back-link {
@@ -387,8 +522,8 @@
     }
     #mute-toggle {
         position: fixed;
-        top: 12px;
-        right: 12px;
+        top: max(12px, env(safe-area-inset-top));
+        right: max(12px, env(safe-area-inset-right));
         width: 44px;
         height: 44px;
         border-radius: 50%;
@@ -404,26 +539,30 @@
         z-index: 1000;
         padding: 0;
         -webkit-tap-highlight-color: transparent;
+        backdrop-filter: blur(6px);
+        -webkit-backdrop-filter: blur(6px);
     }
     #mute-toggle:active { background: rgba(0, 0, 0, 0.65); }
     #arcade-back {
         position: fixed;
-        top: 12px;
-        left: 12px;
-        width: 36px;
-        height: 36px;
+        top: max(12px, env(safe-area-inset-top));
+        left: max(12px, env(safe-area-inset-left));
+        width: 40px;
+        height: 40px;
         border-radius: 50%;
         background: rgba(0, 0, 0, 0.45);
         color: #fff;
-        font-size: 1.1rem;
+        font-size: 1.2rem;
         line-height: 1;
         display: flex;
         align-items: center;
         justify-content: center;
         text-decoration: none;
         z-index: 1000;
-        opacity: 0.7;
+        opacity: 0.8;
         -webkit-tap-highlight-color: transparent;
+        backdrop-filter: blur(6px);
+        -webkit-backdrop-filter: blur(6px);
     }
     #arcade-back:hover, #arcade-back:active {
         background: rgba(0, 0, 0, 0.7);
@@ -431,34 +570,78 @@
     }
     .pause-btn {
         position: fixed;
-        top: 14px;
-        left: 60px;
-        padding: 6px 12px;
-        border-radius: 16px;
+        top: calc(max(12px, env(safe-area-inset-top)) + 2px);
+        left: calc(max(12px, env(safe-area-inset-left)) + 52px);
+        min-height: 36px;
+        padding: 8px 14px;
+        border-radius: 18px;
         background: rgba(0, 0, 0, 0.55);
         color: #fff;
         border: 1px solid rgba(255,255,255,0.2);
-        font-size: 0.8rem;
+        font-size: 0.85rem;
+        font-weight: 600;
         cursor: pointer;
         z-index: 999;
-        opacity: 0.75;
+        opacity: 0.85;
+        backdrop-filter: blur(6px);
+        -webkit-backdrop-filter: blur(6px);
     }
     .pause-btn:hover, .pause-btn:active {
         opacity: 1;
         background: rgba(0, 0, 0, 0.8);
     }
+    /* Playing screens: leave room for fixed top buttons */
+    #screen-playing-current.active,
+    #screen-playing-wait.active,
+    #screen-round-end.active {
+        padding-top: 4px;
+    }
+    /* Hide arcade back link during active play to avoid accidental exits */
+    body.playing #arcade-back { display: none; }
+    /* On active-playing screens, hide the h1 title to maximize phrase real estate */
+    body.playing > .app > h1 { display: none; }
     .pregame-recap {
         background: var(--bg-secondary);
-        border-radius: 8px;
-        padding: 10px;
-        margin: 10px 0;
-        font-size: 0.85rem;
+        border: 1px solid var(--border);
+        border-radius: 10px;
+        padding: 12px 14px;
+        margin: 8px 0 0;
+        font-size: 0.9rem;
         color: var(--text-secondary);
     }
     .pregame-recap .recap-row {
         display: flex;
         justify-content: space-between;
-        padding: 4px 0;
+        padding: 5px 0;
+        border-bottom: 1px solid rgba(255,255,255,0.04);
+    }
+    .pregame-recap .recap-row:last-child { border-bottom: none; }
+    .pregame-recap .recap-row strong { color: var(--text-primary); font-weight: 600; }
+    /* Selection screen: claim button takes up most of screen */
+    #screen-selection {
+        gap: 0;
+    }
+    #screen-selection .panel {
+        flex-shrink: 0;
+    }
+    /* Pregame: tighten layout to fit on small phones */
+    #screen-pregame .panel { margin-bottom: 10px; }
+    #screen-pregame .panel:first-of-type { padding: 14px 16px; }
+    /* Fixed bottom safe area for buttons that aren't .got-it */
+    #screen-playing-current { padding-bottom: max(8px, env(safe-area-inset-bottom)); }
+    /* Score-board on playing screens already sits below h1 + fixed UI; just keep clean spacing */
+    /* Room code: tighter, more thumb-friendly */
+    .room-code {
+        font-size: 2.6rem;
+        letter-spacing: 6px;
+    }
+    /* Reveal screen vertical balance */
+    #screen-reveal .panel { flex-shrink: 0; }
+    /* Visual polish: active screen subtle fade-in */
+    .screen.active { animation: screenFade 0.18s ease-out; }
+    @keyframes screenFade {
+        from { opacity: 0.6; transform: translateY(2px); }
+        to { opacity: 1; transform: translateY(0); }
     }
 </style>
 </head>
@@ -511,13 +694,28 @@
                 <div class="tc-btn" data-n="4" onclick="setTeamCount(4)">4</div>
             </div>
             <div class="team-config-info" id="team-config-info">Add players to see team breakdown</div>
-            <label>Score to win</label>
-            <input type="number" id="setting-score" value="7" min="1" max="20">
-            <label>Round minimum seconds</label>
-            <input type="number" id="setting-min" value="45" min="15" max="180">
-            <label>Round maximum seconds</label>
-            <input type="number" id="setting-max" value="75" min="15" max="240">
-            <button class="btn" id="btn-start-selection" onclick="hostStartSelection()">Start Turn Selection</button>
+            <label>🏆 Score to win</label>
+            <div class="stepper" data-stepper="setting-score" data-min="1" data-max="20" data-step="1">
+                <button type="button" class="step-btn" data-step-dir="-1" aria-label="Decrease score to win">−</button>
+                <div class="step-value"><span data-step-value>7</span></div>
+                <button type="button" class="step-btn" data-step-dir="1" aria-label="Increase score to win">+</button>
+                <input type="hidden" id="setting-score" value="7">
+            </div>
+            <label>⏱ Round minimum seconds</label>
+            <div class="stepper" data-stepper="setting-min" data-min="15" data-max="180" data-step="5">
+                <button type="button" class="step-btn" data-step-dir="-1" aria-label="Decrease minimum seconds">−</button>
+                <div class="step-value"><span data-step-value>45</span><span class="unit">s</span></div>
+                <button type="button" class="step-btn" data-step-dir="1" aria-label="Increase minimum seconds">+</button>
+                <input type="hidden" id="setting-min" value="45">
+            </div>
+            <label>⏱ Round maximum seconds</label>
+            <div class="stepper" data-stepper="setting-max" data-min="15" data-max="240" data-step="5">
+                <button type="button" class="step-btn" data-step-dir="-1" aria-label="Decrease maximum seconds">−</button>
+                <div class="step-value"><span data-step-value>75</span><span class="unit">s</span></div>
+                <button type="button" class="step-btn" data-step-dir="1" aria-label="Increase maximum seconds">+</button>
+                <input type="hidden" id="setting-max" value="75">
+            </div>
+            <button class="btn" id="btn-start-selection" onclick="hostStartSelection()" style="margin-top:18px;">Start Turn Selection</button>
         </div>
         <div id="lobby-guest-status" class="status-line" style="display:none;">Connected! Waiting for host to start...</div>
     </div>
@@ -1751,6 +1949,53 @@ document.addEventListener('click', ensureAudio, { once: true });
 document.getElementById('room-code-input').addEventListener('input', e => {
     e.target.value = e.target.value.toUpperCase();
 });
+
+// ============================================================
+// STEPPER (lobby score / min / max time)
+// ============================================================
+function initSteppers() {
+    document.querySelectorAll('.stepper').forEach(stepper => {
+        const targetId = stepper.dataset.stepper;
+        const min = parseInt(stepper.dataset.min);
+        const max = parseInt(stepper.dataset.max);
+        const step = parseInt(stepper.dataset.step) || 1;
+        const valueEl = stepper.querySelector('[data-step-value]');
+        const hidden = document.getElementById(targetId);
+        const decBtn = stepper.querySelector('[data-step-dir="-1"]');
+        const incBtn = stepper.querySelector('[data-step-dir="1"]');
+        const refresh = () => {
+            const v = parseInt(hidden.value) || min;
+            valueEl.textContent = v;
+            decBtn.disabled = v <= min;
+            incBtn.disabled = v >= max;
+        };
+        const change = (delta) => {
+            let v = parseInt(hidden.value) || min;
+            v += delta * step;
+            if (v < min) v = min;
+            if (v > max) v = max;
+            hidden.value = v;
+            refresh();
+            // Fire input event so any listeners can react
+            hidden.dispatchEvent(new Event('input', { bubbles: true }));
+            hidden.dispatchEvent(new Event('change', { bubbles: true }));
+        };
+        decBtn.addEventListener('click', () => change(-1));
+        incBtn.addEventListener('click', () => change(1));
+        refresh();
+    });
+}
+initSteppers();
+
+// ============================================================
+// BODY CLASS for active-play (used to hide arcade-back during play)
+// ============================================================
+const _origShowScreen = showScreen;
+showScreen = function(id) {
+    _origShowScreen(id);
+    const playingScreens = ['screen-playing-current', 'screen-playing-wait', 'screen-round-end'];
+    document.body.classList.toggle('playing', playingScreens.includes(id));
+};
 </script>
 </body>
 </html>
