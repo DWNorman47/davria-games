@@ -909,7 +909,12 @@ function calcTeamConfig(numPlayers, numTeams) {
         atgCount: numPlayers % numTeams
     };
 }
-function slotToTeam(slot, teamSize) {
+function slotToTeam(slot, teamSize, numTeams) {
+    // Alternate teams by slot: slot 1→A, 2→B, 3→A, 4→B, ... so that
+    // turn order naturally alternates between teams during play.
+    // numTeams is required for this to work; fall back to old behavior
+    // only if numTeams is missing (legacy callers).
+    if (numTeams && numTeams > 0) return (slot - 1) % numTeams;
     return Math.floor((slot - 1) / teamSize);
 }
 function totalNumberedSlots() {
@@ -1057,6 +1062,41 @@ function onRoundTimeChange() {
 }
 
 // ============================================================
+// HEARTBEAT (detects dead connections that don't fire 'close')
+// ============================================================
+let heartbeatInterval = null;
+let lastHeartbeat = 0;
+let heartbeatWatchdog = null;
+const HEARTBEAT_INTERVAL_MS = 3000;
+const HEARTBEAT_TIMEOUT_MS = 12000; // 4 missed pings before considering dead
+
+function startHostHeartbeat() {
+    stopHeartbeat();
+    heartbeatInterval = setInterval(() => {
+        try { broadcast({ type: 'ping', t: Date.now() }); } catch (e) {}
+    }, HEARTBEAT_INTERVAL_MS);
+}
+
+function startGuestHeartbeatWatchdog() {
+    stopHeartbeat();
+    lastHeartbeat = Date.now();
+    heartbeatWatchdog = setInterval(() => {
+        if (isHost) return;
+        const elapsed = Date.now() - lastHeartbeat;
+        if (elapsed > HEARTBEAT_TIMEOUT_MS) {
+            // Connection appears dead — treat as disconnect
+            stopHeartbeat();
+            handleHostDisconnect();
+        }
+    }, 2000);
+}
+
+function stopHeartbeat() {
+    if (heartbeatInterval) { clearInterval(heartbeatInterval); heartbeatInterval = null; }
+    if (heartbeatWatchdog) { clearInterval(heartbeatWatchdog); heartbeatWatchdog = null; }
+}
+
+// ============================================================
 // PEERJS - HOST
 // ============================================================
 function createGame() {
@@ -1079,6 +1119,7 @@ function createGame() {
         renderLobby();
         saveSession();
         autoSaveState();
+        startHostHeartbeat();
     });
     peer.on('connection', conn => {
         conn.on('open', () => {
@@ -1181,7 +1222,7 @@ function doClaimSlot(p) {
     if (state.numTeams === 1) {
         p.team = 0;
     } else {
-        p.team = slotToTeam(state.currentSelectionSlot, state.teamSize);
+        p.team = slotToTeam(state.currentSelectionSlot, state.teamSize, state.numTeams);
     }
     p.isATG = false;
     state.currentSelectionSlot++;
@@ -1556,9 +1597,11 @@ function joinGame() {
             showScreen('screen-lobby');
             document.getElementById('lobby-guest-status').style.display = '';
             saveSession();
+            startGuestHeartbeatWatchdog();
         });
         hostConn.on('data', data => handleHostMessage(data));
         hostConn.on('close', () => {
+            stopHeartbeat();
             handleHostDisconnect();
         });
         hostConn.on('error', e => {
@@ -1574,6 +1617,8 @@ function joinGame() {
 let guestCurrentPhrase = '';
 const PP_HOST_BACKUP_KEY = 'phrasepass-host-backup';
 function handleHostMessage(msg) {
+    // Any incoming message proves the connection is alive — refresh heartbeat
+    lastHeartbeat = Date.now();
     switch (msg.type) {
         case 'state_update':
             Object.assign(state, msg.state);
@@ -1590,6 +1635,9 @@ function handleHostMessage(msg) {
             try {
                 sessionStorage.setItem(PP_HOST_BACKUP_KEY, JSON.stringify(msg.state));
             } catch (e) { /* ignore */ }
+            break;
+        case 'ping':
+            // Heartbeat from host; lastHeartbeat already updated above
             break;
     }
 }
@@ -1718,7 +1766,7 @@ function renderSelection() {
         if (state.numTeams === 1) {
             headerEl.textContent = 'Slot ' + state.currentSelectionSlot;
         } else {
-            const teamIdx = slotToTeam(state.currentSelectionSlot, state.teamSize);
+            const teamIdx = slotToTeam(state.currentSelectionSlot, state.teamSize, state.numTeams);
             headerEl.innerHTML = 'Slot ' + state.currentSelectionSlot + ' — <span class="team-label-tag ' + TEAM_CLASS_SUFFIX[teamIdx] + '">Team ' + TEAM_LETTERS[teamIdx] + '</span>';
         }
     }
@@ -2203,6 +2251,7 @@ function reconnectAsHost(session) {
                 break;
         }
         broadcastState();
+        startHostHeartbeat();
     });
     peer.on('connection', conn => {
         conn.on('open', () => {
@@ -2251,10 +2300,12 @@ function reconnectAsGuest(session) {
             // Host's name-based reconnect logic will reattach us to our slot/team.
             hostConn.send({ type: 'join_lobby', name: myName });
             saveSession();
+            startGuestHeartbeatWatchdog();
             // The next state_update from the host will drive UI via updateUIFromState()
         });
         hostConn.on('data', data => handleHostMessage(data));
         hostConn.on('close', () => {
+            stopHeartbeat();
             handleHostDisconnect();
         });
         hostConn.on('error', e => {
@@ -2290,6 +2341,7 @@ function handleHostDisconnect() {
 
 function leaveGame() {
     // Original "disconnected" behavior: clear session, tear down peer, back to entry
+    stopHeartbeat();
     try { if (hostConn) hostConn.close(); } catch (e) {}
     try { if (peer) peer.destroy(); } catch (e) {}
     hostConn = null;
@@ -2432,6 +2484,7 @@ function takeOverAsHost() {
             }
             // Send full state to any guests that may already reconnect; also seeds backup
             broadcastState();
+            startHostHeartbeat();
         });
         peer.on('connection', conn => {
             conn.on('open', () => {
