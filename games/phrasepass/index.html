@@ -953,9 +953,18 @@ let audioCtx = null;
 // ============================================================
 // UI HELPERS
 // ============================================================
+// Screens where we want to keep the phone awake (active gameplay only)
+const PP_AWAKE_SCREENS = new Set(['screen-playing-current', 'screen-playing-wait']);
+
 function showScreen(id) {
     document.querySelectorAll('.screen').forEach(s => s.classList.remove('active'));
     document.getElementById(id).classList.add('active');
+    // Wake lock: only during active gameplay
+    if (PP_AWAKE_SCREENS.has(id)) {
+        requestWakeLock();
+    } else {
+        releaseWakeLock();
+    }
 }
 function switchTab(which) {
     document.getElementById('tab-create').classList.toggle('active', which === 'create');
@@ -1001,6 +1010,36 @@ function ensureAudio() {
     }
     if (audioCtx && audioCtx.state === 'suspended') audioCtx.resume();
 }
+
+// ============================================================
+// SCREEN WAKE LOCK (keep phone awake during the game)
+// ============================================================
+let wakeLock = null;
+async function requestWakeLock() {
+    if (!('wakeLock' in navigator)) return;
+    try {
+        wakeLock = await navigator.wakeLock.request('screen');
+        wakeLock.addEventListener('release', () => { wakeLock = null; });
+    } catch (e) {
+        // User gesture not registered yet, or lock denied — silent fail
+    }
+}
+function releaseWakeLock() {
+    if (wakeLock) {
+        try { wakeLock.release(); } catch (e) {}
+        wakeLock = null;
+    }
+}
+// Re-acquire when the page becomes visible again (browser auto-releases on hide)
+document.addEventListener('visibilitychange', () => {
+    if (document.visibilityState === 'visible' && !wakeLock) {
+        const activeScreen = document.querySelector('.screen.active');
+        // Only re-acquire if we're on an active gameplay screen
+        if (activeScreen && typeof PP_AWAKE_SCREENS !== 'undefined' && PP_AWAKE_SCREENS.has(activeScreen.id)) {
+            requestWakeLock();
+        }
+    }
+});
 function playBeep(freq, duration, volume) {
     if (soundMuted) return;
     if (!audioCtx) return;
