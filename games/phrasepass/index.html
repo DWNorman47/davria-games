@@ -543,6 +543,30 @@
         -webkit-backdrop-filter: blur(6px);
     }
     #mute-toggle:active { background: rgba(0, 0, 0, 0.65); }
+    #refresh-btn {
+        position: fixed;
+        top: max(12px, env(safe-area-inset-top));
+        right: calc(max(12px, env(safe-area-inset-right)) + 56px);
+        width: 44px;
+        height: 44px;
+        border-radius: 50%;
+        border: none;
+        background: rgba(0, 0, 0, 0.45);
+        color: #fff;
+        font-size: 1.25rem;
+        line-height: 1;
+        display: none; /* hidden until in a room */
+        align-items: center;
+        justify-content: center;
+        cursor: pointer;
+        z-index: 1000;
+        padding: 0;
+        -webkit-tap-highlight-color: transparent;
+        backdrop-filter: blur(6px);
+        -webkit-backdrop-filter: blur(6px);
+    }
+    #refresh-btn.visible { display: flex; }
+    #refresh-btn:active { background: rgba(0, 0, 0, 0.65); }
     #arcade-back {
         position: fixed;
         top: max(12px, env(safe-area-inset-top));
@@ -647,6 +671,7 @@
 </head>
 <body>
 <a id="arcade-back" href="../../index.html" aria-label="Back to Arcade" title="Back to Arcade" onclick="try{clearSession();}catch(e){}">←</a>
+<button id="refresh-btn" type="button" onclick="refreshPage()" aria-label="Refresh page" title="Refresh">⟳</button>
 <button id="mute-toggle" type="button" onclick="toggleMute()" aria-label="Toggle sound">🔇</button>
 <div class="app">
     <h1>📱 Phrase Pass</h1>
@@ -955,6 +980,12 @@ let audioCtx = null;
 // ============================================================
 // Screens where we want to keep the phone awake (active gameplay only)
 const PP_AWAKE_SCREENS = new Set(['screen-playing-current', 'screen-playing-wait']);
+// Screens where the refresh button should be visible (anywhere "in a room")
+const PP_REFRESH_SCREENS = new Set([
+    'screen-lobby', 'screen-selection', 'screen-reveal', 'screen-pregame',
+    'screen-playing-current', 'screen-playing-wait', 'screen-round-end',
+    'screen-host-disconnected'
+]);
 
 function showScreen(id) {
     document.querySelectorAll('.screen').forEach(s => s.classList.remove('active'));
@@ -965,6 +996,17 @@ function showScreen(id) {
     } else {
         releaseWakeLock();
     }
+    // Refresh button: visible only when in a room
+    const refreshBtn = document.getElementById('refresh-btn');
+    if (refreshBtn) {
+        refreshBtn.classList.toggle('visible', PP_REFRESH_SCREENS.has(id));
+    }
+}
+
+function refreshPage() {
+    // Session info is already in sessionStorage, so the auto-reconnect
+    // logic at page load will rejoin the same room as the same player.
+    window.location.reload();
 }
 function switchTab(which) {
     document.getElementById('tab-create').classList.toggle('active', which === 'create');
