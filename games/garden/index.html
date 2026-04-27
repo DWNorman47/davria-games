@@ -408,6 +408,20 @@ input, select {
             <button class="btn" id="newGameBtn" style="display:none;margin-top:16px;">New Game</button>
         </div>
     </div>
+
+    <!-- HOST DISCONNECTED SCREEN -->
+    <div class="screen" id="screenHostDisconnected">
+        <div style="padding:12px;">
+            <div class="panel" style="text-align:center;">
+                <h2 style="color:var(--accent);">Host Disconnected</h2>
+                <p style="color:var(--text-secondary); margin:12px 0;">The host has lost connection. You can take over and continue the game with everyone else.</p>
+                <p id="hostDisconnectedStatus" style="margin-top:8px; font-size:0.85rem; color:var(--text-secondary);"></p>
+            </div>
+            <button class="btn" id="btnTakeOver" style="margin-bottom:10px;">Take Over as Host</button>
+            <button class="btn btn-secondary" id="btnTryReconnect" style="margin-bottom:10px;">Try Reconnect</button>
+            <button class="btn btn-secondary" id="btnLeaveGame">Leave to Main Menu</button>
+        </div>
+    </div>
 </div>
 
 <!-- Minigame overlay -->
@@ -430,6 +444,7 @@ input, select {
 </div>
 
 <div class="toast" id="toast"></div>
+<button id="refresh-btn" type="button" onclick="refreshPage()" aria-label="Refresh page" title="Refresh">⟳</button>
 
 <script>
 // ======================== CONSTANTS ========================
@@ -487,12 +502,27 @@ let memoryBoard = [];
 let selectedBasketIndex = null;
 let fillingBasket = null; // { basketIdx, slots: [] }
 
+// Screens where we want to keep the phone awake (active gameplay only)
+const GARDEN_AWAKE_SCREENS = new Set(['screenMain', 'screenDDR']);
+// Screens where the refresh button should be visible (anywhere "in a room")
+const GARDEN_REFRESH_SCREENS = new Set([
+    'screenLobby', 'screenMain', 'screenDDR', 'screenGameEnd', 'screenHostDisconnected'
+]);
+
 // ======================== HELPERS ========================
 function $(id) { return document.getElementById(id); }
 function show(screenId) {
     document.querySelectorAll('.screen').forEach(s => s.classList.remove('active'));
-    $(screenId).classList.add('active');
+    const el = $(screenId);
+    if (el) el.classList.add('active');
     currentScreen = screenId;
+    // Wake lock based on current screen + game phase
+    updateWakeLockForCurrentScreen();
+    // Refresh button visibility
+    const refreshBtn = $('refresh-btn');
+    if (refreshBtn) {
+        refreshBtn.classList.toggle('visible', GARDEN_REFRESH_SCREENS.has(screenId));
+    }
 }
 function showToast(msg, type = '', duration = 2500) {
     const t = $('toast');
@@ -589,6 +619,7 @@ async function createGame() {
     gameState.players['host'] = createPlayerState('host', myName, 0);
     saveSession();
     showLobby();
+    startHostHeartbeat();
 
     peer.on('connection', conn => {
         conn.on('open', () => {
@@ -608,7 +639,31 @@ function handleHostMessage(conn, msg) {
     const pid = conn.peer;
     switch(msg.type) {
         case 'join_game': {
-            if (gameState.phase !== 'lobby') { conn.send({ type: 'error', message: 'Game already started' }); return; }
+            // Allow rejoin mid-game by name match (used after host migration / page refresh).
+            if (gameState.phase !== 'lobby') {
+                const incomingNameLower = (msg.name || '').trim().toLowerCase();
+                const existingKey = Object.keys(gameState.players).find(k => {
+                    const p = gameState.players[k];
+                    return p && p.id !== 'host' && p.name && p.name.toLowerCase() === incomingNameLower;
+                });
+                if (existingKey && existingKey !== pid) {
+                    // Re-key the player record to the new peer id so subsequent messages route correctly.
+                    const restored = gameState.players[existingKey];
+                    restored.id = pid;
+                    gameState.players[pid] = restored;
+                    delete gameState.players[existingKey];
+                    guestConns.set(conn.peer, conn);
+                    sendPlayerState(pid);
+                    return;
+                }
+                if (existingKey === pid) {
+                    guestConns.set(conn.peer, conn);
+                    sendPlayerState(pid);
+                    return;
+                }
+                conn.send({ type: 'error', message: 'Game already started' });
+                return;
+            }
             if (Object.keys(gameState.players).length >= 12) { conn.send({ type: 'error', message: 'Game is full' }); return; }
             const idx = Object.keys(gameState.players).length;
             gameState.players[pid] = createPlayerState(pid, msg.name, idx);
@@ -1022,10 +1077,14 @@ async function joinGame() {
         hostConn.on('open', () => {
             hostConn.send({ type: 'join_game', name: myName });
             saveSession();
+            startGuestHeartbeatWatchdog();
         });
 
         hostConn.on('error', () => showToast('Connection failed', 'error'));
-        hostConn.on('close', () => showToast('Disconnected from host', 'error'));
+        hostConn.on('close', () => {
+            stopHeartbeat();
+            handleHostDisconnect();
+        });
     });
     peer.on('error', (err) => {
         showToast('Peer error: ' + (err.type || err.message), 'error');
@@ -1035,6 +1094,8 @@ async function joinGame() {
 }
 
 function handleGuestMessage(msg) {
+    // Any incoming message proves the connection is alive — refresh heartbeat
+    lastHeartbeat = Date.now();
     switch(msg.type) {
         case 'state_update':
             myPlayerState = msg.playerState;
@@ -1053,6 +1114,14 @@ function handleGuestMessage(msg) {
             break;
         case 'error':
             showToast(msg.message, 'error');
+            break;
+        case 'host_state_backup':
+            try {
+                sessionStorage.setItem(GARDEN_HOST_BACKUP_KEY, JSON.stringify(msg.state));
+            } catch (e) { /* ignore */ }
+            break;
+        case 'ping':
+            // Heartbeat from host; lastHeartbeat already updated above
             break;
     }
 }
@@ -1942,6 +2011,9 @@ $('postTradeBtn').addEventListener('click', () => {
 $('modalClose').addEventListener('click', closeModal);
 $('newGameBtn').addEventListener('click', newGame);
 $('soundBtn').addEventListener('click', () => { muted = !muted; $('soundBtn').textContent = muted ? '🔇' : '🔊'; });
+$('btnTakeOver').addEventListener('click', takeOverAsHost);
+$('btnTryReconnect').addEventListener('click', tryReconnectGuest);
+$('btnLeaveGame').addEventListener('click', leaveGame);
 
 // Tab buttons
 document.querySelectorAll('.tab-btn').forEach(btn => {
@@ -2010,6 +2082,255 @@ handleHostMessage = function(conn, msg) {
 // Actually, let's just update handleSlotClick directly:
 handleSlotClick = window._handleSlotClick;
 
+// ======================== REFRESH PAGE ========================
+function refreshPage() {
+    // sessionStorage already has roomCode/name/isHost — auto-reconnect on load handles the rest.
+    window.location.reload();
+}
+window.refreshPage = refreshPage;
+
+// ======================== SCREEN WAKE LOCK ========================
+let wakeLock = null;
+async function requestWakeLock() {
+    if (!('wakeLock' in navigator)) return;
+    try {
+        wakeLock = await navigator.wakeLock.request('screen');
+        wakeLock.addEventListener('release', () => { wakeLock = null; });
+    } catch (e) { /* user gesture not registered yet — silent fail */ }
+}
+function releaseWakeLock() {
+    if (wakeLock) {
+        try { wakeLock.release(); } catch (e) {}
+        wakeLock = null;
+    }
+}
+function shouldKeepAwake() {
+    if (!GARDEN_AWAKE_SCREENS.has(currentScreen)) return false;
+    // Only during active gameplay phase
+    return !!(gameState && gameState.phase === 'playing');
+}
+function updateWakeLockForCurrentScreen() {
+    if (shouldKeepAwake()) requestWakeLock();
+    else releaseWakeLock();
+}
+// Re-acquire when the page becomes visible again (browser auto-releases on hide)
+document.addEventListener('visibilitychange', () => {
+    if (document.visibilityState === 'visible' && !wakeLock && shouldKeepAwake()) {
+        requestWakeLock();
+    }
+});
+
+// ======================== HEARTBEAT ========================
+// Detects dead connections that don't fire 'close' (e.g. phone went into the tunnel).
+let heartbeatInterval = null;
+let heartbeatWatchdog = null;
+let lastHeartbeat = 0;
+const HEARTBEAT_INTERVAL_MS = 3000;
+const HEARTBEAT_TIMEOUT_MS = 12000; // 4 missed pings before considering dead
+
+function startHostHeartbeat() {
+    stopHeartbeat();
+    heartbeatInterval = setInterval(() => {
+        try {
+            guestConns.forEach(conn => {
+                if (conn && conn.open) {
+                    try { conn.send({ type: 'ping', t: Date.now() }); } catch (e) {}
+                }
+            });
+        } catch (e) {}
+    }, HEARTBEAT_INTERVAL_MS);
+}
+
+function startGuestHeartbeatWatchdog() {
+    stopHeartbeat();
+    lastHeartbeat = Date.now();
+    heartbeatWatchdog = setInterval(() => {
+        if (isHost) return;
+        const elapsed = Date.now() - lastHeartbeat;
+        if (elapsed > HEARTBEAT_TIMEOUT_MS) {
+            stopHeartbeat();
+            handleHostDisconnect();
+        }
+    }, 2000);
+}
+
+function stopHeartbeat() {
+    if (heartbeatInterval) { clearInterval(heartbeatInterval); heartbeatInterval = null; }
+    if (heartbeatWatchdog) { clearInterval(heartbeatWatchdog); heartbeatWatchdog = null; }
+}
+
+// ======================== HOST DISCONNECT / MANUAL TAKEOVER ========================
+const GARDEN_HOST_BACKUP_KEY = 'garden-host-backup';
+
+let intentionalLeave = false;
+function handleHostDisconnect() {
+    if (isHost) return; // safety
+    if (intentionalLeave) return;
+    const statusEl = $('hostDisconnectedStatus');
+    if (statusEl) statusEl.textContent = '';
+    const btn = $('btnTakeOver');
+    if (btn) btn.disabled = false;
+    show('screenHostDisconnected');
+}
+
+function leaveGame() {
+    intentionalLeave = true;
+    stopHeartbeat();
+    try { if (hostConn) hostConn.close(); } catch (e) {}
+    try { if (peer) peer.destroy(); } catch (e) {}
+    hostConn = null;
+    peer = null;
+    clearSession();
+    try { sessionStorage.removeItem(GARDEN_HOST_BACKUP_KEY); } catch (e) {}
+    showToast('Left game', '');
+    show('screenJoin');
+    // Allow re-arming for a future session in this tab
+    setTimeout(() => { intentionalLeave = false; }, 1500);
+}
+
+function tryReconnectGuest() {
+    const session = getSession();
+    if (!session || !session.roomCode) {
+        leaveGame();
+        return;
+    }
+    const statusEl = $('hostDisconnectedStatus');
+    if (statusEl) statusEl.textContent = 'Trying to reconnect...';
+    intentionalLeave = true;
+    stopHeartbeat();
+    try { if (hostConn) hostConn.close(); } catch (e) {}
+    try { if (peer) peer.destroy(); } catch (e) {}
+    hostConn = null;
+    peer = null;
+    setTimeout(() => { intentionalLeave = false; reconnectAsGuest(session); }, 200);
+}
+
+function takeOverAsHost() {
+    let backup = null;
+    try {
+        const raw = sessionStorage.getItem(GARDEN_HOST_BACKUP_KEY);
+        backup = raw ? JSON.parse(raw) : null;
+    } catch (e) { backup = null; }
+
+    const statusEl = $('hostDisconnectedStatus');
+    if (!backup || !backup.players) {
+        if (statusEl) statusEl.textContent = 'No backup available — cannot take over.';
+        setTimeout(leaveGame, 1500);
+        return;
+    }
+
+    const btn = $('btnTakeOver');
+    if (btn) btn.disabled = true;
+    if (statusEl) statusEl.textContent = 'Claiming room as new host...';
+
+    // Tear down current peer (suppress its 'close' from re-triggering disconnect screen)
+    intentionalLeave = true;
+    stopHeartbeat();
+    try { if (hostConn) hostConn.close(); } catch (e) {}
+    try { if (peer) peer.destroy(); } catch (e) {}
+    hostConn = null;
+    peer = null;
+    guestConns.clear();
+
+    // Promote ourselves to host: find our entry by old peer id, drop the old 'host' entry,
+    // move our data under the 'host' key.
+    const oldMyId = myId;
+    const myEntry = backup.players[oldMyId];
+    if (backup.players['host']) delete backup.players['host'];
+    let promoted;
+    if (myEntry) {
+        promoted = Object.assign({}, myEntry, { id: 'host' });
+        delete backup.players[oldMyId];
+    } else {
+        // Fallback: insert a new host entry by name match (case-insensitive)
+        const myNameLower = (myName || '').toLowerCase();
+        const matchKey = Object.keys(backup.players).find(k => {
+            const p = backup.players[k];
+            return p && p.name && p.name.toLowerCase() === myNameLower;
+        });
+        if (matchKey) {
+            promoted = Object.assign({}, backup.players[matchKey], { id: 'host' });
+            delete backup.players[matchKey];
+        } else {
+            // Last resort — synthesize a fresh host record
+            promoted = createPlayerState('host', myName || 'Host', 0);
+        }
+    }
+    backup.players['host'] = promoted;
+
+    // Restore game state from backup
+    gameState = backup;
+
+    // Pause the day timer if mid-game; new host's startDayTimer below will resume it.
+    if (dayTimerInterval) { clearInterval(dayTimerInterval); dayTimerInterval = null; }
+
+    // Become host
+    isHost = true;
+    myId = PEER_PREFIX + roomCode;
+    myPlayerState = JSON.parse(JSON.stringify(promoted));
+
+    // Try to claim the host peer ID; retry on unavailable-id for up to 30s
+    const startTs = Date.now();
+    const MAX_TAKEOVER_MS = 30000;
+
+    function attempt() {
+        try { if (peer) peer.destroy(); } catch (e) {}
+        peer = new Peer(myId, { debug: 0 });
+
+        peer.on('open', () => {
+            if (statusEl) statusEl.textContent = '';
+            intentionalLeave = false;
+            saveSession();
+            // Drive UI from restored phase
+            if (gameState.phase === 'lobby') {
+                showLobby();
+            } else if (gameState.phase === 'playing') {
+                show('screenMain');
+                renderAll();
+                startDayTimer();
+            } else if (gameState.phase === 'game_end') {
+                show('screenGameEnd');
+                renderGameEnd();
+            } else {
+                showLobby();
+            }
+            // Push state to any guests that may already be reconnecting; also seeds backup
+            broadcastState();
+            startHostHeartbeat();
+        });
+        peer.on('connection', conn => {
+            conn.on('open', () => {
+                guestConns.set(conn.peer, conn);
+            });
+            conn.on('data', (msg) => handleHostMessage(conn, msg));
+            conn.on('close', () => {
+                guestConns.delete(conn.peer);
+                if (gameState && gameState.players) delete gameState.players[conn.peer];
+                broadcastState();
+            });
+            conn.on('error', e => console.warn('conn error', e));
+        });
+        peer.on('error', err => {
+            console.error('takeover peer error', err);
+            if (err.type === 'unavailable-id') {
+                const elapsed = Date.now() - startTs;
+                if (elapsed < MAX_TAKEOVER_MS) {
+                    if (statusEl) statusEl.textContent = 'Old host still tracked — retrying (' + Math.ceil((MAX_TAKEOVER_MS - elapsed) / 1000) + 's left)...';
+                    setTimeout(attempt, 2000);
+                } else {
+                    if (statusEl) statusEl.textContent = 'Could not claim room. Please try again or leave.';
+                    if (btn) btn.disabled = false;
+                    isHost = false;
+                }
+            } else {
+                if (statusEl) statusEl.textContent = 'Error: ' + (err.type || 'unknown');
+                if (btn) btn.disabled = false;
+            }
+        });
+    }
+    attempt();
+}
+
 // ======================== SESSION STORAGE FOR AUTO-RECONNECT ========================
 function saveSession() {
     try {
@@ -2040,6 +2361,16 @@ function autoSaveState() {
     if (!isHost) return;
     try {
         sessionStorage.setItem('garden-autosave', JSON.stringify(gameState));
+    } catch (e) { /* ignore */ }
+    // Broadcast a full-state backup to all guests so any of them can take over as host.
+    try {
+        const fullState = JSON.parse(JSON.stringify(gameState));
+        const backupMsg = { type: 'host_state_backup', state: fullState };
+        guestConns.forEach(conn => {
+            if (conn && conn.open) {
+                try { conn.send(backupMsg); } catch (e) {}
+            }
+        });
     } catch (e) { /* ignore */ }
 }
 
@@ -2099,6 +2430,7 @@ function reconnectAsHost(session) {
             renderGameEnd();
         }
         showToast('Reconnected! Room: ' + roomCode, 'success');
+        startHostHeartbeat();
     }).catch(() => {
         clearTimeout(timeout);
         showToast('Could not reclaim room', 'error');
@@ -2130,10 +2462,11 @@ function reconnectAsGuest(session) {
         hostConn.on('open', () => {
             clearTimeout(timeout);
             hostConn.send({ type: 'join_game', name: myName });
+            startGuestHeartbeatWatchdog();
         });
         hostConn.on('close', () => {
-            showToast('Host not available', 'error');
-            clearSession();
+            stopHeartbeat();
+            handleHostDisconnect();
         });
         hostConn.on('error', () => {
             clearTimeout(timeout);

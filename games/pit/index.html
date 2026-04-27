@@ -304,6 +304,18 @@ let myName = '';
 let roomCode = '';
 let muted = false;
 
+// Session-storage keys for auto-reconnect / host migration
+const PIT_SESSION_KEY = 'pit-session';
+const PIT_AUTOSAVE_KEY = 'pit-autosave';
+const PIT_HOST_BACKUP_KEY = 'pit-host-backup';
+
+// Heartbeat (detects dead connections that don't fire 'close')
+let heartbeatInterval = null;
+let heartbeatWatchdog = null;
+let lastHeartbeat = 0;
+const HEARTBEAT_INTERVAL_MS = 3000;
+const HEARTBEAT_TIMEOUT_MS = 12000;
+
 // Game state (host-authoritative)
 let state = {
     phase: 'lobby',
@@ -403,6 +415,72 @@ function darkenColor(hex, amount = 0.3) {
     return `rgb(${r},${g},${b})`;
 }
 
+// ======================== HEARTBEAT ========================
+function startHostHeartbeat() {
+    stopHeartbeat();
+    heartbeatInterval = setInterval(() => {
+        guestConns.forEach((conn) => {
+            if (!conn || !conn.open) return;
+            try { conn.send({ type: 'ping', t: Date.now() }); } catch (e) {}
+        });
+    }, HEARTBEAT_INTERVAL_MS);
+}
+
+function startGuestHeartbeatWatchdog() {
+    stopHeartbeat();
+    lastHeartbeat = Date.now();
+    heartbeatWatchdog = setInterval(() => {
+        if (isHost) return;
+        const elapsed = Date.now() - lastHeartbeat;
+        if (elapsed > HEARTBEAT_TIMEOUT_MS) {
+            stopHeartbeat();
+            handleHostDisconnect();
+        }
+    }, 2000);
+}
+
+function stopHeartbeat() {
+    if (heartbeatInterval) { clearInterval(heartbeatInterval); heartbeatInterval = null; }
+    if (heartbeatWatchdog) { clearInterval(heartbeatWatchdog); heartbeatWatchdog = null; }
+}
+
+// ======================== SESSION STORAGE ========================
+function saveSession() {
+    try {
+        sessionStorage.setItem(PIT_SESSION_KEY, JSON.stringify({
+            isHost: isHost,
+            roomCode: roomCode,
+            myName: myName,
+            myPeerId: myId
+        }));
+    } catch (e) { /* ignore */ }
+}
+function clearSession() {
+    try {
+        sessionStorage.removeItem(PIT_SESSION_KEY);
+        sessionStorage.removeItem(PIT_AUTOSAVE_KEY);
+    } catch (e) { /* ignore */ }
+}
+function getSession() {
+    try {
+        const raw = sessionStorage.getItem(PIT_SESSION_KEY);
+        return raw ? JSON.parse(raw) : null;
+    } catch (e) { return null; }
+}
+function autoSaveState() {
+    if (!isHost) return;
+    try {
+        const snapshot = {
+            phase: state.phase,
+            players: state.players,
+            commodities: state.commodities,
+            roundWinner: state.roundWinner,
+            targetScore: state.targetScore
+        };
+        sessionStorage.setItem(PIT_AUTOSAVE_KEY, JSON.stringify(snapshot));
+    } catch (e) { /* ignore */ }
+}
+
 // ======================== URL AUTO-JOIN ========================
 function checkUrlJoin() {
     const params = new URLSearchParams(window.location.search);
@@ -449,25 +527,62 @@ async function createGame() {
         conn.on('data', (msg) => handleHostMessage(conn, msg));
         conn.on('close', () => {
             guestConns.delete(conn.peer);
-            state.players = state.players.filter(p => p.id !== conn.peer);
+            // During lobby: drop the player. Once playing, keep their seat so they
+            // can reconnect by name and resume their hand/score.
+            if (state.phase === 'lobby') {
+                state.players = state.players.filter(p => p.id !== conn.peer);
+            }
             broadcastState();
         });
         conn.on('error', e => console.warn('conn error', e));
     });
 
+    saveSession();
+    autoSaveState();
+    startHostHeartbeat();
     showLobby();
 }
 
 function handleHostMessage(conn, msg) {
     switch(msg.type) {
         case 'join_game': {
-            if (state.phase !== 'lobby') { conn.send({ type: 'error', message: 'Game already started' }); return; }
-            if (state.players.length >= 8) { conn.send({ type: 'error', message: 'Game is full' }); return; }
-            const idx = state.players.length;
-            state.players.push({
-                id: conn.peer, name: msg.name, color: PLAYER_COLORS[idx % PLAYER_COLORS.length],
-                hand: [], score: 0, selectedCards: [], holdingTarget: null
-            });
+            const incomingName = (msg.name || '').trim();
+            // First: peer-id match (rare — usually peer ids change on reconnect)
+            let existing = state.players.find(p => p.id === conn.peer);
+            // Then: returning player by name (case-insensitive). This is what
+            // actually rebinds a reconnecting guest to their slot/hand/score.
+            if (!existing && incomingName) {
+                existing = state.players.find(p =>
+                    p.id !== 'host' && p.name && p.name.toLowerCase() === incomingName.toLowerCase()
+                );
+                if (existing) {
+                    // Update peer id to the new one — preserves hand/score/selected/etc.
+                    const oldId = existing.id;
+                    existing.id = conn.peer;
+                    // Clear any transient hold/selection from before disconnect
+                    existing.holdingTarget = null;
+                    existing.selectedCards = [];
+                    if (oldId !== conn.peer) {
+                        // If a stale conn for the old id is around, drop it
+                        const stale = guestConns.get(oldId);
+                        if (stale && stale !== conn) { try { stale.close(); } catch(e) {} }
+                        guestConns.delete(oldId);
+                    }
+                }
+            }
+            if (!existing) {
+                // New player — only allowed in lobby
+                if (state.phase !== 'lobby') { conn.send({ type: 'error', message: 'Game already started' }); return; }
+                if (state.players.length >= 8) { conn.send({ type: 'error', message: 'Game is full' }); return; }
+                const idx = state.players.length;
+                state.players.push({
+                    id: conn.peer, name: incomingName || ('Player ' + (idx+1)),
+                    color: PLAYER_COLORS[idx % PLAYER_COLORS.length],
+                    hand: [], score: 0, selectedCards: [], holdingTarget: null
+                });
+            } else if (incomingName) {
+                existing.name = incomingName;
+            }
             // Ensure connection is stored (may already be from conn.on('open'))
             guestConns.set(conn.peer, conn);
             broadcastState();
@@ -539,8 +654,33 @@ function broadcastState() {
         const player = state.players.find(p => p.id === peerId);
         const msg = { type: 'state_update', state: cs };
         if (player) msg.hand = [...player.hand];
-        conn.send(msg);
+        try { conn.send(msg); } catch (e) {}
     });
+
+    // Send a full authoritative-state backup to all guests so they can take
+    // over as host if needed. Includes everyone's hand — guests who take over
+    // need full state to keep the game going.
+    try {
+        const fullState = {
+            phase: state.phase,
+            players: state.players.map(p => ({
+                id: p.id, name: p.name, color: p.color, score: p.score,
+                hand: [...(p.hand || [])],
+                selectedCards: [...(p.selectedCards || [])],
+                holdingTarget: p.holdingTarget || null
+            })),
+            commodities: state.commodities,
+            roundWinner: state.roundWinner,
+            targetScore: state.targetScore
+        };
+        guestConns.forEach((conn) => {
+            if (!conn || !conn.open) return;
+            try { conn.send({ type: 'host_state_backup', state: fullState }); } catch (e) {}
+        });
+    } catch (e) { /* ignore */ }
+
+    // Auto-save for reconnect-on-refresh (host only)
+    autoSaveState();
 
     // Update host locally (after sending to guests)
     const hostPlayer = state.players.find(p => p.id === 'host');
@@ -739,10 +879,15 @@ async function joinGame() {
         hostConn.on('data', (msg) => handleGuestMessage(msg));
         hostConn.on('open', () => {
             hostConn.send({ type: 'join_game', name: myName });
+            saveSession();
+            startGuestHeartbeatWatchdog();
         });
 
         hostConn.on('error', () => showToast('Connection failed', 'error'));
-        hostConn.on('close', () => showToast('Disconnected from host', 'error'));
+        hostConn.on('close', () => {
+            stopHeartbeat();
+            handleHostDisconnect();
+        });
     });
     peer.on('error', (err) => {
         showToast('Peer error: ' + (err.type || err.message), 'error');
@@ -752,6 +897,8 @@ async function joinGame() {
 }
 
 function handleGuestMessage(msg) {
+    // Any incoming message proves the connection is alive — refresh heartbeat
+    lastHeartbeat = Date.now();
     switch(msg.type) {
         case 'state_update':
             if (msg.hand) myHand = msg.hand;
@@ -765,6 +912,14 @@ function handleGuestMessage(msg) {
             break;
         case 'round_won':
             handleClientMessage(msg);
+            break;
+        case 'host_state_backup':
+            try {
+                sessionStorage.setItem(PIT_HOST_BACKUP_KEY, JSON.stringify(msg.state));
+            } catch (e) { /* ignore */ }
+            break;
+        case 'ping':
+            // lastHeartbeat already updated above
             break;
         case 'error':
             showToast(msg.message, 'error');
@@ -788,7 +943,8 @@ function handleStateUpdate(s) {
     switch(s.phase) {
         case 'lobby': showLobby(); break;
         case 'playing':
-            if (currentScreen === 'screenLobby' || currentScreen === 'screenRoundEnd' || currentScreen === 'screenJoin') {
+            if (currentScreen === 'screenLobby' || currentScreen === 'screenRoundEnd'
+                || currentScreen === 'screenJoin' || currentScreen === 'screenHostDisconnected') {
                 selectedIndices = [];
                 holdingTarget = null;
                 show('screenHand');
@@ -797,7 +953,12 @@ function handleStateUpdate(s) {
             if (currentScreen === 'screenTrade') renderTradeScreen();
             break;
         case 'round_end': show('screenRoundEnd'); renderRoundEnd(); break;
-        case 'game_end': show('screenGameEnd'); renderGameEnd(); break;
+        case 'game_end':
+            show('screenGameEnd'); renderGameEnd();
+            // Game's over — drop reconnect/backup state so a refresh goes to entry
+            clearSession();
+            try { sessionStorage.removeItem(PIT_HOST_BACKUP_KEY); } catch (e) {}
+            break;
     }
 }
 
@@ -1071,6 +1232,292 @@ function copyJoinLink() {
     });
 }
 
+// ======================== AUTO-RECONNECT ========================
+function reconnectAsHost(session) {
+    isHost = true;
+    myName = session.myName || 'Host';
+    roomCode = session.roomCode;
+    myId = PEER_PREFIX + roomCode;
+
+    // Restore saved game state
+    let saved = null;
+    try {
+        const raw = sessionStorage.getItem(PIT_AUTOSAVE_KEY);
+        saved = raw ? JSON.parse(raw) : null;
+    } catch (e) { saved = null; }
+
+    if (!saved) { clearSession(); return; }
+
+    // Replace state cleanly
+    state = {
+        phase: saved.phase || 'lobby',
+        players: Array.isArray(saved.players) ? saved.players.map(p => Object.assign({
+            hand: [], score: 0, selectedCards: [], holdingTarget: null
+        }, p)) : [],
+        commodities: saved.commodities || [],
+        roundWinner: saved.roundWinner || null,
+        targetScore: saved.targetScore || 500
+    };
+
+    // Stop the trade-checker if it was alive across reload
+    if (window._tradeInterval) { clearInterval(window._tradeInterval); window._tradeInterval = null; }
+
+    showToast('Reclaiming room...', '', 1500);
+
+    const timeout = setTimeout(() => {
+        showToast('Reconnection failed — start a new game.', 'error', 3000);
+        clearSession();
+        if (peer) { try { peer.destroy(); } catch (e) {} peer = null; }
+        isHost = false;
+        show('screenJoin');
+    }, 12000);
+
+    peer = new Peer(myId, { debug: 0 });
+    peer.on('connection', conn => {
+        conn.on('open', () => { guestConns.set(conn.peer, conn); });
+        conn.on('data', (msg) => handleHostMessage(conn, msg));
+        conn.on('close', () => {
+            guestConns.delete(conn.peer);
+            if (state.phase === 'lobby') {
+                state.players = state.players.filter(p => p.id !== conn.peer);
+            }
+            broadcastState();
+        });
+        conn.on('error', e => console.warn('conn error', e));
+    });
+    peer.on('open', () => {
+        clearTimeout(timeout);
+        saveSession();
+        // Drive UI from restored phase, then broadcast so any reconnecting guests resync
+        switch (state.phase) {
+            case 'lobby': showLobby(); break;
+            case 'playing':
+                show('screenHand');
+                // Restart trade-checker
+                if (window._tradeInterval) clearInterval(window._tradeInterval);
+                window._tradeInterval = setInterval(checkTrades, 200);
+                break;
+            case 'round_end': show('screenRoundEnd'); break;
+            case 'game_end': show('screenGameEnd'); break;
+            default: showLobby(); break;
+        }
+        broadcastState();
+        startHostHeartbeat();
+    });
+    peer.on('error', (err) => {
+        if (err.type === 'unavailable-id') {
+            clearTimeout(timeout);
+            showToast('Room is taken — start a new game.', 'error', 3000);
+            clearSession();
+            isHost = false;
+            show('screenJoin');
+        } else if (err.type === 'peer-unavailable') {
+            // ignore — guest reconnecting
+        } else {
+            console.warn('host reconnect peer error', err);
+        }
+    });
+}
+
+function reconnectAsGuest(session) {
+    isHost = false;
+    myName = session.myName || 'Player';
+    roomCode = session.roomCode;
+
+    showToast('Reconnecting...', '', 1500);
+
+    const timeout = setTimeout(() => {
+        showToast('Reconnection failed — please rejoin manually.', 'error', 3000);
+        clearSession();
+        if (peer) { try { peer.destroy(); } catch (e) {} peer = null; }
+        show('screenJoin');
+    }, 12000);
+
+    peer = new Peer({ debug: 0 });
+    peer.on('open', (id) => {
+        myId = id;
+        hostConn = peer.connect(PEER_PREFIX + roomCode, { reliable: true });
+        hostConn.on('data', (msg) => handleGuestMessage(msg));
+        hostConn.on('open', () => {
+            clearTimeout(timeout);
+            // Host's name-based reconnect logic will reattach us to our slot/hand
+            hostConn.send({ type: 'join_game', name: myName });
+            saveSession();
+            startGuestHeartbeatWatchdog();
+        });
+        hostConn.on('close', () => {
+            stopHeartbeat();
+            handleHostDisconnect();
+        });
+        hostConn.on('error', () => {
+            clearTimeout(timeout);
+            showToast('Reconnection failed.', 'error', 3000);
+            // Don't clearSession yet — user may want to take over as host
+            handleHostDisconnect();
+        });
+    });
+    peer.on('error', (err) => {
+        clearTimeout(timeout);
+        console.warn('guest reconnect peer error', err);
+        showToast('Reconnection failed: ' + (err.type || err.message), 'error', 3000);
+        handleHostDisconnect();
+    });
+}
+
+// ======================== HOST DISCONNECT / TAKEOVER ========================
+function handleHostDisconnect() {
+    if (isHost) return; // safety
+    const statusEl = $('hostDisconnectedStatus');
+    if (statusEl) statusEl.textContent = '';
+    const btnTakeOver = $('btnTakeOver');
+    if (btnTakeOver) btnTakeOver.disabled = false;
+    show('screenHostDisconnected');
+}
+
+function leaveGame() {
+    stopHeartbeat();
+    try { if (hostConn) hostConn.close(); } catch (e) {}
+    try { if (peer) peer.destroy(); } catch (e) {}
+    hostConn = null;
+    peer = null;
+    clearSession();
+    try { sessionStorage.removeItem(PIT_HOST_BACKUP_KEY); } catch (e) {}
+    showToast('Left game', '', 1500);
+    show('screenJoin');
+}
+
+function tryReconnectGuest() {
+    const session = getSession();
+    if (!session || !session.roomCode) { leaveGame(); return; }
+    const statusEl = $('hostDisconnectedStatus');
+    if (statusEl) statusEl.textContent = 'Trying to reconnect...';
+    try { if (hostConn) hostConn.close(); } catch (e) {}
+    try { if (peer) peer.destroy(); } catch (e) {}
+    hostConn = null;
+    peer = null;
+    reconnectAsGuest(session);
+}
+
+function takeOverAsHost() {
+    let backup = null;
+    try {
+        const raw = sessionStorage.getItem(PIT_HOST_BACKUP_KEY);
+        backup = raw ? JSON.parse(raw) : null;
+    } catch (e) { backup = null; }
+
+    const statusEl = $('hostDisconnectedStatus');
+    if (!backup || !Array.isArray(backup.players)) {
+        if (statusEl) statusEl.textContent = 'No backup available — cannot take over.';
+        setTimeout(leaveGame, 1500);
+        return;
+    }
+
+    const btnTakeOver = $('btnTakeOver');
+    if (btnTakeOver) btnTakeOver.disabled = true;
+    if (statusEl) statusEl.textContent = 'Claiming room as new host...';
+
+    // Tear down current peer
+    try { if (hostConn) hostConn.close(); } catch (e) {}
+    try { if (peer) peer.destroy(); } catch (e) {}
+    hostConn = null;
+    peer = null;
+    guestConns.clear();
+    stopHeartbeat();
+
+    // Find own entry in backup by name (case-insensitive). myId will change.
+    const myNameLower = (myName || '').toLowerCase();
+    const myEntry = backup.players.find(p => p.id !== 'host' && p.name && p.name.toLowerCase() === myNameLower);
+
+    // Drop the old 'host' entry from the backup (the old host is gone).
+    backup.players = backup.players.filter(p => p.id !== 'host');
+    if (myEntry) {
+        myEntry.id = 'host';
+    } else {
+        // Fallback: insert a new host entry — preserves us in the player list.
+        const idx = backup.players.length;
+        backup.players.push({
+            id: 'host', name: myName || 'Host',
+            color: PLAYER_COLORS[idx % PLAYER_COLORS.length],
+            hand: [], score: 0, selectedCards: [], holdingTarget: null
+        });
+    }
+
+    // Restore state from backup
+    state = {
+        phase: backup.phase || 'lobby',
+        players: backup.players.map(p => Object.assign({
+            hand: [], score: 0, selectedCards: [], holdingTarget: null
+        }, p)),
+        commodities: backup.commodities || [],
+        roundWinner: backup.roundWinner || null,
+        targetScore: backup.targetScore || 500
+    };
+
+    // Become host
+    isHost = true;
+    myId = PEER_PREFIX + roomCode;
+    myHand = [...((state.players.find(p => p.id === 'host') || {}).hand || [])];
+
+    // Try to claim host peer ID, retrying on unavailable-id for up to 30s
+    const startTs = Date.now();
+    const MAX_TAKEOVER_MS = 30000;
+
+    function attempt() {
+        try { if (peer) peer.destroy(); } catch (e) {}
+        peer = new Peer(myId, { debug: 0 });
+
+        peer.on('open', () => {
+            if (statusEl) statusEl.textContent = '';
+            saveSession();
+
+            // Drive UI from restored phase
+            switch (state.phase) {
+                case 'lobby': showLobby(); break;
+                case 'playing':
+                    show('screenHand');
+                    if (window._tradeInterval) clearInterval(window._tradeInterval);
+                    window._tradeInterval = setInterval(checkTrades, 200);
+                    break;
+                case 'round_end': show('screenRoundEnd'); break;
+                case 'game_end': show('screenGameEnd'); break;
+                default: showLobby(); break;
+            }
+            broadcastState();
+            startHostHeartbeat();
+        });
+        peer.on('connection', conn => {
+            conn.on('open', () => { guestConns.set(conn.peer, conn); });
+            conn.on('data', (msg) => handleHostMessage(conn, msg));
+            conn.on('close', () => {
+                guestConns.delete(conn.peer);
+                if (state.phase === 'lobby') {
+                    state.players = state.players.filter(p => p.id !== conn.peer);
+                }
+                broadcastState();
+            });
+            conn.on('error', e => console.warn('conn error', e));
+        });
+        peer.on('error', (err) => {
+            console.warn('takeover peer error', err);
+            if (err.type === 'unavailable-id') {
+                const elapsed = Date.now() - startTs;
+                if (elapsed < MAX_TAKEOVER_MS) {
+                    if (statusEl) statusEl.textContent = 'Old host still tracked — retrying (' + Math.ceil((MAX_TAKEOVER_MS - elapsed) / 1000) + 's left)...';
+                    setTimeout(attempt, 2000);
+                } else {
+                    if (statusEl) statusEl.textContent = 'Could not claim room. Try again or leave.';
+                    if (btnTakeOver) btnTakeOver.disabled = false;
+                    isHost = false;
+                }
+            } else {
+                if (statusEl) statusEl.textContent = 'Error: ' + (err.type || 'unknown');
+                if (btnTakeOver) btnTakeOver.disabled = false;
+            }
+        });
+    }
+    attempt();
+}
+
 // ======================== EVENT LISTENERS ========================
 $('createBtn').addEventListener('click', createGame);
 $('joinBtn').addEventListener('click', joinGame);
@@ -1084,6 +1531,15 @@ $('newGameBtn').addEventListener('click', hostNewGame);
 $('copyCodeBtn').addEventListener('click', copyCode);
 $('copyLinkBtn').addEventListener('click', copyJoinLink);
 $('muteBtn').addEventListener('click', () => { muted = !muted; $('muteBtn').textContent = muted ? '🔇' : '🔊'; });
+
+// Host-disconnected screen buttons
+$('btnTakeOver').addEventListener('click', takeOverAsHost);
+$('btnTryReconnect').addEventListener('click', tryReconnectGuest);
+$('btnLeaveGame').addEventListener('click', leaveGame);
+
+// Refresh button (visible while in a room)
+const _refreshBtn = $('refresh-btn');
+if (_refreshBtn) _refreshBtn.addEventListener('click', refreshPage);
 
 // Enter key on inputs
 $('nameInput').addEventListener('keydown', (e) => { if (e.key === 'Enter') $('createBtn').click(); });
@@ -1101,6 +1557,19 @@ setInterval(() => {
         renderTradeScreen();
     }
 }, 300);
+
+// Auto-reconnect on page load if a session was saved
+(function checkAutoReconnect() {
+    const session = getSession();
+    if (!session || !session.roomCode) return;
+    setTimeout(() => {
+        if (session.isHost) {
+            reconnectAsHost(session);
+        } else {
+            reconnectAsGuest(session);
+        }
+    }, 300);
+})();
 </script>
 </body>
 </html>
