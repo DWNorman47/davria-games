@@ -832,11 +832,52 @@
             from { opacity: 1; transform: translateY(0); }
             to   { opacity: 0; transform: translateY(-10px); }
         }
+
+        /* Refresh button (visible only while in a room) */
+        #refresh-btn {
+            position: fixed;
+            top: max(12px, env(safe-area-inset-top));
+            right: max(12px, env(safe-area-inset-right));
+            width: 44px;
+            height: 44px;
+            border-radius: 50%;
+            border: none;
+            background: rgba(0, 0, 0, 0.55);
+            color: #fff;
+            font-size: 1.25rem;
+            line-height: 1;
+            display: none; /* hidden until in a room */
+            align-items: center;
+            justify-content: center;
+            cursor: pointer;
+            z-index: 1500;
+            padding: 0;
+            -webkit-tap-highlight-color: transparent;
+            backdrop-filter: blur(6px);
+            -webkit-backdrop-filter: blur(6px);
+        }
+        #refresh-btn.visible { display: flex; }
+        #refresh-btn:active { background: rgba(0, 0, 0, 0.75); }
     </style>
 </head>
 <body>
     <div id="notification-container" class="notification-container"></div>
     <a href="../../index.html" class="back-link">&larr; Back to Arcade</a>
+    <button id="refresh-btn" type="button" onclick="refreshPage()" aria-label="Refresh page" title="Refresh">⟳</button>
+
+    <!-- Host Disconnected Modal (guest-side) -->
+    <div class="modal-overlay" id="host-disconnected-modal">
+        <div class="modal">
+            <h3 style="color:#e74c3c">Host Disconnected</h3>
+            <div class="modal-info">The host has lost connection. You can take over and continue the game with everyone else, try to reconnect, or leave.</div>
+            <div class="modal-info" id="host-disconnected-status" style="font-size:0.8rem;color:var(--text-secondary)"></div>
+            <div style="display:flex;flex-direction:column;gap:0.4rem;margin-top:0.5rem">
+                <button class="btn primary" id="btn-take-over" onclick="takeOverAsHost()">Take Over as Host</button>
+                <button class="btn" id="btn-try-reconnect" onclick="tryReconnectGuest()">Try Reconnect</button>
+                <button class="btn" id="btn-leave-game" onclick="leaveGame()">Leave to Main Menu</button>
+            </div>
+        </div>
+    </div>
 
     <div class="game-wrapper">
         <div id="canvas-wrapper" style="position:relative;overflow:hidden;touch-action:none;line-height:0">
@@ -4886,6 +4927,8 @@
             showCastJoinUrl(roomCode);
             setOnlineStatus(hostIsPlayer ? 'Waiting for players...' : 'Cast mode: waiting for remote players to join...');
             updateLobbyDisplay();
+            updateRefreshButtonVisibility();
+            startHostHeartbeat();
         });
 
         peer.on('connection', (conn) => {
@@ -5058,7 +5101,7 @@
         else localRole = 'player';
         setOnlineStatus('Connecting...');
 
-        peer = new Peer(undefined, {
+        peer = new Peer({
             debug: 0
         });
 
@@ -5075,11 +5118,14 @@
                     conn.send({ type: 'join_as', role: wireRole, name: localName });
                 } catch (e) { /* ignore */ }
                 setOnlineStatus('Connected! Waiting for assignment...');
+                updateRefreshButtonVisibility();
+                startGuestHeartbeatWatchdog();
             });
 
             conn.on('data', (data) => handleHostMessage(data));
 
             conn.on('close', () => {
+                stopHeartbeat();
                 handleDisconnect(-1);
             });
 
@@ -5139,6 +5185,10 @@
         // Save session for auto-reconnect on refresh
         saveOnlineSession();
         autoSaveOnlineState();
+        // Send full backup so guests can take over
+        broadcastHostStateBackup();
+        // Keep host's phone awake during gameplay
+        updateWakeLock();
     });
 
     function updateLobbyDisplay() {
@@ -5388,6 +5438,9 @@
 
         updateUI();
         drawBoard();
+        // Keep phone awake during active gameplay (guest-side too)
+        try { updateWakeLock(); } catch (e) { /* ignore */ }
+        try { updateRefreshButtonVisibility(); } catch (e) { /* ignore */ }
     }
 
     function broadcastState() {
@@ -5398,6 +5451,23 @@
         });
         // Auto-save for reconnect on refresh
         autoSaveOnlineState();
+        // Send full backup to guests so they can take over as host if needed
+        try {
+            const backup = {
+                snapshot,
+                roomCode,
+                numPlayers,
+                hostIsPlayer,
+                gameStarted,
+                aiEnabled,
+                timestamp: Date.now()
+            };
+            connections.forEach(({ conn }) => {
+                if (conn.open) conn.send({ type: 'host_state_backup', backup });
+            });
+        } catch (e) { /* ignore */ }
+        // Wake lock follows phase changes
+        updateWakeLock();
     }
 
     function sendToPlayer(playerIndex, msg) {
@@ -5670,6 +5740,18 @@
     // =================================================================
 
     function handleHostMessage(data) {
+        // Any incoming message proves the host is alive — refresh heartbeat.
+        lastHeartbeat = Date.now();
+        switch(data.type) {
+            case 'ping':
+                // Heartbeat from host; lastHeartbeat already updated above.
+                return;
+            case 'host_state_backup':
+                try {
+                    sessionStorage.setItem(SETTLERS_HOST_BACKUP_KEY, JSON.stringify(data.backup));
+                } catch (e) { /* ignore */ }
+                return;
+        }
         switch(data.type) {
             case 'role_assignment': {
                 numPlayers = data.numPlayers;
@@ -5789,8 +5871,11 @@
             broadcastState();
             updateUI();
         } else if (!isHost) {
-            showNotification('Disconnected from host! Refresh the page to reconnect.', 'warning');
-            // Don't clear onlineMode or session - allow reconnection on refresh
+            // Don't clear onlineMode or session - allow reconnection on refresh.
+            // Show the host-disconnected modal so the guest can take over,
+            // try to reconnect, or leave.
+            stopHeartbeat();
+            handleHostDisconnect();
         }
     }
 
@@ -6002,6 +6087,8 @@
     window.replaceCurrentPlayerWithAI = replaceCurrentPlayerWithAI;
 
     function disconnectOnline() {
+        stopHeartbeat();
+        releaseWakeLock();
         if (peer) {
             peer.destroy();
             peer = null;
@@ -6020,7 +6107,314 @@
         applyRoleView();
         clearOnlineSession();
         try { sessionStorage.removeItem('settlers-online-autosave'); } catch (e) { /* ignore */ }
+        try { sessionStorage.removeItem(SETTLERS_HOST_BACKUP_KEY); } catch (e) { /* ignore */ }
+        try { updateRefreshButtonVisibility(); } catch (e) { /* ignore */ }
     }
+
+    // =================================================================
+    // CONNECTION RESILIENCE: heartbeat, refresh button, wake lock,
+    // host migration. Patterned on Phrase Pass.
+    // =================================================================
+
+    const SETTLERS_HOST_BACKUP_KEY = 'settlers-host-backup';
+    const HEARTBEAT_INTERVAL_MS = 3000;
+    const HEARTBEAT_TIMEOUT_MS = 12000; // 4 missed pings before considering dead
+
+    let heartbeatInterval = null;
+    let heartbeatWatchdog = null;
+    let lastHeartbeat = 0;
+
+    function startHostHeartbeat() {
+        stopHeartbeat();
+        heartbeatInterval = setInterval(() => {
+            if (!isHost) return;
+            try { broadcastToAll({ type: 'ping', t: Date.now() }); } catch (e) { /* ignore */ }
+        }, HEARTBEAT_INTERVAL_MS);
+    }
+
+    function startGuestHeartbeatWatchdog() {
+        stopHeartbeat();
+        lastHeartbeat = Date.now();
+        heartbeatWatchdog = setInterval(() => {
+            if (isHost) return;
+            const elapsed = Date.now() - lastHeartbeat;
+            if (elapsed > HEARTBEAT_TIMEOUT_MS) {
+                stopHeartbeat();
+                handleHostDisconnect();
+            }
+        }, 2000);
+    }
+
+    function stopHeartbeat() {
+        if (heartbeatInterval) { clearInterval(heartbeatInterval); heartbeatInterval = null; }
+        if (heartbeatWatchdog) { clearInterval(heartbeatWatchdog); heartbeatWatchdog = null; }
+    }
+
+    // ---- Refresh button --------------------------------------------------
+    function refreshPage() {
+        // Online session is in sessionStorage, so the auto-reconnect logic
+        // at page load will rejoin the same room as the same player.
+        try { window.location.reload(); } catch (e) { window.location.href = window.location.href; }
+    }
+    function updateRefreshButtonVisibility() {
+        const btn = document.getElementById('refresh-btn');
+        if (!btn) return;
+        btn.classList.toggle('visible', !!onlineMode);
+    }
+
+    // ---- Wake lock -------------------------------------------------------
+    let wakeLock = null;
+    async function requestWakeLock() {
+        if (!('wakeLock' in navigator)) return;
+        try {
+            wakeLock = await navigator.wakeLock.request('screen');
+            wakeLock.addEventListener('release', () => { wakeLock = null; });
+        } catch (e) { /* user gesture not registered yet, or denied */ }
+    }
+    function releaseWakeLock() {
+        if (wakeLock) {
+            try { wakeLock.release(); } catch (e) { /* ignore */ }
+            wakeLock = null;
+        }
+    }
+    function shouldKeepAwake() {
+        // Keep awake during active gameplay phases.
+        if (!onlineMode || !gameStarted) return false;
+        const p = state.phase;
+        return p === 'roll' || p === 'play' || p === 'robber'
+            || p === 'discard' || p === 'roadbuilding'
+            || p === 'yearofplenty' || p === 'monopoly';
+    }
+    function updateWakeLock() {
+        if (shouldKeepAwake()) {
+            if (!wakeLock) requestWakeLock();
+        } else {
+            releaseWakeLock();
+        }
+    }
+    document.addEventListener('visibilitychange', () => {
+        if (document.visibilityState === 'visible' && !wakeLock && shouldKeepAwake()) {
+            requestWakeLock();
+        }
+    });
+
+    // ---- Host backup broadcast (for guest takeover) ----------------------
+    function broadcastHostStateBackup() {
+        if (!onlineMode || !isHost) return;
+        try {
+            const snapshot = buildStateSnapshot();
+            const backup = {
+                snapshot,
+                roomCode,
+                numPlayers,
+                hostIsPlayer,
+                gameStarted,
+                aiEnabled,
+                timestamp: Date.now()
+            };
+            connections.forEach(({ conn }) => {
+                if (conn.open) conn.send({ type: 'host_state_backup', backup });
+            });
+        } catch (e) { /* ignore */ }
+    }
+
+    // ---- Host disconnect (guest-side) ------------------------------------
+    function handleHostDisconnect() {
+        if (isHost) return; // safety
+        if (!onlineMode) return;
+        // Show modal with options
+        const statusEl = document.getElementById('host-disconnected-status');
+        if (statusEl) statusEl.textContent = '';
+        const btnTakeOver = document.getElementById('btn-take-over');
+        if (btnTakeOver) btnTakeOver.disabled = false;
+        const modal = document.getElementById('host-disconnected-modal');
+        if (modal) modal.classList.add('active');
+    }
+
+    function leaveGame() {
+        // Tear down peer, clear session, return to main menu state.
+        stopHeartbeat();
+        releaseWakeLock();
+        const modal = document.getElementById('host-disconnected-modal');
+        if (modal) modal.classList.remove('active');
+        try { sessionStorage.removeItem(SETTLERS_HOST_BACKUP_KEY); } catch (e) { /* ignore */ }
+        disconnectOnline();
+        showNotification('Left the game.', 'info');
+        updateRefreshButtonVisibility();
+        updateUI();
+    }
+
+    function tryReconnectGuest() {
+        const session = getOnlineSession();
+        if (!session || !session.roomCode) {
+            leaveGame();
+            return;
+        }
+        const statusEl = document.getElementById('host-disconnected-status');
+        if (statusEl) statusEl.textContent = 'Trying to reconnect...';
+        // Tear down current peer
+        stopHeartbeat();
+        try { if (peer) peer.destroy(); } catch (e) { /* ignore */ }
+        peer = null;
+        connections = [];
+        // Hide modal so reconnectToGame's notifications are visible
+        const modal = document.getElementById('host-disconnected-modal');
+        if (modal) modal.classList.remove('active');
+        // Reuse existing reconnect path
+        reconnectToGame();
+    }
+
+    function takeOverAsHost() {
+        // Read full host backup from sessionStorage
+        let backup = null;
+        try {
+            const raw = sessionStorage.getItem(SETTLERS_HOST_BACKUP_KEY);
+            backup = raw ? JSON.parse(raw) : null;
+        } catch (e) { backup = null; }
+
+        const statusEl = document.getElementById('host-disconnected-status');
+        if (!backup || !backup.snapshot) {
+            if (statusEl) statusEl.textContent = 'No backup available — cannot take over.';
+            setTimeout(leaveGame, 1500);
+            return;
+        }
+
+        const btnTakeOver = document.getElementById('btn-take-over');
+        if (btnTakeOver) btnTakeOver.disabled = true;
+        if (statusEl) statusEl.textContent = 'Claiming room as new host...';
+
+        // Tear down current peer
+        stopHeartbeat();
+        try { if (peer) peer.destroy(); } catch (e) { /* ignore */ }
+        peer = null;
+        connections = [];
+
+        // Restore game state from the backup snapshot.
+        try {
+            applyStateSnapshot(backup.snapshot);
+        } catch (e) {
+            if (statusEl) statusEl.textContent = 'Failed to restore state: ' + (e.message || e);
+            if (btnTakeOver) btnTakeOver.disabled = false;
+            return;
+        }
+
+        const savedRoomCode = backup.roomCode || roomCode;
+        const savedNumPlayers = backup.numPlayers || numPlayers;
+        const savedGameStarted = backup.gameStarted !== false;
+        const oldLocalPlayerIndex = (typeof localPlayerIndex === 'number') ? localPlayerIndex : -1;
+
+        // Become host. Keep our own player slot (if we had one) — Settlers
+        // already keeps the host's index out of guest connections via
+        // findNextPlayerSlot(), and our snapshot already has us in state.players[oldLocalPlayerIndex].
+        roomCode = savedRoomCode;
+        numPlayers = savedNumPlayers;
+        gameStarted = savedGameStarted;
+        aiEnabled = backup.aiEnabled || false;
+        isHost = true;
+        onlineMode = true;
+        if (oldLocalPlayerIndex >= 0) {
+            // We were a player — become a host-player at our existing slot.
+            hostIsPlayer = true;
+            localPlayerIndex = oldLocalPlayerIndex;
+            localRole = 'host-player';
+        } else {
+            // We were a viewer — become cast-host (no player slot).
+            hostIsPlayer = false;
+            localPlayerIndex = -1;
+            localRole = 'host-cast';
+        }
+        // The new host is, definitionally, not disconnected anymore.
+        if (state.players && state.players[localPlayerIndex]) {
+            state.players[localPlayerIndex].disconnected = false;
+            state.players[localPlayerIndex].isBot = false;
+        }
+        // No vote should target the new host
+        if (state.pendingVote && state.pendingVote.targetPlayer === localPlayerIndex) {
+            state.pendingVote = null;
+        }
+
+        const startTs = Date.now();
+        const MAX_TAKEOVER_MS = 30000;
+
+        function attempt() {
+            try { if (peer) peer.destroy(); } catch (e) { /* ignore */ }
+            peer = new Peer('settlers-' + roomCode, { debug: 0 });
+
+            peer.on('open', () => {
+                if (statusEl) statusEl.textContent = '';
+                // Hide modal
+                const modal = document.getElementById('host-disconnected-modal');
+                if (modal) modal.classList.remove('active');
+                connections = [];
+                applyRoleView();
+                saveOnlineSession();
+                autoSaveOnlineState();
+                showNotification('You are now the host. Waiting for players to reconnect...', 'info', 6000);
+                log(`Took over as host. Room code: ${roomCode}.`);
+                updateRefreshButtonVisibility();
+                updateUI();
+                drawBoard();
+                startHostHeartbeat();
+            });
+
+            peer.on('connection', (conn) => {
+                const entry = { conn, playerIndex: -1, role: null };
+                connections.push(entry);
+                let assigned = false;
+                conn.on('data', (data) => {
+                    if (!assigned && data && data.type === 'join_as') {
+                        assigned = true;
+                        const incomingName = (data.name || '').trim().slice(0, 20);
+                        assignIncomingConnection(entry, data.role === 'viewer' ? 'viewer' : 'player', incomingName);
+                        return;
+                    }
+                    if (!assigned) return;
+                    if (entry.role === 'viewer') return;
+                    handleGuestAction(data, entry.playerIndex);
+                });
+                setTimeout(() => {
+                    if (!assigned) {
+                        assigned = true;
+                        assignIncomingConnection(entry, 'player', '');
+                    }
+                }, 1500);
+                conn.on('close', () => {
+                    if (entry.role === 'viewer') {
+                        handleViewerDisconnect(entry);
+                    } else if (entry.playerIndex >= 0) {
+                        handleDisconnect(entry.playerIndex);
+                    } else {
+                        connections = connections.filter(c => c !== entry);
+                    }
+                });
+            });
+
+            peer.on('error', (err) => {
+                console.error('takeover peer error', err);
+                if (err && err.type === 'unavailable-id') {
+                    const elapsed = Date.now() - startTs;
+                    if (elapsed < MAX_TAKEOVER_MS) {
+                        if (statusEl) statusEl.textContent = 'Old host still tracked — retrying (' + Math.ceil((MAX_TAKEOVER_MS - elapsed) / 1000) + 's left)...';
+                        setTimeout(attempt, 2000);
+                    } else {
+                        if (statusEl) statusEl.textContent = 'Could not claim room. Please try again or leave.';
+                        if (btnTakeOver) btnTakeOver.disabled = false;
+                        isHost = false; // revert
+                    }
+                } else {
+                    if (statusEl) statusEl.textContent = 'Error: ' + ((err && (err.type || err.message)) || 'unknown');
+                    if (btnTakeOver) btnTakeOver.disabled = false;
+                }
+            });
+        }
+        attempt();
+    }
+
+    // Expose for onclick handlers
+    window.refreshPage = refreshPage;
+    window.takeOverAsHost = takeOverAsHost;
+    window.tryReconnectGuest = tryReconnectGuest;
+    window.leaveGame = leaveGame;
 
     // =================================================================
     // SESSION STORAGE FOR AUTO-RECONNECT
@@ -6068,6 +6462,8 @@
             roomCode = code;
             connections = [];
             applyRoleView();
+            updateRefreshButtonVisibility();
+            startHostHeartbeat();
             if (onReady) onReady();
         });
 
@@ -6214,7 +6610,7 @@
             if (session.localName) localName = session.localName;
             applyRoleView();
 
-            peer = new Peer(undefined, { debug: 0 });
+            peer = new Peer({ debug: 0 });
 
             peer.on('open', () => {
                 const conn = peer.connect('settlers-' + session.roomCode, { reliable: true });
@@ -6231,10 +6627,12 @@
                     if (localRole !== 'viewer' && localPlayerIndex >= 0) {
                         try { conn.send({ type: 'reconnect', playerIndex: localPlayerIndex }); } catch (e) { /* ignore */ }
                     }
+                    updateRefreshButtonVisibility();
+                    startGuestHeartbeatWatchdog();
                 });
 
                 conn.on('data', (data) => handleHostMessage(data));
-                conn.on('close', () => handleDisconnect(-1));
+                conn.on('close', () => { stopHeartbeat(); handleDisconnect(-1); });
                 conn.on('error', (err) => {
                     clearTimeout(timeout);
                     showNotification('Reconnection error: ' + err.message, 'warning');
@@ -6368,7 +6766,7 @@
         else if (pendingJoinRole === 'both') localRole = 'player-both';
         else localRole = 'player';
 
-        peer = new Peer(undefined, { debug: 0 });
+        peer = new Peer({ debug: 0 });
         let connected = false;
 
         peer.on('open', () => {
@@ -6384,10 +6782,12 @@
                     conn.send({ type: 'join_as', role: wireRole, name: localName });
                 } catch (e) { /* ignore */ }
                 setOnlineStatus('Connected! Waiting for host to start...');
+                updateRefreshButtonVisibility();
+                startGuestHeartbeatWatchdog();
             });
 
             conn.on('data', (data) => handleHostMessage(data));
-            conn.on('close', () => handleDisconnect(-1));
+            conn.on('close', () => { stopHeartbeat(); handleDisconnect(-1); });
             conn.on('error', () => {
                 if (!connected) {
                     // Host not reachable yet — retry after delay
@@ -6437,6 +6837,7 @@
         // Otherwise, check for URL-based auto-join (cast monitor / direct link)
         setTimeout(() => autoJoinFromUrl(), 300);
     }
+    updateRefreshButtonVisibility();
 
     </script>
 </body>

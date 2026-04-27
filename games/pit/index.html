@@ -142,6 +142,28 @@ input, select {
 
 /* Scrollable areas */
 .scroll-area { overflow-y: auto; flex: 1; -webkit-overflow-scrolling: touch; }
+
+/* Refresh button (visible when in a room) */
+#refresh-btn {
+    position: fixed;
+    top: max(12px, env(safe-area-inset-top));
+    right: max(12px, env(safe-area-inset-right));
+    width: 40px; height: 40px;
+    border-radius: 50%; border: none;
+    background: rgba(0,0,0,0.45); color: #fff;
+    font-size: 1.2rem; line-height: 1;
+    display: none; align-items: center; justify-content: center;
+    cursor: pointer; z-index: 1000; padding: 0;
+    -webkit-tap-highlight-color: transparent;
+    backdrop-filter: blur(6px); -webkit-backdrop-filter: blur(6px);
+}
+#refresh-btn.visible { display: flex; }
+#refresh-btn:active { background: rgba(0,0,0,0.65); }
+
+/* Host-disconnected screen */
+.host-dc-title { color: var(--accent); font-size: 1.4rem; font-weight: 800; margin-bottom: 8px; }
+.host-dc-text { color: var(--text-secondary); margin: 12px 0; }
+.host-dc-status { color: var(--text-secondary); font-size: 0.9rem; margin-top: 8px; min-height: 18px; }
 </style>
 </head>
 <body>
@@ -238,9 +260,22 @@ input, select {
         <div class="panel scoreboard" id="gameScoreboard"></div>
         <button class="btn" id="newGameBtn" style="display:none;">New Game</button>
     </div>
+
+    <!-- HOST DISCONNECTED -->
+    <div class="screen" id="screenHostDisconnected">
+        <div class="panel" style="text-align:center;">
+            <div class="host-dc-title">Host Disconnected</div>
+            <p class="host-dc-text">The host has lost connection. You can take over and continue the game with everyone else.</p>
+            <p id="hostDisconnectedStatus" class="host-dc-status"></p>
+        </div>
+        <button class="btn" id="btnTakeOver" style="margin-bottom:10px;">Take Over as Host</button>
+        <button class="btn btn-secondary" id="btnTryReconnect" style="margin-bottom:10px;">Try Reconnect</button>
+        <button class="btn btn-secondary" id="btnLeaveGame">Leave to Main Menu</button>
+    </div>
 </div>
 
 <button class="pit-btn" id="pitBtn">PIT!</button>
+<button id="refresh-btn" type="button" aria-label="Refresh page" title="Refresh">⟳</button>
 <div class="toast" id="toast"></div>
 
 <script>
@@ -285,6 +320,14 @@ let holdingTarget = null;
 let holdTimer = null;
 let currentScreen = 'screenJoin';
 
+// Screens where the refresh button should be visible (anywhere "in a room")
+const PIT_REFRESH_SCREENS = new Set([
+    'screenLobby', 'screenHand', 'screenTrade',
+    'screenRoundEnd', 'screenGameEnd', 'screenHostDisconnected'
+]);
+// Screens where we want to keep the phone awake (active gameplay)
+const PIT_AWAKE_SCREENS = new Set(['screenHand', 'screenTrade']);
+
 // ======================== HELPERS ========================
 function $(id) { return document.getElementById(id); }
 function show(screenId) {
@@ -292,7 +335,45 @@ function show(screenId) {
     $(screenId).classList.add('active');
     currentScreen = screenId;
     $('pitBtn').classList.toggle('show', screenId === 'screenHand' || screenId === 'screenTrade');
+    // Refresh button visibility
+    const refreshBtn = $('refresh-btn');
+    if (refreshBtn) refreshBtn.classList.toggle('visible', PIT_REFRESH_SCREENS.has(screenId));
+    // Wake lock during active gameplay only
+    if (PIT_AWAKE_SCREENS.has(screenId)) {
+        requestWakeLock();
+    } else {
+        releaseWakeLock();
+    }
 }
+
+function refreshPage() {
+    // Auto-reconnect logic on page load will rejoin the same room as the same player.
+    window.location.reload();
+}
+
+// ======================== WAKE LOCK ========================
+let wakeLock = null;
+async function requestWakeLock() {
+    if (!('wakeLock' in navigator)) return;
+    try {
+        wakeLock = await navigator.wakeLock.request('screen');
+        wakeLock.addEventListener('release', () => { wakeLock = null; });
+    } catch (e) { /* silent */ }
+}
+function releaseWakeLock() {
+    if (wakeLock) {
+        try { wakeLock.release(); } catch (e) {}
+        wakeLock = null;
+    }
+}
+document.addEventListener('visibilitychange', () => {
+    if (document.visibilityState === 'visible' && !wakeLock) {
+        const activeScreen = document.querySelector('.screen.active');
+        if (activeScreen && PIT_AWAKE_SCREENS.has(activeScreen.id)) {
+            requestWakeLock();
+        }
+    }
+});
 
 function showToast(msg, type = '', duration = 2500) {
     const t = $('toast');
