@@ -686,12 +686,15 @@
             <p class="subtitle">Host a new game on this device.</p>
             <label>Your name</label>
             <input type="text" id="host-name" placeholder="Host" maxlength="16">
+            <label>Room code (optional)</label>
+            <input type="text" id="custom-room-code" placeholder="Auto-generate" maxlength="12" style="text-transform:uppercase; letter-spacing:2px;">
+            <div style="font-size:0.75rem; color:var(--text-secondary); margin:-6px 0 8px;">Leave blank for a random code, or enter your own (4-12 letters/numbers) for a persistent bookmark.</div>
             <button class="btn" onclick="createGame()">Create Game</button>
         </div>
         <div class="panel" id="panel-join" style="display:none;">
-            <p class="subtitle">Enter the 6-character room code.</p>
+            <p class="subtitle">Enter the room code.</p>
             <label>Room code</label>
-            <input type="text" id="room-code-input" placeholder="ABC123" maxlength="6" style="text-transform:uppercase; letter-spacing:4px; text-align:center; font-size:1.5rem;">
+            <input type="text" id="room-code-input" placeholder="ABC123" maxlength="12" style="text-transform:uppercase; letter-spacing:2px; text-align:center; font-size:1.5rem;">
             <label>Your name</label>
             <input type="text" id="guest-name" placeholder="Player" maxlength="16">
             <button class="btn" onclick="joinGame()">Join</button>
@@ -704,6 +707,10 @@
         <div class="panel" id="lobby-host-panel" style="display:none;">
             <p class="subtitle">Share this code with players:</p>
             <div class="room-code" id="lobby-room-code">------</div>
+            <div style="display:flex;gap:8px;justify-content:center;margin-top:6px;flex-wrap:wrap">
+                <button class="btn btn-small" onclick="copyRoomCode()" style="width:auto;padding:8px 14px;min-height:36px;font-size:0.85rem">📋 Copy Code</button>
+                <button class="btn btn-small" onclick="copyJoinLink()" style="width:auto;padding:8px 14px;min-height:36px;font-size:0.85rem">🔗 Copy Join Link</button>
+            </div>
         </div>
         <div class="panel">
             <h3 style="margin-bottom:10px;">Players (<span id="player-count">0</span>)</h3>
@@ -1008,6 +1015,27 @@ function refreshPage() {
     // logic at page load will rejoin the same room as the same player.
     window.location.reload();
 }
+
+function copyRoomCode() {
+    if (!roomCode) return;
+    try {
+        navigator.clipboard.writeText(roomCode);
+        setStatus('entry-status', 'Code copied!');
+    } catch (e) {
+        setStatus('entry-status', roomCode);
+    }
+}
+
+function copyJoinLink() {
+    if (!roomCode) return;
+    const url = window.location.origin + window.location.pathname + '?room=' + roomCode;
+    try {
+        navigator.clipboard.writeText(url);
+        setStatus('entry-status', 'Join link copied!');
+    } catch (e) {
+        setStatus('entry-status', 'Code: ' + roomCode);
+    }
+}
 function switchTab(which) {
     document.getElementById('tab-create').classList.toggle('active', which === 'create');
     document.getElementById('tab-join').classList.toggle('active', which === 'join');
@@ -1186,7 +1214,16 @@ function createGame() {
     isHost = true;
     soundMuted = false; // host defaults to sound ON
     updateMuteButton();
-    roomCode = genRoomCode();
+    // Use custom code if provided (4-12 alphanumeric chars), otherwise auto-generate
+    const customRaw = (document.getElementById('custom-room-code')?.value || '').trim().toUpperCase().replace(/[^A-Z0-9]/g, '');
+    if (customRaw.length >= 4 && customRaw.length <= 12) {
+        roomCode = customRaw;
+    } else {
+        if (customRaw.length > 0) {
+            setStatus('entry-status', 'Custom code must be 4-12 letters/numbers. Using random code.');
+        }
+        roomCode = genRoomCode();
+    }
     myPeerId = 'phrasepass-' + roomCode;
     setStatus('entry-status', 'Creating room...');
     peer = new Peer(myPeerId, { debug: 1 });
@@ -1661,8 +1698,8 @@ function broadcastState() {
 // PEERJS - GUEST
 // ============================================================
 function joinGame() {
-    const code = (document.getElementById('room-code-input').value || '').trim().toUpperCase();
-    if (code.length !== 6) { setStatus('entry-status', 'Enter a 6-character room code'); return; }
+    const code = (document.getElementById('room-code-input').value || '').trim().toUpperCase().replace(/[^A-Z0-9]/g, '');
+    if (code.length < 4 || code.length > 12) { setStatus('entry-status', 'Enter a valid room code (4-12 letters/numbers)'); return; }
     myName = (document.getElementById('guest-name').value || 'Player').trim().slice(0, 16) || 'Player';
     ensureAudio();
     isHost = false;
@@ -2599,17 +2636,40 @@ function takeOverAsHost() {
     attempt();
 }
 
-// Auto-reconnect on page load if a session was saved
-(function checkAutoReconnect() {
+// Auto-reconnect on page load if a session was saved.
+// If no session but ?room=CODE is in the URL, prefill the join tab.
+(function checkAutoReconnectOrUrl() {
     const session = getSession();
-    if (!session || !session.roomCode) return;
-    setTimeout(() => {
-        if (session.isHost) {
-            reconnectAsHost(session);
-        } else {
-            reconnectAsGuest(session);
+    if (session && session.roomCode) {
+        setTimeout(() => {
+            if (session.isHost) {
+                reconnectAsHost(session);
+            } else {
+                reconnectAsGuest(session);
+            }
+        }, 300);
+        return;
+    }
+    // No session — check URL for ?room=CODE and ?name=NAME
+    try {
+        const params = new URLSearchParams(window.location.search);
+        const code = (params.get('room') || '').trim().toUpperCase().replace(/[^A-Z0-9]/g, '');
+        const name = (params.get('name') || '').trim().slice(0, 16);
+        if (code.length >= 4 && code.length <= 12) {
+            // Switch to Join tab and prefill
+            switchTab('join');
+            const codeInput = document.getElementById('room-code-input');
+            const nameInput = document.getElementById('guest-name');
+            if (codeInput) codeInput.value = code;
+            if (name && nameInput) nameInput.value = name;
+            // Auto-join if name is also provided
+            if (name) {
+                setTimeout(() => joinGame(), 300);
+            } else if (nameInput) {
+                nameInput.focus();
+            }
         }
-    }, 300);
+    } catch (e) { /* ignore */ }
 })();
 </script>
 </body>
