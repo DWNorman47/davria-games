@@ -802,10 +802,7 @@
         <div class="score-board" id="pc-scoreboard"></div>
         <div class="phrase-display" id="phrase-text">PHRASE</div>
         <button class="btn got-it" onclick="gotIt()">GOT IT! Pass →</button>
-        <div style="display:flex;gap:8px;margin-top:8px;">
-            <button class="btn" id="btn-skip" type="button" onclick="skipPhrase()" style="flex:1;background:#3498db;min-height:56px;">Skip (2 left)</button>
-            <button class="btn" id="btn-fail" type="button" onclick="failPhrase()" style="flex:1;background:#e74c3c;min-height:56px;">Said it! (1/3)</button>
-        </div>
+        <button class="btn" id="btn-skip" type="button" onclick="skipOrFail()" style="margin-top:8px;background:#3498db;min-height:56px;">Skip (2 left)</button>
         <button class="pause-btn" type="button" onclick="requestPause()">⏸ Pause</button>
     </div>
 
@@ -929,12 +926,10 @@ const state = {
     winningTeam: -1,
     passesThisRound: 0,
     skipsUsed: 0,
-    failsUsed: 0,
     roundNumber: 0,
     pausedSnapshot: null
 };
 const MAX_SKIPS = 2;
-const MAX_FAILS = 3;
 
 const TEAM_COLORS = ['var(--team-a)', 'var(--team-b)', 'var(--team-c)', 'var(--team-d)'];
 const TEAM_LETTERS = ['A', 'B', 'C', 'D'];
@@ -1327,18 +1322,11 @@ function handleGuestMessage(conn, msg) {
             advanceTurn();
             break;
         }
-        case 'skip_phrase': {
+        case 'skip_or_fail': {
             if (state.phase !== 'playing' || !state.roundActive) return;
             const currentPlayer = getPlayerBySlot(state.currentPlayerSlot);
             if (!currentPlayer || currentPlayer.id !== conn.peer) return;
-            hostSkipPhrase();
-            break;
-        }
-        case 'fail_phrase': {
-            if (state.phase !== 'playing' || !state.roundActive) return;
-            const currentPlayer = getPlayerBySlot(state.currentPlayerSlot);
-            if (!currentPlayer || currentPlayer.id !== conn.peer) return;
-            hostFailPhrase();
+            hostSkipOrFail();
             break;
         }
         case 'pause_game': {
@@ -1444,7 +1432,6 @@ function hostStartRound() {
     state.roundActive = true;
     state.passesThisRound = 0;
     state.skipsUsed = 0;
-    state.failsUsed = 0;
     state.roundNumber = (state.roundNumber || 0) + 1;
     const totalSlots = state.players.length;
     if (state.currentPlayerSlot < 1 || state.currentPlayerSlot > totalSlots) {
@@ -1677,7 +1664,6 @@ function broadcastState() {
             lastRoundMessage: state.lastRoundMessage,
             passesThisRound: state.passesThisRound,
             skipsUsed: state.skipsUsed || 0,
-            failsUsed: state.failsUsed || 0,
             roundNumber: state.roundNumber || 0,
             hasPausedSnapshot: !!state.pausedSnapshot
         }
@@ -1710,7 +1696,6 @@ function broadcastState() {
             lastRoundMessage: state.lastRoundMessage,
             passesThisRound: state.passesThisRound,
             skipsUsed: state.skipsUsed || 0,
-            failsUsed: state.failsUsed || 0,
             roundNumber: state.roundNumber || 0,
             pausedSnapshot: state.pausedSnapshot
         };
@@ -1840,47 +1825,29 @@ function gotIt() {
     }
 }
 
-function skipPhrase() {
+// Single button: first MAX_SKIPS clicks = free skip; the next click = fail (ends round)
+function skipOrFail() {
     if (isHost) {
         const currentPlayer = getPlayerBySlot(state.currentPlayerSlot);
         if (currentPlayer && currentPlayer.id === 'host' && state.roundActive) {
-            hostSkipPhrase();
+            hostSkipOrFail();
         }
     } else {
-        if (hostConn && hostConn.open) hostConn.send({ type: 'skip_phrase' });
+        if (hostConn && hostConn.open) hostConn.send({ type: 'skip_or_fail' });
     }
 }
 
-function failPhrase() {
-    if (isHost) {
-        const currentPlayer = getPlayerBySlot(state.currentPlayerSlot);
-        if (currentPlayer && currentPlayer.id === 'host' && state.roundActive) {
-            hostFailPhrase();
-        }
-    } else {
-        if (hostConn && hostConn.open) hostConn.send({ type: 'fail_phrase' });
-    }
-}
-
-function hostSkipPhrase() {
-    if ((state.skipsUsed || 0) >= MAX_SKIPS) return;
-    state.skipsUsed = (state.skipsUsed || 0) + 1;
-    state.currentPhrase = drawPhrase();
-    broadcastState();
-    sendPhraseToCurrentPlayer();
-    showHostPlayingScreen();
-}
-
-function hostFailPhrase() {
-    state.failsUsed = (state.failsUsed || 0) + 1;
-    if (state.failsUsed >= MAX_FAILS) {
-        // 3rd fail ends the round
-        endRound();
-    } else {
+function hostSkipOrFail() {
+    const used = state.skipsUsed || 0;
+    if (used < MAX_SKIPS) {
+        state.skipsUsed = used + 1;
         state.currentPhrase = drawPhrase();
         broadcastState();
         sendPhraseToCurrentPlayer();
         showHostPlayingScreen();
+    } else {
+        // No skips left — this click is a fail, ends the round
+        endRound();
     }
 }
 
@@ -2150,23 +2117,17 @@ function showHostPlayingScreen() {
     if (currentPlayer.id === me.id) {
         document.getElementById('phrase-text').textContent = (state.currentPhrase || '').toUpperCase();
         buildScoreboard('pc-scoreboard');
-        // Update skip / fail button labels and disabled state
+        // Single button: first 2 clicks skip, 3rd is a fail
         const skipsUsed = state.skipsUsed || 0;
-        const failsUsed = state.failsUsed || 0;
         const skipsLeft = Math.max(0, MAX_SKIPS - skipsUsed);
         const skipBtn = document.getElementById('btn-skip');
-        const failBtn = document.getElementById('btn-fail');
         if (skipBtn) {
-            skipBtn.textContent = skipsLeft > 0 ? ('Skip (' + skipsLeft + ' left)') : 'No skips left';
-            skipBtn.disabled = skipsLeft <= 0;
-            skipBtn.style.opacity = skipsLeft > 0 ? '1' : '0.5';
-        }
-        if (failBtn) {
-            const nextFail = failsUsed + 1;
-            if (nextFail >= MAX_FAILS) {
-                failBtn.textContent = 'Said it! (ENDS ROUND)';
+            if (skipsLeft > 0) {
+                skipBtn.textContent = 'Skip (' + skipsLeft + ' left)';
+                skipBtn.style.background = '#3498db';
             } else {
-                failBtn.textContent = 'Said it! (' + nextFail + '/' + MAX_FAILS + ')';
+                skipBtn.textContent = 'Fail!';
+                skipBtn.style.background = '#e74c3c';
             }
         }
         showScreen('screen-playing-current');
