@@ -797,6 +797,16 @@
         <div id="pregame-guest-status" class="status-line" style="display:none;">Waiting for host...</div>
     </div>
 
+    <!-- ============ CATEGORY SELECT ============ -->
+    <div id="screen-category-select" class="screen">
+        <div class="panel">
+            <h3 style="text-align:center; margin-bottom:6px;">Pick a Category</h3>
+            <p class="subtitle" id="category-subtitle" style="margin-bottom:6px;">Choose phrases for this round.</p>
+        </div>
+        <div id="category-buttons" class="panel" style="display:none;"></div>
+        <div id="category-wait" class="status-line" style="display:none;">Waiting for player to pick a category...</div>
+    </div>
+
     <!-- ============ PLAYING - current player ============ -->
     <div id="screen-playing-current" class="screen">
         <div class="score-board" id="pc-scoreboard"></div>
@@ -824,7 +834,7 @@
             <div class="round-end-message" id="round-end-msg">BUZZ!</div>
             <div class="score-board" id="re-scoreboard"></div>
         </div>
-        <button class="btn" id="btn-next-round" onclick="hostStartRound()" style="display:none;">Next Round</button>
+        <button class="btn" id="btn-next-round" onclick="hostStartCategorySelect()" style="display:none;">Next Round</button>
         <div id="round-end-guest-status" class="status-line" style="display:none;">Waiting for host...</div>
         <button class="pause-btn" type="button" onclick="requestPause()">⏸ Pause</button>
     </div>
@@ -855,52 +865,100 @@
 // ============================================================
 // PHRASES
 // ============================================================
-const PHRASES = [
-    "break a leg","spill the beans","piece of cake","cold feet","hit the sack",
-    "bite the bullet","under the weather","burn the midnight oil","barking up the wrong tree",
-    "costs an arm and a leg","once in a blue moon","kill two birds with one stone",
-    "let the cat out of the bag","the ball is in your court","back to the drawing board",
-    "call it a day","curiosity killed the cat","cut to the chase","easy does it",
-    "get cold feet","give the benefit of the doubt","hit the nail on the head",
-    "it takes two to tango","jump on the bandwagon","no pain no gain","on the ball",
-    "pulling your leg","see eye to eye","speak of the devil","the best of both worlds",
-    "through thick and thin","time flies when you are having fun","to make a long story short",
-    "your guess is as good as mine","actions speak louder than words","beat around the bush",
-    "star wars","the godfather","jurassic park","the lion king","forrest gump",
-    "pulp fiction","the matrix","back to the future","toy story","finding nemo",
-    "the dark knight","titanic","the avengers","ghostbusters","jaws","rocky",
-    "the princess bride","home alone","the wizard of oz","indiana jones","men in black",
-    "inception","spider man","iron man","black panther","frozen","shrek","up",
-    "harry potter","lord of the rings","game of thrones","stranger things","the office",
-    "breaking bad","sesame street","mickey mouse","sponge bob","pokemon","mario kart",
-    "super smash bros","minecraft","fortnite","rock and roll","hip hop","taylor swift",
-    "beyonce","the beatles","elvis presley","michael jackson","saturday night live",
-    "rubber duck","shopping cart","washing machine","coffee table","tooth brush",
-    "alarm clock","paper clip","fire truck","school bus","traffic light","smoke alarm",
-    "pencil sharpener","vacuum cleaner","teddy bear","roller skates","hair dryer",
-    "cotton candy","bubble wrap","rocking chair","ice cube","door knob","light switch",
-    "picture frame","water bottle","bean bag","hula hoop","rubber band","jigsaw puzzle",
-    "jumping jacks","high five","rock paper scissors","hide and seek","duck duck goose",
-    "ring around the rosie","paper airplane","thumb war","staring contest","tag team",
-    "slow motion","belly flop","cannon ball","double dutch","musical chairs","piggy back",
-    "thumbs up","side eye","face palm","fist bump","cart wheel","snow angel",
-    "grand canyon","times square","eiffel tower","statue of liberty","golden gate bridge",
-    "mount everest","niagara falls","great wall of china","pyramids of giza","big ben",
-    "empire state building","leaning tower of pisa","central park","hollywood","las vegas",
-    "north pole","bermuda triangle","stone henge","mount rushmore","the sahara",
-    "polar bear","panda bear","honey bee","kangaroo","penguin","dolphin","octopus",
-    "great white shark","bald eagle","peacock","flamingo","hippopotamus","giraffe",
-    "rhinoceros","sea turtle","jelly fish","praying mantis","chameleon","koala",
-    "sloth","hedgehog","rainbow","thunderstorm","snow flake","full moon","shooting star",
-    "peanut butter","apple pie","chocolate chip cookie","hot dog","french fries",
-    "ice cream sundae","grilled cheese","banana split","birthday cake","pizza slice",
-    "pancakes","cotton candy","corn on the cob","macaroni and cheese","fried chicken",
-    "peanut butter and jelly","sushi roll","taco tuesday","cereal box","jelly bean",
-    "ginger bread man","bubble tea","root beer float","orange juice","hot chocolate",
-    "santa claus","easter bunny","tooth fairy","trick or treat","fire works","snow man",
-    "brain freeze","lemonade stand","treasure chest","pirate ship","haunted house",
-    "roller coaster","ferris wheel","bouncy castle","water slide","beach ball"
-];
+const PHRASE_CATEGORIES = {
+    idioms: {
+        name: "Idioms & Sayings",
+        phrases: [
+            "break a leg","spill the beans","piece of cake","cold feet","hit the sack",
+            "bite the bullet","under the weather","burn the midnight oil","barking up the wrong tree",
+            "costs an arm and a leg","once in a blue moon","kill two birds with one stone",
+            "let the cat out of the bag","the ball is in your court","back to the drawing board",
+            "call it a day","curiosity killed the cat","cut to the chase","easy does it",
+            "get cold feet","give the benefit of the doubt","hit the nail on the head",
+            "it takes two to tango","jump on the bandwagon","no pain no gain","on the ball",
+            "pulling your leg","see eye to eye","speak of the devil","the best of both worlds",
+            "through thick and thin","time flies when you are having fun","to make a long story short",
+            "your guess is as good as mine","actions speak louder than words","beat around the bush"
+        ]
+    },
+    movies: {
+        name: "Movies",
+        phrases: [
+            "star wars","the godfather","jurassic park","the lion king","forrest gump",
+            "pulp fiction","the matrix","back to the future","toy story","finding nemo",
+            "the dark knight","titanic","the avengers","ghostbusters","jaws","rocky",
+            "the princess bride","home alone","the wizard of oz","indiana jones","men in black",
+            "inception","spider man","iron man","black panther","frozen","shrek","up"
+        ]
+    },
+    popculture: {
+        name: "Pop Culture",
+        phrases: [
+            "harry potter","lord of the rings","game of thrones","stranger things","the office",
+            "breaking bad","sesame street","mickey mouse","sponge bob","pokemon","mario kart",
+            "super smash bros","minecraft","fortnite","rock and roll","hip hop","taylor swift",
+            "beyonce","the beatles","elvis presley","michael jackson","saturday night live",
+            "santa claus","easter bunny","tooth fairy","trick or treat"
+        ]
+    },
+    objects: {
+        name: "Objects",
+        phrases: [
+            "rubber duck","shopping cart","washing machine","coffee table","tooth brush",
+            "alarm clock","paper clip","fire truck","school bus","traffic light","smoke alarm",
+            "pencil sharpener","vacuum cleaner","teddy bear","roller skates","hair dryer",
+            "bubble wrap","rocking chair","ice cube","door knob","light switch",
+            "picture frame","water bottle","bean bag","hula hoop","rubber band","jigsaw puzzle",
+            "paper airplane","cereal box","beach ball","fire works","snow man"
+        ]
+    },
+    actions: {
+        name: "Actions & Games",
+        phrases: [
+            "jumping jacks","high five","rock paper scissors","hide and seek","duck duck goose",
+            "ring around the rosie","thumb war","staring contest","tag team",
+            "slow motion","belly flop","cannon ball","double dutch","musical chairs","piggy back",
+            "thumbs up","side eye","face palm","fist bump","cart wheel","snow angel"
+        ]
+    },
+    places: {
+        name: "Places",
+        phrases: [
+            "grand canyon","times square","eiffel tower","statue of liberty","golden gate bridge",
+            "mount everest","niagara falls","great wall of china","pyramids of giza","big ben",
+            "empire state building","leaning tower of pisa","central park","hollywood","las vegas",
+            "north pole","bermuda triangle","stone henge","mount rushmore","the sahara",
+            "lemonade stand","treasure chest","pirate ship","haunted house",
+            "roller coaster","ferris wheel","bouncy castle","water slide"
+        ]
+    },
+    animals: {
+        name: "Animals & Nature",
+        phrases: [
+            "polar bear","panda bear","honey bee","kangaroo","penguin","dolphin","octopus",
+            "great white shark","bald eagle","peacock","flamingo","hippopotamus","giraffe",
+            "rhinoceros","sea turtle","jelly fish","praying mantis","chameleon","koala",
+            "sloth","hedgehog","rainbow","thunderstorm","snow flake","full moon","shooting star"
+        ]
+    },
+    food: {
+        name: "Food & Drink",
+        phrases: [
+            "peanut butter","apple pie","chocolate chip cookie","hot dog","french fries",
+            "ice cream sundae","grilled cheese","banana split","birthday cake","pizza slice",
+            "pancakes","cotton candy","corn on the cob","macaroni and cheese","fried chicken",
+            "peanut butter and jelly","sushi roll","taco tuesday","jelly bean",
+            "ginger bread man","bubble tea","root beer float","orange juice","hot chocolate",
+            "brain freeze"
+        ]
+    }
+};
+
+// Backward-compat: flat list of all phrases (used as fallback)
+const PHRASES = Object.values(PHRASE_CATEGORIES).flatMap(c => c.phrases);
+
+// "All" pseudo-category for UI selection
+const ALL_CATEGORY_ID = 'all';
 
 // ============================================================
 // STATE
@@ -927,7 +985,9 @@ const state = {
     passesThisRound: 0,
     skipsUsed: 0,
     roundNumber: 0,
-    pausedSnapshot: null
+    pausedSnapshot: null,
+    currentCategory: 'all',
+    usedPhrases: []
 };
 const MAX_SKIPS = 2;
 
@@ -993,6 +1053,7 @@ const PP_AWAKE_SCREENS = new Set(['screen-playing-current', 'screen-playing-wait
 // Screens where the refresh button should be visible (anywhere "in a room")
 const PP_REFRESH_SCREENS = new Set([
     'screen-lobby', 'screen-selection', 'screen-reveal', 'screen-pregame',
+    'screen-category-select',
     'screen-playing-current', 'screen-playing-wait', 'screen-round-end',
     'screen-host-disconnected'
 ]);
@@ -1336,6 +1397,13 @@ function handleGuestMessage(conn, msg) {
             }
             break;
         }
+        case 'pick_category': {
+            if (state.phase !== 'category_select') return;
+            const p = state.players.find(pl => pl.id === conn.peer);
+            if (!p || p.slot !== state.currentPlayerSlot) return;
+            hostSetCategory(msg.categoryId || 'all');
+            break;
+        }
     }
 }
 
@@ -1427,17 +1495,17 @@ function hostStartSelection() {
 }
 
 function hostStartRound() {
-    phraseDeck = phraseDeck.length > 10 ? phraseDeck : shuffle(PHRASES);
     state.phase = 'playing';
     state.roundActive = true;
     state.passesThisRound = 0;
     state.skipsUsed = 0;
     state.roundNumber = (state.roundNumber || 0) + 1;
     const totalSlots = state.players.length;
+    // Slot is set up beforehand: hostStartNewGame seeds slot=1 for round 1;
+    // for subsequent rounds the loser/holder keeps the slot from endRound().
+    // Just normalize if somehow out of range (e.g. player count changed).
     if (state.currentPlayerSlot < 1 || state.currentPlayerSlot > totalSlots) {
         state.currentPlayerSlot = 1;
-    } else {
-        state.currentPlayerSlot = (state.currentPlayerSlot % totalSlots) + 1;
     }
     const duration = state.roundMinMs + Math.random() * (state.roundMaxMs - state.roundMinMs);
     state.roundEndTime = Date.now() + duration;
@@ -1449,9 +1517,27 @@ function hostStartRound() {
     showHostPlayingScreen();
 }
 
-function drawPhrase() {
-    if (phraseDeck.length === 0) phraseDeck = shuffle(PHRASES);
-    return phraseDeck.pop();
+function drawPhrase(categoryId) {
+    const cat = categoryId || state.currentCategory || 'all';
+    const pool = (cat === 'all')
+        ? Object.values(PHRASE_CATEGORIES).flatMap(c => c.phrases)
+        : (PHRASE_CATEGORIES[cat]?.phrases || []);
+    if (!pool || pool.length === 0) {
+        // Fallback to all-categories pool
+        const fallbackPool = Object.values(PHRASE_CATEGORIES).flatMap(c => c.phrases);
+        const fb = fallbackPool[Math.floor(Math.random() * fallbackPool.length)];
+        return fb;
+    }
+    if (!Array.isArray(state.usedPhrases)) state.usedPhrases = [];
+    const used = new Set(state.usedPhrases);
+    const available = pool.filter(p => !used.has(p));
+    if (available.length === 0) {
+        // Exhausted — allow repeats
+        return pool[Math.floor(Math.random() * pool.length)];
+    }
+    const pick = available[Math.floor(Math.random() * available.length)];
+    state.usedPhrases.push(pick);
+    return pick;
 }
 
 function advanceTurn() {
@@ -1561,6 +1647,8 @@ function hostNewGame() {
     state.losingTeam = -1;
     state.roundNumber = 0;
     state.pausedSnapshot = null;
+    state.usedPhrases = [];
+    state.currentCategory = 'all';
     state.players.forEach(p => { p.slot = -1; p.team = -1; p.isATG = false; p._claimLocked = false; });
     recalcTeamConfig();
     phraseDeck = [];
@@ -1587,18 +1675,22 @@ function hostStartNewGame() {
     // From the pregame screen, fresh start (round 1, scores reset)
     if (!isHost) return;
     state.scores = new Array(state.numTeams).fill(0);
-    state.currentPlayerSlot = 0;
     state.roundNumber = 0;
     state.passesThisRound = 0;
     state.winningTeam = -1;
     state.losingTeam = -1;
     state.pausedSnapshot = null;
+    state.usedPhrases = [];
+    state.currentCategory = 'all';
     phraseDeck = [];
-    hostStartRound();
+    // Pre-advance slot for round 1: starts at slot 1.
+    const totalSlots = state.players.length;
+    state.currentPlayerSlot = totalSlots >= 1 ? 1 : 0;
+    hostStartCategorySelect();
 }
 
 function hostContinueGame() {
-    // Restore from pausedSnapshot and resume gameplay
+    // Restore from pausedSnapshot and resume gameplay (skips category-select; reuses current category)
     if (!isHost) return;
     const snap = state.pausedSnapshot;
     if (!snap) return;
@@ -1607,11 +1699,48 @@ function hostContinueGame() {
     state.roundNumber = snap.roundNumber || 0;
     state.passesThisRound = 0;
     state.pausedSnapshot = null;
-    // Begin a fresh round with the same current player slot
-    // hostStartRound() advances by one — undo that by stepping back so it lands on the snapshot slot
-    const totalSlots = state.players.length || 1;
-    state.currentPlayerSlot = ((state.currentPlayerSlot - 2 + totalSlots) % totalSlots) + 1;
+    if (snap.usedPhrases) state.usedPhrases = snap.usedPhrases.slice();
+    if (snap.currentCategory) state.currentCategory = snap.currentCategory;
+    // hostStartRound increments roundNumber by 1; step it back so the resumed
+    // round keeps the same number and same slot (the same player who was up).
+    state.roundNumber = Math.max(0, (state.roundNumber || 1) - 1);
     hostStartRound();
+}
+
+function hostStartCategorySelect() {
+    if (!isHost) return;
+    // Make sure currentPlayerSlot is in range
+    const totalSlots = state.players.length;
+    if (totalSlots < 1) return;
+    if (state.currentPlayerSlot < 1 || state.currentPlayerSlot > totalSlots) {
+        state.currentPlayerSlot = 1;
+    }
+    state.phase = 'category_select';
+    broadcastState();
+    renderCategorySelect();
+}
+
+function hostSetCategory(catId) {
+    if (!isHost) return;
+    if (state.phase !== 'category_select') return;
+    const validIds = new Set([ALL_CATEGORY_ID, ...Object.keys(PHRASE_CATEGORIES)]);
+    if (!validIds.has(catId)) catId = 'all';
+    state.currentCategory = catId;
+    hostStartRound();
+}
+
+function pickCategory(catId) {
+    // Called from UI by the player whose turn it is to start
+    ensureAudio();
+    if (isHost) {
+        const me = getMyPlayer();
+        if (!me || me.slot !== state.currentPlayerSlot) return;
+        hostSetCategory(catId);
+    } else {
+        if (hostConn && hostConn.open) {
+            hostConn.send({ type: 'pick_category', categoryId: catId });
+        }
+    }
 }
 
 function pauseGame() {
@@ -1624,7 +1753,9 @@ function pauseGame() {
         scores: (state.scores || []).slice(),
         currentPlayerSlot: state.currentPlayerSlot,
         roundNumber: state.roundNumber,
-        passesThisRound: state.passesThisRound
+        passesThisRound: state.passesThisRound,
+        currentCategory: state.currentCategory,
+        usedPhrases: (state.usedPhrases || []).slice()
     };
     state.phase = 'pregame';
     broadcastState();
@@ -1665,7 +1796,8 @@ function broadcastState() {
             passesThisRound: state.passesThisRound,
             skipsUsed: state.skipsUsed || 0,
             roundNumber: state.roundNumber || 0,
-            hasPausedSnapshot: !!state.pausedSnapshot
+            hasPausedSnapshot: !!state.pausedSnapshot,
+            currentCategory: state.currentCategory || 'all'
         }
     };
     broadcast(clean);
@@ -1697,7 +1829,9 @@ function broadcastState() {
             passesThisRound: state.passesThisRound,
             skipsUsed: state.skipsUsed || 0,
             roundNumber: state.roundNumber || 0,
-            pausedSnapshot: state.pausedSnapshot
+            pausedSnapshot: state.pausedSnapshot,
+            currentCategory: state.currentCategory || 'all',
+            usedPhrases: (state.usedPhrases || []).slice()
         };
         broadcast({ type: 'host_state_backup', state: fullState });
     } catch (e) { /* ignore */ }
@@ -2081,6 +2215,52 @@ function renderPregame() {
     }
 }
 
+function renderCategorySelect() {
+    showScreen('screen-category-select');
+    // Reset any team theme leftover from gameplay
+    document.body.classList.remove('theme-a', 'theme-b', 'theme-c', 'theme-d', 'theme-atg');
+    const me = getMyPlayer();
+    const startingPlayer = getPlayerBySlot(state.currentPlayerSlot);
+    const startingName = startingPlayer ? startingPlayer.name : 'Player';
+    const subtitleEl = document.getElementById('category-subtitle');
+    const buttonsPanel = document.getElementById('category-buttons');
+    const waitEl = document.getElementById('category-wait');
+    const isMyPick = me && startingPlayer && me.id === startingPlayer.id;
+    if (isMyPick) {
+        if (subtitleEl) subtitleEl.textContent = 'Pick a category for this round.';
+        if (buttonsPanel) {
+            buttonsPanel.style.display = '';
+            buttonsPanel.innerHTML = '';
+            // "All Categories" first
+            const allBtn = document.createElement('button');
+            allBtn.className = 'btn';
+            allBtn.textContent = 'All Categories';
+            allBtn.onclick = () => pickCategory('all');
+            buttonsPanel.appendChild(allBtn);
+            // Each defined category
+            Object.keys(PHRASE_CATEGORIES).forEach(catId => {
+                const cat = PHRASE_CATEGORIES[catId];
+                const btn = document.createElement('button');
+                btn.className = 'btn secondary';
+                btn.textContent = cat.name + ' (' + cat.phrases.length + ')';
+                btn.onclick = () => pickCategory(catId);
+                buttonsPanel.appendChild(btn);
+            });
+        }
+        if (waitEl) waitEl.style.display = 'none';
+    } else {
+        if (subtitleEl) subtitleEl.textContent = 'Waiting for ' + startingName + ' to pick a category...';
+        if (buttonsPanel) {
+            buttonsPanel.style.display = 'none';
+            buttonsPanel.innerHTML = '';
+        }
+        if (waitEl) {
+            waitEl.style.display = '';
+            waitEl.textContent = 'Waiting for ' + startingName + ' to pick a category...';
+        }
+    }
+}
+
 function buildScoreboard(containerId) {
     const el = document.getElementById(containerId);
     if (!el) return;
@@ -2198,6 +2378,9 @@ function updateUIFromState() {
             break;
         case 'pregame':
             renderPregame();
+            break;
+        case 'category_select':
+            renderCategorySelect();
             break;
         case 'playing':
             showHostPlayingScreen();
@@ -2322,7 +2505,9 @@ function autoSaveState() {
             lastRoundMessage: state.lastRoundMessage,
             passesThisRound: state.passesThisRound,
             roundNumber: state.roundNumber,
-            pausedSnapshot: state.pausedSnapshot
+            pausedSnapshot: state.pausedSnapshot,
+            currentCategory: state.currentCategory || 'all',
+            usedPhrases: (state.usedPhrases || []).slice()
         };
         sessionStorage.setItem(PP_AUTOSAVE_KEY, JSON.stringify(snapshot));
     } catch (e) { /* ignore */ }
@@ -2355,7 +2540,9 @@ function reconnectAsHost(session) {
             scores: (state.scores || []).slice(),
             currentPlayerSlot: state.currentPlayerSlot,
             roundNumber: state.roundNumber,
-            passesThisRound: state.passesThisRound
+            passesThisRound: state.passesThisRound,
+            currentCategory: state.currentCategory,
+            usedPhrases: (state.usedPhrases || []).slice()
         };
         state.phase = 'pregame';
     }
@@ -2405,6 +2592,9 @@ function reconnectAsHost(session) {
             case 'pregame':
                 showScreen('screen-pregame');
                 renderPregame();
+                break;
+            case 'category_select':
+                renderCategorySelect();
                 break;
             case 'round_end':
                 showScreen('screen-round-end');
@@ -2594,7 +2784,9 @@ function takeOverAsHost() {
             scores: (state.scores || []).slice(),
             currentPlayerSlot: state.currentPlayerSlot,
             roundNumber: state.roundNumber,
-            passesThisRound: state.passesThisRound
+            passesThisRound: state.passesThisRound,
+            currentCategory: state.currentCategory,
+            usedPhrases: (state.usedPhrases || []).slice()
         };
         state.phase = 'pregame';
     }
@@ -2638,6 +2830,9 @@ function takeOverAsHost() {
                 case 'pregame':
                     showScreen('screen-pregame');
                     renderPregame();
+                    break;
+                case 'category_select':
+                    renderCategorySelect();
                     break;
                 case 'round_end':
                     showScreen('screen-round-end');
