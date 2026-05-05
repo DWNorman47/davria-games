@@ -726,6 +726,12 @@
                 <div class="tc-btn" data-n="4" onclick="setTeamCount(4)">4</div>
             </div>
             <div class="team-config-info" id="team-config-info">Add players to see team breakdown</div>
+            <label id="atg-mode-label">⭐ All-Time Guesser mode</label>
+            <div class="team-count-selector" id="atg-mode-selector">
+                <div class="tc-btn active" data-atgmode="neutral" onclick="setAtgMode('neutral')" style="font-size:1rem;">Neutral</div>
+                <div class="tc-btn" data-atgmode="both" onclick="setAtgMode('both')" style="font-size:1rem;">Both Teams</div>
+            </div>
+            <div class="team-config-info" id="atg-mode-info">Neutral: ATG holding the phone = no one scores</div>
             <label>🏆 Score to win</label>
             <div class="stepper" data-stepper="setting-score" data-min="1" data-max="20" data-step="1">
                 <button type="button" class="step-btn" data-step-dir="-1" aria-label="Decrease score to win">−</button>
@@ -810,6 +816,7 @@
     <!-- ============ PLAYING - current player ============ -->
     <div id="screen-playing-current" class="screen">
         <div class="score-board" id="pc-scoreboard"></div>
+        <div id="pc-atg-banner" class="status-line" style="display:none;margin-bottom:6px;"></div>
         <div class="phrase-display" id="phrase-text">PHRASE</div>
         <button class="btn got-it" onclick="gotIt()">GOT IT! Pass →</button>
         <button class="btn" id="btn-skip" type="button" onclick="skipOrFail()" style="margin-top:8px;background:#3498db;min-height:56px;">Skip (2 left)</button>
@@ -1028,6 +1035,8 @@ const state = {
     teamSize: 0,
     atgCount: 0,
     atgClaimedCount: 0,
+    atgMode: 'neutral', // 'neutral' (default) | 'both'
+    atgInstance: 0, // when atgMode='both', tracks which team the current ATG is acting as (0..numTeams-1)
     currentSelectionSlot: 1,
     currentPlayerSlot: 0,
     currentPhrase: '',
@@ -1519,6 +1528,18 @@ function setTeamCount(n) {
     broadcastState();
 }
 
+function setAtgMode(mode) {
+    if (!isHost) return;
+    if (state.phase !== 'lobby') return;
+    if (mode !== 'neutral' && mode !== 'both') mode = 'neutral';
+    state.atgMode = mode;
+    document.querySelectorAll('#atg-mode-selector .tc-btn').forEach(btn => {
+        btn.classList.toggle('active', btn.dataset.atgmode === mode);
+    });
+    renderLobby();
+    broadcastState();
+}
+
 function removePlayerByPeerId(peerId) {
     if (state.phase === 'lobby') {
         state.players = state.players.filter(p => p.id !== peerId);
@@ -1541,6 +1562,7 @@ function hostStartSelection() {
     state.phase = 'selection';
     state.currentSelectionSlot = 1;
     state.atgClaimedCount = 0;
+    state.atgInstance = 0;
     state.scores = new Array(state.numTeams).fill(0);
     state.scoreToWin = parseInt(document.getElementById('setting-score').value) || 7;
     state.roundMinMs = (parseInt(document.getElementById('setting-min').value) || 45) * 1000;
@@ -1565,6 +1587,8 @@ function hostStartRound() {
     if (state.currentPlayerSlot < 1 || state.currentPlayerSlot > totalSlots) {
         state.currentPlayerSlot = 1;
     }
+    // Reset ATG instance for new round
+    state.atgInstance = 0;
     const duration = state.roundMinMs + Math.random() * (state.roundMaxMs - state.roundMinMs);
     state.roundEndTime = Date.now() + duration;
     const newPhrase = drawPhrase();
@@ -1600,7 +1624,32 @@ function drawPhrase(categoryId) {
 
 function advanceTurn() {
     state.passesThisRound = (state.passesThisRound || 0) + 1;
-    state.currentPlayerSlot = (state.currentPlayerSlot % state.players.length) + 1;
+    // ATG "both teams" mode: an ATG plays once per team per rotation.
+    // The leaving player drives whether we stay on the same slot (advance instance)
+    // or roll over to the next slot (reset instance to 0).
+    const leaving = getPlayerBySlot(state.currentPlayerSlot);
+    const useAtgBoth = state.atgMode === 'both' && state.numTeams > 1;
+    let advanceSlot = true;
+    if (useAtgBoth && leaving && leaving.isATG) {
+        const inst = state.atgInstance || 0;
+        if (inst < state.numTeams - 1) {
+            // Same ATG stays on, but acts as the next team
+            state.atgInstance = inst + 1;
+            advanceSlot = false;
+        } else {
+            // Done all teams for this ATG — advance to next slot, reset
+            state.atgInstance = 0;
+            advanceSlot = true;
+        }
+    }
+    if (advanceSlot) {
+        state.currentPlayerSlot = (state.currentPlayerSlot % state.players.length) + 1;
+        // If we just landed on a (new) ATG, ensure instance starts at 0
+        const arriving = getPlayerBySlot(state.currentPlayerSlot);
+        if (useAtgBoth && arriving && arriving.isATG) {
+            state.atgInstance = 0;
+        }
+    }
     state.currentPhrase = drawPhrase();
     broadcastState();
     sendPhraseToCurrentPlayer();
@@ -1664,6 +1713,22 @@ function endRound() {
 
     if (state.numTeams === 1) {
         state.lastRoundMessage = "Time's up! " + (state.passesThisRound || 0) + ' passes this round.';
+    } else if (currentPlayer && currentPlayer.isATG && state.atgMode === 'both') {
+        // ATG playing as a specific team — that team is the loser, others score.
+        const holderTeam = Math.max(0, Math.min(state.numTeams - 1, state.atgInstance || 0));
+        state.losingTeam = holderTeam;
+        for (let t = 0; t < state.numTeams; t++) {
+            if (t !== holderTeam) state.scores[t]++;
+        }
+        state.lastRoundMessage = 'All-Time Guesser ' + currentPlayer.name + ' was holding (acting as Team ' + TEAM_LETTERS[holderTeam] + '). All other teams score!';
+        // Check win condition
+        for (let t = 0; t < state.numTeams; t++) {
+            if (state.scores[t] >= state.scoreToWin) {
+                state.winningTeam = t;
+                gameEnded = true;
+                break;
+            }
+        }
     } else if (currentPlayer && currentPlayer.isATG) {
         state.lastRoundMessage = 'All-Time Guesser ' + currentPlayer.name + ' was holding the phone — no one scores!';
     } else if (currentPlayer) {
@@ -1701,6 +1766,7 @@ function hostNewGame() {
     state.scores = new Array(state.numTeams).fill(0);
     state.currentPlayerSlot = 0;
     state.atgClaimedCount = 0;
+    state.atgInstance = 0;
     state.winningTeam = -1;
     state.losingTeam = -1;
     state.roundNumber = 0;
@@ -1763,6 +1829,13 @@ function hostContinueGame() {
     // round keeps the same number and same slot (the same player who was up).
     state.roundNumber = Math.max(0, (state.roundNumber || 1) - 1);
     hostStartRound();
+    // hostStartRound() resets atgInstance — restore the in-flight value so the
+    // resumed ATG keeps acting as the same team they were holding for.
+    if (typeof snap.atgInstance === 'number') {
+        state.atgInstance = snap.atgInstance;
+        broadcastState();
+        showHostPlayingScreen();
+    }
 }
 
 function hostStartCategorySelect() {
@@ -1813,7 +1886,8 @@ function pauseGame() {
         roundNumber: state.roundNumber,
         passesThisRound: state.passesThisRound,
         currentCategory: state.currentCategory,
-        usedPhrases: (state.usedPhrases || []).slice()
+        usedPhrases: (state.usedPhrases || []).slice(),
+        atgInstance: state.atgInstance || 0
     };
     state.phase = 'pregame';
     broadcastState();
@@ -1844,6 +1918,8 @@ function broadcastState() {
             teamSize: state.teamSize,
             atgCount: state.atgCount,
             atgClaimedCount: state.atgClaimedCount,
+            atgMode: state.atgMode || 'neutral',
+            atgInstance: state.atgInstance || 0,
             currentSelectionSlot: state.currentSelectionSlot,
             currentPlayerSlot: state.currentPlayerSlot,
             scores: state.scores,
@@ -1872,6 +1948,8 @@ function broadcastState() {
             teamSize: state.teamSize,
             atgCount: state.atgCount,
             atgClaimedCount: state.atgClaimedCount,
+            atgMode: state.atgMode || 'neutral',
+            atgInstance: state.atgInstance || 0,
             currentSelectionSlot: state.currentSelectionSlot,
             currentPlayerSlot: state.currentPlayerSlot,
             currentPhrase: state.currentPhrase,
@@ -2094,6 +2172,25 @@ function renderLobby() {
             info.textContent = text;
         }
     }
+    // ATG mode selector + info
+    document.querySelectorAll('#atg-mode-selector .tc-btn').forEach(btn => {
+        btn.classList.toggle('active', btn.dataset.atgmode === (state.atgMode || 'neutral'));
+    });
+    const atgInfo = document.getElementById('atg-mode-info');
+    if (atgInfo) {
+        const N = state.players.length;
+        const cfg = (state.numTeams === 1)
+            ? { atgCount: 0 }
+            : calcTeamConfig(N, state.numTeams);
+        const hasATGs = state.numTeams > 1 && cfg.atgCount > 0;
+        if (!hasATGs) {
+            atgInfo.textContent = '(N/A — no ATGs with current team setup)';
+        } else if ((state.atgMode || 'neutral') === 'both') {
+            atgInfo.textContent = 'Both Teams: ATG goes ' + state.numTeams + 'x per rotation, once for each team';
+        } else {
+            atgInfo.textContent = 'Neutral: ATG holding the phone = no one scores';
+        }
+    }
 }
 
 function renderSelection() {
@@ -2284,8 +2381,16 @@ function renderCategorySelect() {
     const buttonsPanel = document.getElementById('category-buttons');
     const waitEl = document.getElementById('category-wait');
     const isMyPick = me && startingPlayer && me.id === startingPlayer.id;
+    // If the round-starter is an ATG playing for a specific team in 'both' mode,
+    // show their current affiliation.
+    const atgBothActive = startingPlayer && startingPlayer.isATG && state.atgMode === 'both' && state.numTeams > 1;
+    let atgAffix = '';
+    if (atgBothActive) {
+        const t = Math.max(0, Math.min(state.numTeams - 1, state.atgInstance || 0));
+        atgAffix = ' (ATG → Team ' + TEAM_LETTERS[t] + ', ' + ((state.atgInstance || 0) + 1) + '/' + state.numTeams + ')';
+    }
     if (isMyPick) {
-        if (subtitleEl) subtitleEl.textContent = 'Pick a category for this round.';
+        if (subtitleEl) subtitleEl.textContent = 'Pick a category for this round.' + (atgBothActive ? ' You are the ATG — playing for Team ' + TEAM_LETTERS[Math.max(0, Math.min(state.numTeams - 1, state.atgInstance || 0))] + '.' : '');
         if (buttonsPanel) {
             buttonsPanel.style.display = '';
             buttonsPanel.innerHTML = '';
@@ -2307,14 +2412,14 @@ function renderCategorySelect() {
         }
         if (waitEl) waitEl.style.display = 'none';
     } else {
-        if (subtitleEl) subtitleEl.textContent = 'Waiting for ' + startingName + ' to pick a category...';
+        if (subtitleEl) subtitleEl.textContent = 'Waiting for ' + startingName + atgAffix + ' to pick a category...';
         if (buttonsPanel) {
             buttonsPanel.style.display = 'none';
             buttonsPanel.innerHTML = '';
         }
         if (waitEl) {
             waitEl.style.display = '';
-            waitEl.textContent = 'Waiting for ' + startingName + ' to pick a category...';
+            waitEl.textContent = 'Waiting for ' + startingName + atgAffix + ' to pick a category...';
         }
     }
 }
@@ -2351,10 +2456,29 @@ function showHostPlayingScreen() {
     if (!currentPlayer) return;
     const body = document.body;
     body.classList.remove('theme-a', 'theme-b', 'theme-c', 'theme-d', 'theme-atg');
-    body.classList.add('theme-' + teamClassFor(currentPlayer));
+    // If an ATG is "playing as" a specific team (atgMode='both'), theme by that team.
+    const atgBothActive = currentPlayer.isATG && state.atgMode === 'both' && state.numTeams > 1;
+    if (atgBothActive) {
+        const t = Math.max(0, Math.min(state.numTeams - 1, state.atgInstance || 0));
+        body.classList.add('theme-' + TEAM_CLASS_SUFFIX[t]);
+    } else {
+        body.classList.add('theme-' + teamClassFor(currentPlayer));
+    }
     if (currentPlayer.id === me.id) {
         document.getElementById('phrase-text').textContent = (state.currentPhrase || '').toUpperCase();
         buildScoreboard('pc-scoreboard');
+        // Crystal-clear banner for "playing for Team X" when this ATG is up under 'both' mode
+        const banner = document.getElementById('pc-atg-banner');
+        if (banner) {
+            if (atgBothActive) {
+                const t = Math.max(0, Math.min(state.numTeams - 1, state.atgInstance || 0));
+                banner.style.display = '';
+                banner.innerHTML = 'You are the All-Time Guesser — currently playing for <span class="team-label-tag ' + TEAM_CLASS_SUFFIX[t] + '">Team ' + TEAM_LETTERS[t] + '</span> (' + ((state.atgInstance || 0) + 1) + '/' + state.numTeams + ')';
+            } else {
+                banner.style.display = 'none';
+                banner.innerHTML = '';
+            }
+        }
         // Single button: first 2 clicks skip, 3rd is a fail
         const skipsUsed = state.skipsUsed || 0;
         const skipsLeft = Math.max(0, MAX_SKIPS - skipsUsed);
@@ -2371,7 +2495,13 @@ function showHostPlayingScreen() {
         showScreen('screen-playing-current');
     } else {
         document.getElementById('wait-current-player').textContent = currentPlayer.name;
-        document.getElementById('wait-team-label').textContent = teamLabelFor(currentPlayer);
+        const waitLabel = document.getElementById('wait-team-label');
+        if (atgBothActive) {
+            const t = Math.max(0, Math.min(state.numTeams - 1, state.atgInstance || 0));
+            waitLabel.innerHTML = 'All-Time Guesser → <span class="team-label-tag ' + TEAM_CLASS_SUFFIX[t] + '">Team ' + TEAM_LETTERS[t] + '</span> (' + ((state.atgInstance || 0) + 1) + '/' + state.numTeams + ')';
+        } else {
+            waitLabel.textContent = teamLabelFor(currentPlayer);
+        }
         buildScoreboard('pw-scoreboard');
         showScreen('screen-playing-wait');
     }
@@ -2550,6 +2680,8 @@ function autoSaveState() {
             teamSize: state.teamSize,
             atgCount: state.atgCount,
             atgClaimedCount: state.atgClaimedCount,
+            atgMode: state.atgMode || 'neutral',
+            atgInstance: state.atgInstance || 0,
             currentSelectionSlot: state.currentSelectionSlot,
             currentPlayerSlot: state.currentPlayerSlot,
             currentPhrase: state.currentPhrase,
