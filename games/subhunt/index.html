@@ -149,10 +149,6 @@
     @keyframes churn { from { background-position: 0 0; } to { background-position: 13px 0; } }
     .cell .trail { position: absolute; inset: 0; border-radius: 3px; }
     .cell .trail.origin { box-shadow: inset 0 0 0 2px rgba(255,255,255,0.85); }
-    .cell.ping-quad::after {
-        content: ""; position: absolute; inset: 0;
-        background: rgba(233, 196, 69, 0.14); pointer-events: none;
-    }
     .cell.move-target { cursor: pointer; box-shadow: inset 0 0 0 2px #2ecc71; }
     .cell.move-target::before {
         content: ""; width: 30%; height: 30%;
@@ -168,6 +164,20 @@
     .cell .sub::after {
         content: ""; position: absolute; top: -28%; left: 42%;
         width: 16%; height: 34%; border-radius: 2px; background: inherit;
+    }
+    /* Sonar contact: snapshot of where a sub WAS when the ping happened */
+    .cell .sub.ghost {
+        opacity: 0.5; z-index: 1;
+        box-shadow: none;
+        outline: 2px dashed rgba(255,255,255,0.75);
+        outline-offset: 1px;
+    }
+    .cell .sub.ghost.dim { opacity: 0.22; }
+    /* Fire mode: tap an arrow next to your sub to launch */
+    .cell.fire-target { cursor: pointer; box-shadow: inset 0 0 0 2px var(--accent); }
+    .cell.fire-target .dir-arrow {
+        color: #ff9fb0; font-weight: bold; z-index: 3;
+        font-size: 1.15em; text-shadow: 0 1px 2px rgba(0,0,0,0.6);
     }
     .cell .wreck { z-index: 2; filter: grayscale(0.3); }
 
@@ -198,11 +208,8 @@
         text-align: center; color: #2ecc71; font-weight: bold;
         font-size: 1.1rem; margin: 4px 0 2px;
     }
-    .action-row { display: flex; gap: 8px; }
-    .action-row .btn { flex: 1; margin-top: 8px; padding: 12px 6px; min-height: 64px; font-size: 1rem; }
-    .fire-pad { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; margin-top: 8px; }
-    .fire-pad .btn { margin-top: 0; min-height: 58px; font-size: 1.4rem; }
-    .fire-pad .spacer { visibility: hidden; }
+    .action-row { display: flex; gap: 6px; }
+    .action-row .btn { flex: 1; margin-top: 8px; padding: 12px 4px; min-height: 64px; font-size: 0.95rem; }
     .hint { text-align: center; color: var(--text-secondary); font-size: 0.9rem; margin-top: 8px; }
     .legend {
         display: flex; flex-wrap: wrap; gap: 10px; justify-content: center;
@@ -249,9 +256,9 @@
             <h3>How to play</h3>
             <ul>
                 <li>2&ndash;4 players, each on their own phone. Your sub is <b>invisible</b> to the others.</li>
-                <li>On your turn: <b>Move</b> one square, <b>Fire</b> a torpedo, or <b>Ping</b> sonar.</li>
+                <li>Each turn has two steps: first <b>Move</b> one square or <b>Wait</b>, then <b>Fire</b> a torpedo, <b>Ping</b> sonar, or call it <b>Done</b>.</li>
                 <li><b>Torpedoes</b> run straight to the edge and sink the first sub they hit &mdash; but the full trail, including your firing position, is revealed to everyone and fades after a round.</li>
-                <li><b>Sonar ping</b> tells you the distance to the nearest enemy &mdash; but everyone hears which quadrant you pinged from.</li>
+                <li><b>Sonar ping</b> reveals every enemy sub on your map &mdash; but your own position echoes back to <b>everyone</b>. Contacts (dashed outlines) are snapshots and fade after a round; subs may have moved!</li>
                 <li>Turbulent water spreads inward from the edges; subs caught in it are <b>visible to all</b>.</li>
                 <li>Wrecks block torpedoes. One hit sinks you. Last sub standing wins!</li>
             </ul>
@@ -325,8 +332,8 @@
 
 <script>
 const COLORS = ['#5dade2', '#ec7063', '#2ecc71', '#f39c12'];
-const QUAD_NAMES = { NW: 'north-west', NE: 'north-east', SW: 'south-west', SE: 'south-east' };
 const DIRS = { up: [0,-1], down: [0,1], left: [-1,0], right: [1,0] };
+const DIR_ARROWS = { up: '▲', down: '▼', left: '◀', right: '▶' };
 const PEER_PREFIX = 'subhunt-';
 const GRACE_MS = 10000;             // disconnected player's window before their turn passes
 const HEARTBEAT_INTERVAL_MS = 3000;
@@ -883,10 +890,6 @@ function addLog(msg) {
 function isTurbulent(x, y, size, turb) {
     return Math.min(x, y, size - 1 - x, size - 1 - y) < turb;
 }
-function quadrantOf(pos, size) {
-    const h = size / 2;
-    return (pos.y < h ? 'N' : 'S') + (pos.x < h ? 'W' : 'E');
-}
 function wreckAt(x, y) { return G.wrecks.some(w => w.x === x && w.y === y); }
 function aliveList() { return G.players.filter(p => p.alive); }
 
@@ -902,7 +905,7 @@ function startMatch() {
     placeSubs(players, size);
     G = {
         phase: 'game', size, players,
-        turn: 0, round: 1, turbulence: 0,
+        turn: 0, turnPhase: 'maneuver', round: 1, turbulence: 0,
         trails: [], pings: [], wrecks: [], log: [],
         winnerIdx: -1, graceUntil: 0, graceLeftMs: 0, paused: false,
     };
@@ -938,26 +941,39 @@ function hostApplyAction(idx, msg) {
     if (G.phase !== 'game' || G.paused || idx !== G.turn) return;
     const p = G.players[idx];
     if (!p.alive) return;
-    p.notes = []; // seen — clear before this action's outcome
-    let acted = false;
 
-    if (msg.action === 'move') {
-        const { x, y } = msg;
-        if (x < 0 || y < 0 || x >= G.size || y >= G.size) return;
-        const dx = Math.abs(x - p.pos.x), dy = Math.abs(y - p.pos.y);
-        if (dx + dy !== 1 || wreckAt(x, y)) return;
-        const blocker = G.players.find(q => q.alive && q !== p && q.pos.x === x && q.pos.y === y);
-        if (blocker) {
-            blocker.notes.push('⚠️ CLUNK — something scraped your hull. An enemy sub is close!');
-            p.lastResult = '🔩 CLUNK! Your bow struck metal — an enemy sub is in that square! Turn used.';
+    // --- Step 1 of a turn: maneuver (move or wait) ---
+    if ((G.turnPhase || 'maneuver') === 'maneuver') {
+        if (msg.action === 'move') {
+            const { x, y } = msg;
+            if (x < 0 || y < 0 || x >= G.size || y >= G.size) return;
+            const dx = Math.abs(x - p.pos.x), dy = Math.abs(y - p.pos.y);
+            if (dx + dy !== 1 || wreckAt(x, y)) return;
+            p.notes = []; // seen — clear before this turn's outcome
+            const blocker = G.players.find(q => q.alive && q !== p && q.pos.x === x && q.pos.y === y);
+            if (blocker) {
+                blocker.notes.push('⚠️ CLUNK — something scraped your hull. An enemy sub is close!');
+                p.lastResult = '🔩 CLUNK! Your bow struck metal — an enemy sub is in that square! You hold position.';
+            } else {
+                p.pos = { x, y };
+                p.lastResult = isTurbulent(x, y, G.size, G.turbulence)
+                    ? '🌊 You moved into turbulent water — you are VISIBLE to everyone!'
+                    : '🤫 You moved silently.';
+            }
+        } else if (msg.action === 'wait') {
+            p.notes = [];
+            p.lastResult = '🤫 You hold position, running silent.';
         } else {
-            p.pos = { x, y };
-            p.lastResult = isTurbulent(x, y, G.size, G.turbulence)
-                ? '🌊 You moved into turbulent water — you are VISIBLE to everyone!'
-                : '🤫 You moved silently.';
+            return; // fire/ping/done are step 2
         }
-        acted = true;
-    } else if (msg.action === 'fire' && DIRS[msg.dir]) {
+        G.turnPhase = 'attack';
+        broadcastViews();
+        return;
+    }
+
+    // --- Step 2 of a turn: attack (fire, ping, or done) ---
+    let acted = false;
+    if (msg.action === 'fire' && DIRS[msg.dir]) {
         const [dx, dy] = DIRS[msg.dir];
         const cells = [{ ...p.pos }];
         let x = p.pos.x, y = p.pos.y, victim = null, blocked = false;
@@ -984,14 +1000,16 @@ function hostApplyAction(idx, msg) {
         }
         acted = true;
     } else if (msg.action === 'ping') {
-        const enemies = G.players.filter(q => q.alive && q !== p);
-        const d = Math.min(...enemies.map(q =>
-            Math.abs(q.pos.x - p.pos.x) + Math.abs(q.pos.y - p.pos.y)));
-        const quad = quadrantOf(p.pos, G.size);
-        G.pings.push({ quad, player: idx, round: G.round });
-        addLog(`📡 ${p.name} pinged sonar — echo heard in the ${QUAD_NAMES[quad]}!`);
-        p.lastResult = `📡 Sonar echo: the nearest enemy sub is ${d} square${d === 1 ? '' : 's'} away.`;
+        const echoes = [];
+        G.players.forEach((q, i) => {
+            if (q.alive && i !== idx) echoes.push({ idx: i, x: q.pos.x, y: q.pos.y });
+        });
+        G.pings.push({ player: idx, round: G.round, pos: { ...p.pos }, echoes });
+        addLog(`📡 ${p.name} pinged sonar — the echo gave their position away!`);
+        p.lastResult = `📡 Sonar contact! Enemy sub${echoes.length > 1 ? 's' : ''} marked on your map — but everyone saw where your ping came from.`;
         acted = true;
+    } else if (msg.action === 'done') {
+        acted = true; // slip away quietly, keeping the maneuver result
     }
 
     if (!acted) return;
@@ -1015,6 +1033,7 @@ function advanceTurn() {
         if (G.players[i].alive) {
             if (G.turn + s >= n) startNewRound();
             G.turn = i;
+            G.turnPhase = 'maneuver';
             armGraceIfNeeded();
             return;
         }
@@ -1107,7 +1126,7 @@ function buildView(idx) {
     return {
         type: 'view', phase: G.phase, roomCode,
         size: G.size, round: G.round, turbulence: G.turbulence,
-        turnIdx: G.turn, winnerIdx: G.winnerIdx,
+        turnIdx: G.turn, turnPhase: G.turnPhase || 'maneuver', winnerIdx: G.winnerIdx,
         paused: !!G.paused,
         graceMs: G.graceUntil ? Math.max(0, G.graceUntil - Date.now()) : 0,
         pausedGraceS: G.paused && G.graceLeftMs > 0 ? Math.ceil(G.graceLeftMs / 1000) : 0,
@@ -1117,7 +1136,13 @@ function buildView(idx) {
         trails: G.trails
             .filter(t => G.round - t.round <= 1)
             .map(t => ({ cells: t.cells, player: t.player, bright: t.round === G.round })),
-        pings: G.pings.filter(p => G.round - p.round <= 1).map(p => ({ quad: p.quad })),
+        // Everyone sees where each ping came from; only the pinger sees the echoes.
+        pingMarks: G.pings
+            .filter(pg => G.round - pg.round <= 1)
+            .map(pg => ({ x: pg.pos.x, y: pg.pos.y, idx: pg.player, bright: pg.round === G.round })),
+        echoMarks: G.pings
+            .filter(pg => G.round - pg.round <= 1 && pg.player === idx)
+            .flatMap(pg => pg.echoes.map(e => ({ ...e, bright: pg.round === G.round }))),
         wrecks: G.wrecks,
         visibleSubs,
         log: G.log,
@@ -1232,8 +1257,10 @@ function renderGame(view) {
         result.style.display = 'none';
     }
 
-    renderBoardV(document.getElementById('board'), view,
-        uiMode === 'move' && !view.paused ? { moveTargets: moveTargets(view) } : {});
+    let boardOpts = {};
+    if (!view.paused && myTurn && uiMode === 'move') boardOpts = { moveTargets: moveTargets(view) };
+    else if (!view.paused && myTurn && uiMode === 'fire') boardOpts = { fireTargets: fireTargets(view) };
+    renderBoardV(document.getElementById('board'), view, boardOpts);
     renderLegend(document.getElementById('game-legend'), view);
     renderActions(view, myTurn);
     renderHostControls(view);
@@ -1294,32 +1321,32 @@ function renderActions(view, myTurn) {
         return;
     }
     if (uiMode === 'choose') {
-        box.innerHTML = `
-            <div class="your-turn">Give your orders, Captain</div>
-            <div class="action-row">
-                <button class="btn action" onclick="modeMove()">🧭<br>Move</button>
-                <button class="btn" onclick="modeFire()">🚀<br>Fire</button>
-                <button class="btn go" onclick="sendPing()">📡<br>Ping</button>
-            </div>
-            <div class="hint">Move silently, fire a revealing torpedo, or ping the depths.</div>`;
+        if (view.turnPhase === 'maneuver') {
+            box.innerHTML = `
+                <div class="your-turn">Your turn — maneuver</div>
+                <div class="action-row">
+                    <button class="btn action" onclick="modeMove()">🧭<br>Move</button>
+                    <button class="btn secondary" onclick="sendWait()">🤫<br>Wait</button>
+                </div>
+                <div class="hint">Slip one square or hold position — then you attack.</div>`;
+        } else {
+            box.innerHTML = `
+                <div class="your-turn">Now — attack</div>
+                <div class="action-row">
+                    <button class="btn" onclick="modeFire()">🚀<br>Fire</button>
+                    <button class="btn go" onclick="sendPing()">📡<br>Ping</button>
+                    <button class="btn secondary" onclick="sendDone()">✔️<br>Done</button>
+                </div>
+                <div class="hint">Fire a revealing torpedo, ping (see all, be seen), or end your turn.</div>`;
+        }
     } else if (uiMode === 'move') {
         box.innerHTML = `
             <div class="hint">Tap a highlighted square to move.</div>
             <button class="btn secondary" onclick="cancelMode()">Cancel</button>`;
     } else if (uiMode === 'fire') {
         box.innerHTML = `
-            <div class="fire-pad">
-                <div class="spacer"></div>
-                <button class="btn" onclick="sendFire('up')">⬆️</button>
-                <div class="spacer"></div>
-                <button class="btn" onclick="sendFire('left')">⬅️</button>
-                <button class="btn secondary" onclick="cancelMode()">✖</button>
-                <button class="btn" onclick="sendFire('right')">➡️</button>
-                <div class="spacer"></div>
-                <button class="btn" onclick="sendFire('down')">⬇️</button>
-                <div class="spacer"></div>
-            </div>
-            <div class="hint">Torpedo runs to the edge — and reveals your position!</div>`;
+            <div class="hint">Tap an arrow on the board to launch — the torpedo runs to the edge and reveals your position!</div>
+            <button class="btn secondary" onclick="cancelMode()">Cancel</button>`;
     }
 }
 
@@ -1352,6 +1379,17 @@ function moveTargets(view) {
     return out;
 }
 
+function fireTargets(view) {
+    if (!view.youPos) return [];
+    const out = [];
+    for (const [dir, [dx, dy]] of Object.entries(DIRS)) {
+        const x = view.youPos.x + dx, y = view.youPos.y + dy;
+        if (x < 0 || y < 0 || x >= view.size || y >= view.size) continue;
+        out.push({ x, y, dir });
+    }
+    return out;
+}
+
 function renderBoardV(container, view, opts = {}) {
     const { moveTargets: targets = [] } = opts;
     container.innerHTML = '';
@@ -1366,17 +1404,16 @@ function renderBoardV(container, view, opts = {}) {
             if (!curE || (!curE.bright && entry.bright)) trailMap[key] = entry;
         });
     }
-    const activeQuads = new Set(view.pings.map(p => p.quad));
     const targetSet = new Set(targets.map(c => c.x + ',' + c.y));
-    const h = view.size / 2;
+    const fireMap = {};
+    for (const f of (opts.fireTargets || [])) fireMap[f.x + ',' + f.y] = f.dir;
+    const ghosts = [...(view.pingMarks || []), ...(view.echoMarks || [])];
 
     for (let y = 0; y < view.size; y++) {
         for (let x = 0; x < view.size; x++) {
             const cell = document.createElement('div');
             cell.className = 'cell';
             if (isTurbulent(x, y, view.size, view.turbulence)) cell.classList.add('turb');
-            const quad = (y < h ? 'N' : 'S') + (x < h ? 'W' : 'E');
-            if (activeQuads.has(quad)) cell.classList.add('ping-quad');
 
             const key = x + ',' + y;
             const t = trailMap[key];
@@ -1392,6 +1429,15 @@ function renderBoardV(container, view, opts = {}) {
                 w.className = 'wreck';
                 w.textContent = '⚓';
                 cell.appendChild(w);
+            }
+            for (const g of ghosts) {
+                if (g.x !== x || g.y !== y) continue;
+                const ghost = document.createElement('div');
+                ghost.className = 'sub ghost' + (g.bright ? '' : ' dim');
+                ghost.style.background = COLORS[g.idx];
+                ghost.textContent = g.idx === view.youIdx ? 'YOU'
+                    : view.players[g.idx].name[0].toUpperCase();
+                cell.appendChild(ghost);
             }
             for (const s of view.visibleSubs) {
                 if (s.x !== x || s.y !== y) continue;
@@ -1413,6 +1459,15 @@ function renderBoardV(container, view, opts = {}) {
             if (targetSet.has(key)) {
                 cell.classList.add('move-target');
                 cell.addEventListener('click', () => sendMove(x, y));
+            }
+            const fdir = fireMap[key];
+            if (fdir) {
+                cell.classList.add('fire-target');
+                const a = document.createElement('span');
+                a.className = 'dir-arrow';
+                a.textContent = DIR_ARROWS[fdir];
+                cell.appendChild(a);
+                cell.addEventListener('click', () => sendFire(fdir));
             }
             container.appendChild(cell);
         }
@@ -1456,6 +1511,8 @@ function sendAction(msg) {
 function sendMove(x, y) { sendAction({ action: 'move', x, y }); }
 function sendFire(dir) { sendAction({ action: 'fire', dir }); }
 function sendPing() { sendAction({ action: 'ping' }); }
+function sendWait() { sendAction({ action: 'wait' }); }
+function sendDone() { sendAction({ action: 'done' }); }
 
 // ============================================================
 // INIT — auto-reconnect from a saved session, or prefill ?room=
