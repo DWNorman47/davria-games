@@ -165,14 +165,18 @@
         content: ""; position: absolute; top: -28%; left: 42%;
         width: 16%; height: 34%; border-radius: 2px; background: inherit;
     }
-    /* Sonar contact: snapshot of where a sub WAS when the ping happened */
-    .cell .sub.ghost {
-        opacity: 0.5; z-index: 1;
+    /* Contact marker: any sub you know about but don't own — sonar echoes
+       (snapshots) and subs exposed by turbulent water. Dashed outline only;
+       a solid capsule always means YOUR live sub. */
+    .cell .sub.outline {
+        background: transparent !important;
+        border: 2px dashed currentColor;
         box-shadow: none;
-        outline: 2px dashed rgba(255,255,255,0.75);
-        outline-offset: 1px;
+        opacity: 0.9;
+        z-index: 1;
     }
-    .cell .sub.ghost.dim { opacity: 0.22; }
+    .cell .sub.outline::after { display: none; }
+    .cell .sub.outline.dim { opacity: 0.35; }
     /* Fire mode: tap an arrow next to your sub to launch */
     .cell.fire-target { cursor: pointer; box-shadow: inset 0 0 0 2px var(--accent); }
     .cell.fire-target .dir-arrow {
@@ -1045,7 +1049,7 @@ function startNewRound() {
     G.trails = G.trails.filter(t => G.round - t.round <= 1);
     G.pings = G.pings.filter(p => G.round - p.round <= 1);
     const maxRings = G.size / 2 - 1;
-    const t = Math.min(maxRings, Math.floor((G.round - 1) / 3));
+    const t = Math.min(maxRings, Math.floor((G.round - 1) / 5));
     if (t > G.turbulence) {
         G.turbulence = t;
         addLog('🌊 The storm spreads! Subs in the churning outer waters are visible to all!');
@@ -1433,8 +1437,8 @@ function renderBoardV(container, view, opts = {}) {
             for (const g of ghosts) {
                 if (g.x !== x || g.y !== y) continue;
                 const ghost = document.createElement('div');
-                ghost.className = 'sub ghost' + (g.bright ? '' : ' dim');
-                ghost.style.background = COLORS[g.idx];
+                ghost.className = 'sub outline' + (g.bright ? '' : ' dim');
+                ghost.style.color = COLORS[g.idx];
                 ghost.textContent = g.idx === view.youIdx ? 'YOU'
                     : view.players[g.idx].name[0].toUpperCase();
                 cell.appendChild(ghost);
@@ -1442,8 +1446,15 @@ function renderBoardV(container, view, opts = {}) {
             for (const s of view.visibleSubs) {
                 if (s.x !== x || s.y !== y) continue;
                 const sub = document.createElement('div');
-                sub.className = 'sub';
-                sub.style.background = COLORS[s.idx];
+                if (view.phase === 'over') {
+                    // Final reveal: show everyone solid
+                    sub.className = 'sub';
+                    sub.style.background = COLORS[s.idx];
+                } else {
+                    // Turbulence contact: dashed outline like sonar contacts
+                    sub.className = 'sub outline';
+                    sub.style.color = COLORS[s.idx];
+                }
                 sub.textContent = s.idx === view.youIdx ? 'YOU'
                     : view.players[s.idx].name[0].toUpperCase();
                 cell.appendChild(sub);
