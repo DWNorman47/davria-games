@@ -154,9 +154,11 @@
         content: ""; width: 30%; height: 30%;
         border-radius: 50%; background: rgba(46, 204, 113, 0.6);
     }
+    /* Subs stack in the same cell (absolute + centered), so a contact
+       outline on your square draws AROUND your solid sub, not beside it */
     .cell .sub {
         width: 76%; height: 48%; border-radius: 999px;
-        position: relative; z-index: 2;
+        position: absolute; inset: 0; margin: auto; z-index: 2;
         display: flex; align-items: center; justify-content: center;
         font-size: 0.6em; font-weight: bold; color: rgba(0,0,0,0.65);
         box-shadow: 0 1px 3px rgba(0,0,0,0.5);
@@ -169,6 +171,7 @@
        (snapshots) and subs exposed by turbulent water. Dashed outline only;
        a solid capsule always means YOUR live sub. */
     .cell .sub.outline {
+        width: 92%; height: 66%; /* slightly larger, rings the solid sub */
         background: transparent !important;
         border: 2px dashed currentColor;
         box-shadow: none;
