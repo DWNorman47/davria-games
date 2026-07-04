@@ -1,0 +1,1479 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+<title>Sub Hunt</title>
+<script src="https://unpkg.com/peerjs@1.5.4/dist/peerjs.min.js"></script>
+<style>
+    :root {
+        --bg-primary: #0f0f1a;
+        --bg-secondary: #1a1a2e;
+        --bg-card: #16213e;
+        --accent: #e94560;
+        --accent-hover: #ff6b81;
+        --text-primary: #eee;
+        --text-secondary: #aaa;
+        --border: #2a2a4a;
+        --sea-deep: #0a2239;
+        --sea-cell: #123a5c;
+        --sea-turb: #1d6a94;
+    }
+    * { box-sizing: border-box; margin: 0; padding: 0; -webkit-tap-highlight-color: transparent; }
+    html, body {
+        width: 100%;
+        background: var(--bg-primary);
+        color: var(--text-primary);
+        font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+        overscroll-behavior: none;
+        touch-action: manipulation;
+    }
+    body { display: flex; flex-direction: column; min-height: 100vh; min-height: 100dvh; }
+    .app {
+        flex: 1; display: flex; flex-direction: column;
+        padding: 16px;
+        padding-top: max(16px, env(safe-area-inset-top));
+        padding-bottom: max(16px, env(safe-area-inset-bottom));
+        max-width: 560px; margin: 0 auto; width: 100%;
+    }
+    h1 { text-align: center; font-size: 2rem; margin-bottom: 4px; color: var(--accent); letter-spacing: 1px; }
+    .subtitle { text-align: center; color: var(--text-secondary); margin-bottom: 16px; font-size: 0.9rem; }
+    .screen { display: none; flex: 1; flex-direction: column; }
+    .screen.active { display: flex; }
+    .panel {
+        background: var(--bg-card);
+        border: 1px solid var(--border);
+        border-radius: 14px;
+        padding: 16px;
+        margin-bottom: 12px;
+        box-shadow: 0 4px 16px rgba(0,0,0,0.25), inset 0 1px 0 rgba(255,255,255,0.03);
+    }
+    .panel h3 { font-size: 1.05rem; margin-bottom: 8px; letter-spacing: 0.3px; }
+    .panel ul { padding-left: 20px; color: var(--text-secondary); font-size: 0.9rem; }
+    .panel li { margin-bottom: 6px; }
+    .panel p { color: var(--text-secondary); font-size: 0.95rem; }
+    .btn {
+        display: block; width: 100%;
+        padding: 16px; min-height: 58px;
+        background: var(--accent); color: white;
+        border: none; border-radius: 12px;
+        font-size: 1.15rem; font-weight: bold; cursor: pointer;
+        margin-top: 10px;
+        transition: background 0.15s, transform 0.05s;
+        box-shadow: 0 4px 14px rgba(233, 69, 96, 0.25);
+    }
+    .btn:active { transform: scale(0.98); }
+    .btn:hover { background: var(--accent-hover); }
+    .btn:disabled { background: #555; cursor: not-allowed; box-shadow: none; opacity: 0.7; }
+    .btn.secondary { background: var(--bg-secondary); border: 1px solid var(--border); box-shadow: none; }
+    .btn.secondary:hover { background: var(--border); }
+    .btn.action { background: #1f6feb; box-shadow: 0 4px 14px rgba(31,111,235,0.25); }
+    .btn.action:hover { background: #388bfd; }
+    .btn.go { background: #27ae60; box-shadow: 0 4px 14px rgba(39,174,96,0.3); }
+    .btn.go:hover { background: #2ecc71; }
+    input[type="text"] {
+        width: 100%; padding: 14px; min-height: 52px;
+        background: var(--bg-secondary); color: var(--text-primary);
+        border: 1px solid var(--border); border-radius: 10px;
+        font-size: 1.05rem; margin-top: 6px;
+    }
+    label { display: block; margin-top: 12px; color: var(--text-secondary); font-size: 0.9rem; font-weight: 500; }
+    .status { text-align: center; color: var(--text-secondary); min-height: 1.4em; margin-top: 10px; font-size: 0.95rem; }
+
+    /* Floating refresh button (visible while in a room) */
+    .refresh-btn {
+        position: fixed;
+        top: max(10px, env(safe-area-inset-top));
+        right: max(10px, env(safe-area-inset-right));
+        width: 44px; height: 44px;
+        display: none;
+        align-items: center; justify-content: center;
+        background: var(--bg-card);
+        border: 1px solid var(--border);
+        border-radius: 50%;
+        font-size: 1.2rem;
+        cursor: pointer;
+        z-index: 50;
+        box-shadow: 0 2px 10px rgba(0,0,0,0.4);
+    }
+    .refresh-btn.visible { display: flex; }
+
+    /* Tabs */
+    .tabs { display: flex; gap: 8px; margin-bottom: 12px; }
+    .tab {
+        flex: 1; padding: 14px; min-height: 52px;
+        background: var(--bg-secondary); color: var(--text-secondary);
+        border: 1px solid var(--border); border-radius: 10px;
+        font-size: 1.05rem; font-weight: bold; cursor: pointer;
+    }
+    .tab.active { background: var(--bg-card); color: var(--text-primary); border-color: var(--accent); }
+
+    /* Lobby */
+    .room-code {
+        text-align: center; font-size: 2.4rem; font-weight: bold;
+        letter-spacing: 6px; color: #ffd671; margin: 6px 0 10px;
+        font-family: ui-monospace, Menlo, Consolas, monospace;
+    }
+    .player-list { list-style: none; }
+    .player-list li {
+        display: flex; align-items: center; gap: 10px;
+        padding: 10px 4px; border-bottom: 1px solid var(--border);
+        font-size: 1.05rem;
+    }
+    .player-list li:last-child { border-bottom: none; }
+    .dot { width: 14px; height: 14px; border-radius: 50%; flex: 0 0 auto; }
+    .tag { margin-left: auto; font-size: 0.8rem; color: var(--text-secondary); }
+    .row { display: flex; gap: 8px; }
+    .row .btn { flex: 1; }
+
+    /* Board */
+    .board {
+        display: grid; gap: 2px;
+        background: var(--sea-deep);
+        padding: 6px; border-radius: 12px;
+        border: 1px solid var(--border);
+        margin-bottom: 10px; user-select: none;
+    }
+    .cell {
+        aspect-ratio: 1; background: var(--sea-cell);
+        border-radius: 3px; position: relative;
+        display: flex; align-items: center; justify-content: center;
+        font-size: clamp(0.6rem, 3.2vw, 1rem); overflow: hidden;
+    }
+    .cell.turb {
+        background: var(--sea-turb);
+        background-image: repeating-linear-gradient(-45deg,
+            rgba(255,255,255,0.10) 0 4px, transparent 4px 9px);
+        animation: churn 2.2s linear infinite;
+    }
+    @keyframes churn { from { background-position: 0 0; } to { background-position: 13px 0; } }
+    .cell .trail { position: absolute; inset: 0; border-radius: 3px; }
+    .cell .trail.origin { box-shadow: inset 0 0 0 2px rgba(255,255,255,0.85); }
+    .cell.ping-quad::after {
+        content: ""; position: absolute; inset: 0;
+        background: rgba(233, 196, 69, 0.14); pointer-events: none;
+    }
+    .cell.move-target { cursor: pointer; box-shadow: inset 0 0 0 2px #2ecc71; }
+    .cell.move-target::before {
+        content: ""; width: 30%; height: 30%;
+        border-radius: 50%; background: rgba(46, 204, 113, 0.6);
+    }
+    .cell .sub {
+        width: 76%; height: 48%; border-radius: 999px;
+        position: relative; z-index: 2;
+        display: flex; align-items: center; justify-content: center;
+        font-size: 0.6em; font-weight: bold; color: rgba(0,0,0,0.65);
+        box-shadow: 0 1px 3px rgba(0,0,0,0.5);
+    }
+    .cell .sub::after {
+        content: ""; position: absolute; top: -28%; left: 42%;
+        width: 16%; height: 34%; border-radius: 2px; background: inherit;
+    }
+    .cell .wreck { z-index: 2; filter: grayscale(0.3); }
+
+    /* Game screen */
+    .game-header {
+        display: flex; justify-content: space-between; align-items: baseline;
+        margin-bottom: 8px; padding: 0 2px;
+    }
+    .game-header .who { font-size: 1.15rem; font-weight: bold; }
+    .game-header .round { color: var(--text-secondary); font-size: 0.9rem; }
+    .notice {
+        background: #3d2f12; border: 1px solid #8a6d1a; color: #ffd671;
+        border-radius: 10px; padding: 10px 12px; margin-bottom: 10px; font-size: 0.95rem;
+    }
+    .result {
+        background: var(--bg-card); border: 1px solid var(--border);
+        border-radius: 10px; padding: 12px; margin-bottom: 10px;
+        font-size: 0.98rem; text-align: center;
+    }
+    .waiting {
+        text-align: center; color: var(--text-secondary);
+        padding: 18px 12px; font-size: 1.05rem;
+        background: var(--bg-card); border: 1px solid var(--border); border-radius: 12px;
+        margin-top: 8px;
+    }
+    .waiting b { color: #ffd671; }
+    .your-turn {
+        text-align: center; color: #2ecc71; font-weight: bold;
+        font-size: 1.1rem; margin: 4px 0 2px;
+    }
+    .action-row { display: flex; gap: 8px; }
+    .action-row .btn { flex: 1; margin-top: 8px; padding: 12px 6px; min-height: 64px; font-size: 1rem; }
+    .fire-pad { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; margin-top: 8px; }
+    .fire-pad .btn { margin-top: 0; min-height: 58px; font-size: 1.4rem; }
+    .fire-pad .spacer { visibility: hidden; }
+    .hint { text-align: center; color: var(--text-secondary); font-size: 0.9rem; margin-top: 8px; }
+    .legend {
+        display: flex; flex-wrap: wrap; gap: 10px; justify-content: center;
+        font-size: 0.82rem; color: var(--text-secondary); margin-bottom: 10px;
+    }
+    .legend span { display: inline-flex; align-items: center; gap: 4px; }
+    .legend .chip { width: 14px; height: 9px; border-radius: 999px; display: inline-block; }
+    .log { list-style: none; padding: 0; }
+    .log li {
+        padding: 7px 4px; border-bottom: 1px solid var(--border);
+        font-size: 0.9rem; color: var(--text-secondary);
+    }
+    .log li:first-child { color: var(--text-primary); }
+    .log li:last-child { border-bottom: none; }
+    .winner { text-align: center; font-size: 1.7rem; font-weight: bold; margin: 12px 0; }
+</style>
+</head>
+<body>
+<button id="refresh-btn" class="refresh-btn" onclick="refreshPage()" title="Refresh connection">🔄</button>
+<div class="app">
+    <h1>Sub Hunt</h1>
+    <div class="subtitle">Silent submarine duel &middot; everyone on their own phone</div>
+
+    <!-- ENTRY -->
+    <div id="screen-entry" class="screen active">
+        <div class="tabs">
+            <button class="tab active" id="tab-create" onclick="switchTab('create')">Host Game</button>
+            <button class="tab" id="tab-join" onclick="switchTab('join')">Join Game</button>
+        </div>
+        <div id="panel-create" class="panel">
+            <label>Your name</label>
+            <input type="text" id="host-name" placeholder="Captain" maxlength="14">
+            <button class="btn go" onclick="createGame()">Create Room 🌊</button>
+        </div>
+        <div id="panel-join" class="panel" style="display:none">
+            <label>Your name</label>
+            <input type="text" id="guest-name" placeholder="Captain" maxlength="14">
+            <label>Room code</label>
+            <input type="text" id="room-code-input" placeholder="e.g. ABX7QK" maxlength="12" autocapitalize="characters">
+            <button class="btn go" onclick="joinGame()">Join Room</button>
+        </div>
+        <div class="status" id="entry-status"></div>
+        <div class="panel">
+            <h3>How to play</h3>
+            <ul>
+                <li>2&ndash;4 players, each on their own phone. Your sub is <b>invisible</b> to the others.</li>
+                <li>On your turn: <b>Move</b> one square, <b>Fire</b> a torpedo, or <b>Ping</b> sonar.</li>
+                <li><b>Torpedoes</b> run straight to the edge and sink the first sub they hit &mdash; but the full trail, including your firing position, is revealed to everyone and fades after a round.</li>
+                <li><b>Sonar ping</b> tells you the distance to the nearest enemy &mdash; but everyone hears which quadrant you pinged from.</li>
+                <li>Turbulent water spreads inward from the edges; subs caught in it are <b>visible to all</b>.</li>
+                <li>Wrecks block torpedoes. One hit sinks you. Last sub standing wins!</li>
+            </ul>
+        </div>
+    </div>
+
+    <!-- LOBBY -->
+    <div id="screen-lobby" class="screen">
+        <div class="panel">
+            <h3>Room code</h3>
+            <div class="room-code" id="lobby-room-code"></div>
+            <div class="row">
+                <button class="btn secondary" onclick="copyRoomCode()">Copy Code</button>
+                <button class="btn secondary" onclick="copyJoinLink()">Copy Link</button>
+            </div>
+        </div>
+        <div class="panel">
+            <h3>Captains aboard</h3>
+            <ul class="player-list" id="lobby-players"></ul>
+        </div>
+        <div id="lobby-host-panel" style="display:none">
+            <button class="btn go" id="btn-start" onclick="startMatch()" disabled>Dive! (need 2&ndash;4 players)</button>
+        </div>
+        <div class="status" id="lobby-status"></div>
+    </div>
+
+    <!-- GAME -->
+    <div id="screen-game" class="screen">
+        <div class="game-header">
+            <span class="who" id="game-who"></span>
+            <span class="round" id="game-round"></span>
+        </div>
+        <div id="game-notices"></div>
+        <div class="board" id="board"></div>
+        <div class="legend" id="game-legend"></div>
+        <div id="game-result" class="result" style="display:none"></div>
+        <div id="game-actions"></div>
+        <div id="host-controls"></div>
+        <div class="panel" style="margin-top:12px">
+            <h3>📻 Radio chatter</h3>
+            <ul class="log" id="game-log"></ul>
+        </div>
+    </div>
+
+    <!-- GAME OVER -->
+    <div id="screen-over" class="screen">
+        <div class="winner" id="over-winner"></div>
+        <div class="board" id="over-board"></div>
+        <div class="panel">
+            <h3>📻 Final radio chatter</h3>
+            <ul class="log" id="over-log"></ul>
+        </div>
+        <div id="over-host-panel" style="display:none">
+            <button class="btn go" onclick="playAgain()">Back to Lobby</button>
+        </div>
+        <div class="waiting" id="over-guest-note" style="display:none">Waiting for the host to restart...</div>
+    </div>
+
+    <!-- HOST DISCONNECTED -->
+    <div id="screen-host-lost" class="screen">
+        <div class="panel" style="margin-top:24px">
+            <h3>📡 Lost contact with the host</h3>
+            <p>The host's connection dropped. You can take command with the last known game state, or wait for them to come back and reconnect.</p>
+        </div>
+        <button class="btn" id="btn-take-over" onclick="takeOverAsHost()">👑 Take Over as Host</button>
+        <button class="btn secondary" onclick="tryReconnectGuest()">Try Reconnect</button>
+        <button class="btn secondary" onclick="leaveGame()">Leave Game</button>
+        <div class="status" id="host-lost-status"></div>
+    </div>
+</div>
+
+<script>
+const COLORS = ['#5dade2', '#ec7063', '#2ecc71', '#f39c12'];
+const QUAD_NAMES = { NW: 'north-west', NE: 'north-east', SW: 'south-west', SE: 'south-east' };
+const DIRS = { up: [0,-1], down: [0,1], left: [-1,0], right: [1,0] };
+const PEER_PREFIX = 'subhunt-';
+const GRACE_MS = 10000;             // disconnected player's window before their turn passes
+const HEARTBEAT_INTERVAL_MS = 3000;
+const HEARTBEAT_TIMEOUT_MS = 12000; // 4 missed pings before considering the host dead
+
+let isHost = false;
+let peer = null;
+let roomCode = '';
+let myName = '';
+let hostConn = null;              // guest → host
+const guestConns = new Map();     // host: peerId → conn
+
+// Host-side state
+let lobbyPlayers = [];            // [{id:'host'|peerId, name, connected}]
+let G = null;                     // active match state
+let graceTimer = null;
+
+// Client-side state (both host & guests render from a view)
+let V = null;                     // latest view
+let uiMode = 'choose';            // 'choose' | 'move' | 'fire'
+let actionPending = false;
+let prevTurnMine = false;
+let prevAlive = true;
+
+// ============================================================
+// UI HELPERS
+// ============================================================
+const SH_AWAKE_SCREENS = new Set(['screen-game']);
+const SH_REFRESH_SCREENS = new Set(['screen-lobby', 'screen-game', 'screen-over', 'screen-host-lost']);
+
+function showScreen(id) {
+    document.querySelectorAll('.screen').forEach(s => s.classList.remove('active'));
+    document.getElementById(id).classList.add('active');
+    window.scrollTo(0, 0);
+    if (SH_AWAKE_SCREENS.has(id)) requestWakeLock();
+    else releaseWakeLock();
+    const refreshBtn = document.getElementById('refresh-btn');
+    if (refreshBtn) refreshBtn.classList.toggle('visible', SH_REFRESH_SCREENS.has(id));
+}
+function refreshPage() {
+    // Session info is in sessionStorage, so the auto-reconnect logic at page
+    // load will rejoin the same room as the same player.
+    window.location.reload();
+}
+function setStatus(id, text) {
+    const el = document.getElementById(id);
+    if (el) el.textContent = text;
+}
+function switchTab(which) {
+    document.getElementById('tab-create').classList.toggle('active', which === 'create');
+    document.getElementById('tab-join').classList.toggle('active', which === 'join');
+    document.getElementById('panel-create').style.display = which === 'create' ? '' : 'none';
+    document.getElementById('panel-join').style.display = which === 'join' ? '' : 'none';
+}
+function genRoomCode() {
+    const chars = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
+    let s = '';
+    for (let i = 0; i < 6; i++) s += chars[Math.floor(Math.random() * chars.length)];
+    return s;
+}
+function copyRoomCode() {
+    if (!roomCode) return;
+    try { navigator.clipboard.writeText(roomCode); setStatus('lobby-status', 'Code copied!'); }
+    catch (e) { setStatus('lobby-status', roomCode); }
+}
+function copyJoinLink() {
+    if (!roomCode) return;
+    const url = window.location.origin + window.location.pathname + '?room=' + roomCode;
+    try { navigator.clipboard.writeText(url); setStatus('lobby-status', 'Join link copied!'); }
+    catch (e) { setStatus('lobby-status', 'Code: ' + roomCode); }
+}
+function vibrate(pattern) {
+    try { if (navigator.vibrate) navigator.vibrate(pattern); } catch (e) {}
+}
+
+// ============================================================
+// WAKE LOCK (keep the screen on during a match)
+// ============================================================
+let wakeLock = null;
+async function requestWakeLock() {
+    try {
+        if ('wakeLock' in navigator && !wakeLock) {
+            wakeLock = await navigator.wakeLock.request('screen');
+            wakeLock.addEventListener('release', () => { wakeLock = null; });
+        }
+    } catch (e) { /* ignore — not critical */ }
+}
+function releaseWakeLock() {
+    if (wakeLock) {
+        try { wakeLock.release(); } catch (e) {}
+        wakeLock = null;
+    }
+}
+// Re-acquire when the page becomes visible again (browser auto-releases on hide)
+document.addEventListener('visibilitychange', () => {
+    if (document.visibilityState === 'visible' && !wakeLock) {
+        const active = document.querySelector('.screen.active');
+        if (active && SH_AWAKE_SCREENS.has(active.id)) requestWakeLock();
+    }
+});
+
+// ============================================================
+// SESSION STORAGE FOR AUTO-RECONNECT
+// ============================================================
+const SH_SESSION_KEY = 'subhunt-session';
+const SH_AUTOSAVE_KEY = 'subhunt-autosave';
+const SH_HOST_BACKUP_KEY = 'subhunt-host-backup';
+
+function saveSession() {
+    try {
+        sessionStorage.setItem(SH_SESSION_KEY, JSON.stringify({
+            isHost, roomCode, myName,
+        }));
+    } catch (e) { /* ignore */ }
+}
+function clearSession() {
+    try {
+        sessionStorage.removeItem(SH_SESSION_KEY);
+        sessionStorage.removeItem(SH_AUTOSAVE_KEY);
+    } catch (e) { /* ignore */ }
+}
+function getSession() {
+    try {
+        const raw = sessionStorage.getItem(SH_SESSION_KEY);
+        return raw ? JSON.parse(raw) : null;
+    } catch (e) { return null; }
+}
+function autoSaveState() {
+    if (!isHost) return;
+    try {
+        sessionStorage.setItem(SH_AUTOSAVE_KEY, JSON.stringify({
+            roomCode, lobbyPlayers, G,
+        }));
+    } catch (e) { /* ignore */ }
+}
+
+// ============================================================
+// HEARTBEAT (detects dead connections that don't fire 'close')
+// ============================================================
+let heartbeatInterval = null;
+let lastHeartbeat = 0;
+let heartbeatWatchdog = null;
+
+function startHostHeartbeat() {
+    stopHeartbeat();
+    heartbeatInterval = setInterval(() => {
+        for (const conn of guestConns.values()) {
+            try { conn.send({ type: 'ping', t: Date.now() }); } catch (e) {}
+        }
+    }, HEARTBEAT_INTERVAL_MS);
+}
+function startGuestWatchdog() {
+    stopHeartbeat();
+    lastHeartbeat = Date.now();
+    heartbeatWatchdog = setInterval(() => {
+        if (isHost) return;
+        if (Date.now() - lastHeartbeat > HEARTBEAT_TIMEOUT_MS) {
+            stopHeartbeat();
+            handleHostDisconnect();
+        }
+    }, 2000);
+}
+function stopHeartbeat() {
+    if (heartbeatInterval) { clearInterval(heartbeatInterval); heartbeatInterval = null; }
+    if (heartbeatWatchdog) { clearInterval(heartbeatWatchdog); heartbeatWatchdog = null; }
+}
+
+// ============================================================
+// PEERJS - HOST
+// ============================================================
+function initHostPeer(onOpen, onError) {
+    peer = new Peer(PEER_PREFIX + roomCode, { debug: 1 });
+    peer.on('open', onOpen);
+    peer.on('connection', conn => {
+        conn.on('open', () => guestConns.set(conn.peer, conn));
+        conn.on('data', data => handleGuestMessage(conn, data));
+        conn.on('close', () => { guestConns.delete(conn.peer); onGuestLost(conn.peer); });
+        conn.on('error', e => console.warn('conn error', e));
+    });
+    peer.on('error', onError);
+}
+
+function createGame() {
+    myName = (document.getElementById('host-name').value || 'Host').trim().slice(0, 14) || 'Host';
+    isHost = true;
+    roomCode = genRoomCode();
+    setStatus('entry-status', 'Creating room...');
+    initHostPeer(() => {
+        lobbyPlayers = [{ id: 'host', name: myName, connected: true }];
+        saveSession();
+        startHostHeartbeat();
+        broadcastLobby();
+    }, err => {
+        console.error(err);
+        if (err.type === 'unavailable-id') {
+            setTimeout(() => { try { peer.destroy(); } catch (e) {} createGame(); }, 400);
+        } else {
+            setStatus('entry-status', 'Error: ' + err.type);
+        }
+    });
+}
+
+function handleGuestMessage(conn, msg) {
+    if (!isHost) return;
+    switch (msg.type) {
+        case 'join': {
+            const name = (msg.name || 'Player').trim().slice(0, 14) || 'Player';
+            const hostP = lobbyPlayers.find(p => p.id === 'host');
+            if (hostP && hostP.name.toLowerCase() === name.toLowerCase()) {
+                conn.send({ type: 'reject', reason: 'That name is taken — pick another.' });
+                return;
+            }
+            // Returning player (by name, case-insensitive) — reclaim their seat
+            // whether or not we noticed the old connection die.
+            const existing = lobbyPlayers.find(p =>
+                p.id !== 'host' && p.name.toLowerCase() === name.toLowerCase());
+            if (existing) {
+                if (existing.id !== conn.peer) {
+                    const old = guestConns.get(existing.id);
+                    if (old) { try { old.close(); } catch (e) {} }
+                    guestConns.delete(existing.id);
+                }
+                existing.id = conn.peer;
+                existing.connected = true;
+                if (G) {
+                    const gp = G.players.find(p => p.name.toLowerCase() === name.toLowerCase());
+                    if (gp) {
+                        gp.id = conn.peer;
+                        gp.connected = true;
+                        addLog(`📡 ${name}'s sub is back online!`);
+                        if (G.phase === 'game' && G.players[G.turn] === gp) armGraceIfNeeded();
+                        broadcastViews();
+                    } else {
+                        conn.send({ type: 'reject', reason: 'A match is underway — try again after it ends.' });
+                    }
+                } else {
+                    broadcastLobby();
+                }
+                return;
+            }
+            if (G) {
+                conn.send({ type: 'reject', reason: 'A match is underway — try again after it ends.' });
+                return;
+            }
+            if (lobbyPlayers.length >= 4) {
+                conn.send({ type: 'reject', reason: 'Room is full (4 subs max).' });
+                return;
+            }
+            lobbyPlayers.push({ id: conn.peer, name, connected: true });
+            broadcastLobby();
+            break;
+        }
+        case 'action': {
+            if (!G || G.phase !== 'game') return;
+            const idx = G.players.findIndex(p => p.id === conn.peer);
+            if (idx >= 0) hostApplyAction(idx, msg);
+            break;
+        }
+    }
+}
+
+function onGuestLost(peerId) {
+    const lp = lobbyPlayers.find(p => p.id === peerId);
+    if (lp) lp.connected = false;
+    if (G) {
+        const gp = G.players.find(p => p.id === peerId);
+        if (gp && gp.connected) {
+            gp.connected = false;
+            addLog(`📡 Lost contact with ${gp.name}'s sub...`);
+            // Only touch the grace timer if it's this player's turn — don't
+            // reset a countdown already running for someone else.
+            if (G.phase === 'game' && G.players[G.turn] === gp) armGraceIfNeeded();
+            broadcastViews();
+        }
+    } else if (lp) {
+        lobbyPlayers = lobbyPlayers.filter(p => p !== lp);
+        broadcastLobby();
+    }
+}
+
+function sendTo(playerId, msg) {
+    if (playerId === 'host') { handleHostMessage(msg); return; }
+    const conn = guestConns.get(playerId);
+    if (conn) { try { conn.send(msg); } catch (e) {} }
+}
+
+function broadcastLobby() {
+    const view = {
+        type: 'view', phase: 'lobby', roomCode,
+        players: lobbyPlayers.map(p => ({ name: p.name, connected: p.connected })),
+    };
+    for (const p of lobbyPlayers) {
+        if (p.connected) sendTo(p.id, view);
+    }
+    sendBackupToGuests();
+    autoSaveState();
+}
+
+function sendBackupToGuests() {
+    // Full-state backup so any guest can take over hosting if the host drops.
+    const msg = { type: 'host_state_backup', backup: { roomCode, lobbyPlayers, G } };
+    for (const conn of guestConns.values()) {
+        try { conn.send(msg); } catch (e) {}
+    }
+}
+
+// ============================================================
+// PEERJS - GUEST
+// ============================================================
+function connectToHost(onSuccess, onFail) {
+    peer = new Peer({ debug: 1 });
+    peer.on('open', () => {
+        hostConn = peer.connect(PEER_PREFIX + roomCode, { reliable: true });
+        hostConn.on('open', () => {
+            hostConn.send({ type: 'join', name: myName });
+            saveSession();
+            startGuestWatchdog();
+            onSuccess();
+        });
+        hostConn.on('data', data => handleHostMessage(data));
+        hostConn.on('close', () => {
+            stopHeartbeat();
+            handleHostDisconnect();
+        });
+        hostConn.on('error', () => onFail('Connection error'));
+    });
+    peer.on('error', err => {
+        console.error(err);
+        onFail(err.type === 'peer-unavailable'
+            ? 'Room not found — check the code.' : 'Error: ' + err.type);
+    });
+}
+
+function joinGame() {
+    const code = (document.getElementById('room-code-input').value || '')
+        .trim().toUpperCase().replace(/[^A-Z0-9]/g, '');
+    if (code.length < 4 || code.length > 12) {
+        setStatus('entry-status', 'Enter a valid room code');
+        return;
+    }
+    myName = (document.getElementById('guest-name').value || 'Player').trim().slice(0, 14) || 'Player';
+    isHost = false;
+    roomCode = code;
+    setStatus('entry-status', 'Connecting...');
+    connectToHost(
+        () => setStatus('entry-status', 'Connected!'),
+        msg => setStatus('entry-status', msg));
+}
+
+function handleHostMessage(msg) {
+    // Any incoming message proves the connection is alive
+    lastHeartbeat = Date.now();
+    switch (msg.type) {
+        case 'view':
+            updateFromView(msg);
+            break;
+        case 'host_state_backup':
+            try {
+                sessionStorage.setItem(SH_HOST_BACKUP_KEY, JSON.stringify(msg.backup));
+            } catch (e) { /* ignore */ }
+            break;
+        case 'reject':
+            clearSession();
+            setStatus('entry-status', msg.reason);
+            showScreen('screen-entry');
+            try { hostConn.close(); } catch (e) {}
+            break;
+        case 'ping':
+            break;
+    }
+}
+
+// ============================================================
+// RECONNECT / HOST RECOVERY
+// ============================================================
+function reconnectAsHost(session) {
+    isHost = true;
+    myName = session.myName || 'Host';
+    roomCode = session.roomCode;
+
+    let saved = null;
+    try {
+        const raw = sessionStorage.getItem(SH_AUTOSAVE_KEY);
+        saved = raw ? JSON.parse(raw) : null;
+    } catch (e) { saved = null; }
+    if (!saved || !Array.isArray(saved.lobbyPlayers)) {
+        clearSession();
+        return;
+    }
+    lobbyPlayers = saved.lobbyPlayers;
+    G = saved.G || null;
+    // Guests must reconnect; only we are known-connected right now.
+    lobbyPlayers.forEach(p => { p.connected = p.id === 'host'; });
+    if (G) G.players.forEach(p => { p.connected = p.id === 'host'; });
+
+    setStatus('entry-status', 'Reclaiming room...');
+    const timeout = setTimeout(() => {
+        setStatus('entry-status', 'Reconnection failed — please start a new game.');
+        clearSession();
+        try { if (peer) peer.destroy(); } catch (e) {}
+        peer = null;
+        showScreen('screen-entry');
+    }, 12000);
+
+    initHostPeer(() => {
+        clearTimeout(timeout);
+        saveSession();
+        startHostHeartbeat();
+        if (G) {
+            if (G.phase === 'game') {
+                addLog('📡 Host back online — waiting for captains to reconnect...');
+                armGraceIfNeeded();
+            }
+            broadcastViews();
+        } else {
+            broadcastLobby();
+        }
+    }, err => {
+        clearTimeout(timeout);
+        console.error(err);
+        setStatus('entry-status', 'Reconnection failed: ' + err.type);
+        clearSession();
+        showScreen('screen-entry');
+    });
+}
+
+function reconnectAsGuest(session, fromLostScreen) {
+    isHost = false;
+    myName = session.myName || 'Player';
+    roomCode = session.roomCode;
+    const statusId = fromLostScreen ? 'host-lost-status' : 'entry-status';
+    setStatus(statusId, 'Reconnecting...');
+
+    try { if (hostConn) hostConn.close(); } catch (e) {}
+    try { if (peer) peer.destroy(); } catch (e) {}
+    hostConn = null;
+    peer = null;
+
+    const timeout = setTimeout(() => fail('Reconnection failed — the host may be gone.'), 12000);
+    let failed = false;
+    function fail(msg) {
+        if (failed) return;
+        failed = true;
+        clearTimeout(timeout);
+        setStatus(statusId, msg);
+        if (!fromLostScreen) {
+            clearSession();
+            try { if (peer) peer.destroy(); } catch (e) {}
+            peer = null;
+            showScreen('screen-entry');
+        }
+    }
+    connectToHost(() => {
+        clearTimeout(timeout);
+        setStatus(statusId, 'Reconnected!');
+    }, fail);
+}
+
+function handleHostDisconnect() {
+    if (isHost) return; // safety
+    setStatus('host-lost-status', '');
+    const btn = document.getElementById('btn-take-over');
+    if (btn) btn.disabled = false;
+    showScreen('screen-host-lost');
+}
+
+function tryReconnectGuest() {
+    const session = getSession();
+    if (!session || !session.roomCode) { leaveGame(); return; }
+    reconnectAsGuest(session, true);
+}
+
+function leaveGame() {
+    stopHeartbeat();
+    try { if (hostConn) hostConn.close(); } catch (e) {}
+    try { if (peer) peer.destroy(); } catch (e) {}
+    hostConn = null;
+    peer = null;
+    clearSession();
+    try { sessionStorage.removeItem(SH_HOST_BACKUP_KEY); } catch (e) {}
+    setStatus('entry-status', 'Left game');
+    showScreen('screen-entry');
+}
+
+function takeOverAsHost() {
+    let backup = null;
+    try {
+        const raw = sessionStorage.getItem(SH_HOST_BACKUP_KEY);
+        backup = raw ? JSON.parse(raw) : null;
+    } catch (e) { backup = null; }
+    if (!backup || !Array.isArray(backup.lobbyPlayers)) {
+        setStatus('host-lost-status', 'No backup available — cannot take over.');
+        setTimeout(leaveGame, 1500);
+        return;
+    }
+    const btn = document.getElementById('btn-take-over');
+    if (btn) btn.disabled = true;
+    setStatus('host-lost-status', 'Claiming room as new host...');
+
+    stopHeartbeat();
+    try { if (hostConn) hostConn.close(); } catch (e) {}
+    try { if (peer) peer.destroy(); } catch (e) {}
+    hostConn = null;
+    peer = null;
+    guestConns.clear();
+
+    isHost = true;
+    roomCode = backup.roomCode || roomCode;
+    lobbyPlayers = backup.lobbyPlayers;
+    G = backup.G || null;
+
+    // The old host is gone: demote their entry, promote ours (matched by name).
+    const promote = arr => {
+        const old = arr.find(p => p.id === 'host');
+        if (old) { old.id = 'lost-host'; old.connected = false; }
+        const mine = arr.find(p => p.name && p.name.toLowerCase() === myName.toLowerCase());
+        if (mine) { mine.id = 'host'; mine.connected = true; }
+        arr.forEach(p => { if (p.id !== 'host') p.connected = false; });
+    };
+    promote(lobbyPlayers);
+    if (G) promote(G.players);
+    else lobbyPlayers = lobbyPlayers.filter(p => p.id !== 'lost-host');
+    if (!lobbyPlayers.some(p => p.id === 'host')) {
+        lobbyPlayers.push({ id: 'host', name: myName, connected: true });
+    }
+
+    initHostPeer(() => {
+        saveSession();
+        startHostHeartbeat();
+        if (G) {
+            addLog(`👑 ${myName} took command as the new host!`);
+            if (G.phase === 'game') armGraceIfNeeded();
+            broadcastViews();
+        } else {
+            broadcastLobby();
+        }
+    }, err => {
+        console.error(err);
+        isHost = false;
+        if (btn) btn.disabled = false;
+        setStatus('host-lost-status', err.type === 'unavailable-id'
+            ? 'Room still claimed — the host may be back. Try Reconnect instead.'
+            : 'Takeover failed: ' + err.type);
+    });
+}
+
+// ============================================================
+// HOST - MATCH LOGIC
+// ============================================================
+function addLog(msg) {
+    G.log.unshift(msg);
+    if (G.log.length > 8) G.log.length = 8;
+}
+function isTurbulent(x, y, size, turb) {
+    return Math.min(x, y, size - 1 - x, size - 1 - y) < turb;
+}
+function quadrantOf(pos, size) {
+    const h = size / 2;
+    return (pos.y < h ? 'N' : 'S') + (pos.x < h ? 'W' : 'E');
+}
+function wreckAt(x, y) { return G.wrecks.some(w => w.x === x && w.y === y); }
+function aliveList() { return G.players.filter(p => p.alive); }
+
+function startMatch() {
+    const roster = lobbyPlayers.filter(p => p.connected);
+    if (roster.length < 2 || roster.length > 4) return;
+    clearGraceTimer();
+    const size = roster.length === 2 ? 8 : 10;
+    const players = roster.map(p => ({
+        id: p.id, name: p.name, connected: true,
+        alive: true, pos: null, notes: [], lastResult: '',
+    }));
+    placeSubs(players, size);
+    G = {
+        phase: 'game', size, players,
+        turn: 0, round: 1, turbulence: 0,
+        trails: [], pings: [], wrecks: [], log: [],
+        winnerIdx: -1, graceUntil: 0, graceLeftMs: 0, paused: false,
+    };
+    addLog(`⚓ ${players.length} submarines slipped beneath the waves...`);
+    addLog(`🫡 ${players[0].name} has the first move.`);
+    broadcastViews();
+}
+
+function placeSubs(players, size) {
+    let minDist = Math.floor(size / 2) + 1;
+    while (true) {
+        const spots = [];
+        let ok = true;
+        for (let i = 0; i < players.length; i++) {
+            let placed = false;
+            for (let t = 0; t < 300; t++) {
+                const x = 1 + Math.floor(Math.random() * (size - 2));
+                const y = 1 + Math.floor(Math.random() * (size - 2));
+                if (spots.every(s => Math.abs(s.x - x) + Math.abs(s.y - y) >= minDist)) {
+                    spots.push({ x, y });
+                    placed = true;
+                    break;
+                }
+            }
+            if (!placed) { ok = false; break; }
+        }
+        if (ok) { players.forEach((p, i) => p.pos = spots[i]); return; }
+        minDist--;
+    }
+}
+
+function hostApplyAction(idx, msg) {
+    if (G.phase !== 'game' || G.paused || idx !== G.turn) return;
+    const p = G.players[idx];
+    if (!p.alive) return;
+    p.notes = []; // seen — clear before this action's outcome
+    let acted = false;
+
+    if (msg.action === 'move') {
+        const { x, y } = msg;
+        if (x < 0 || y < 0 || x >= G.size || y >= G.size) return;
+        const dx = Math.abs(x - p.pos.x), dy = Math.abs(y - p.pos.y);
+        if (dx + dy !== 1 || wreckAt(x, y)) return;
+        const blocker = G.players.find(q => q.alive && q !== p && q.pos.x === x && q.pos.y === y);
+        if (blocker) {
+            blocker.notes.push('⚠️ CLUNK — something scraped your hull. An enemy sub is close!');
+            p.lastResult = '🔩 CLUNK! Your bow struck metal — an enemy sub is in that square! Turn used.';
+        } else {
+            p.pos = { x, y };
+            p.lastResult = isTurbulent(x, y, G.size, G.turbulence)
+                ? '🌊 You moved into turbulent water — you are VISIBLE to everyone!'
+                : '🤫 You moved silently.';
+        }
+        acted = true;
+    } else if (msg.action === 'fire' && DIRS[msg.dir]) {
+        const [dx, dy] = DIRS[msg.dir];
+        const cells = [{ ...p.pos }];
+        let x = p.pos.x, y = p.pos.y, victim = null, blocked = false;
+        while (true) {
+            x += dx; y += dy;
+            if (x < 0 || y < 0 || x >= G.size || y >= G.size) break;
+            cells.push({ x, y });
+            if (wreckAt(x, y)) { blocked = true; break; }
+            victim = G.players.find(q => q.alive && q !== p && q.pos.x === x && q.pos.y === y) || null;
+            if (victim) break;
+        }
+        G.trails.push({ cells, player: idx, round: G.round });
+        addLog(`🚀 ${p.name} fired a torpedo — trail spotted!`);
+        if (victim) {
+            victim.alive = false;
+            G.wrecks.push({ ...victim.pos });
+            addLog(`💥 Direct hit! ${victim.name}'s sub was destroyed by ${p.name}!`);
+            p.lastResult = `💥 DIRECT HIT! You sank ${victim.name}'s sub!`;
+            victim.lastResult = `💥 Your sub was sunk by ${p.name}!`;
+        } else if (blocked) {
+            p.lastResult = '⚓ Your torpedo detonated against a wreck. No hit.';
+        } else {
+            p.lastResult = '🌊 Your torpedo streaked to the edge of the map. No hit.';
+        }
+        acted = true;
+    } else if (msg.action === 'ping') {
+        const enemies = G.players.filter(q => q.alive && q !== p);
+        const d = Math.min(...enemies.map(q =>
+            Math.abs(q.pos.x - p.pos.x) + Math.abs(q.pos.y - p.pos.y)));
+        const quad = quadrantOf(p.pos, G.size);
+        G.pings.push({ quad, player: idx, round: G.round });
+        addLog(`📡 ${p.name} pinged sonar — echo heard in the ${QUAD_NAMES[quad]}!`);
+        p.lastResult = `📡 Sonar echo: the nearest enemy sub is ${d} square${d === 1 ? '' : 's'} away.`;
+        acted = true;
+    }
+
+    if (!acted) return;
+
+    if (aliveList().length <= 1) {
+        G.phase = 'over';
+        G.winnerIdx = G.players.findIndex(q => q.alive);
+        clearGraceTimer();
+        G.graceUntil = 0;
+        if (G.winnerIdx >= 0) addLog(`🏆 ${G.players[G.winnerIdx].name} rules the seas!`);
+    } else {
+        advanceTurn();
+    }
+    broadcastViews();
+}
+
+function advanceTurn() {
+    const n = G.players.length;
+    for (let s = 1; s <= n; s++) {
+        const i = (G.turn + s) % n;
+        if (G.players[i].alive) {
+            if (G.turn + s >= n) startNewRound();
+            G.turn = i;
+            armGraceIfNeeded();
+            return;
+        }
+    }
+}
+
+function startNewRound() {
+    G.round++;
+    G.trails = G.trails.filter(t => G.round - t.round <= 1);
+    G.pings = G.pings.filter(p => G.round - p.round <= 1);
+    const maxRings = G.size / 2 - 1;
+    const t = Math.min(maxRings, Math.floor((G.round - 1) / 3));
+    if (t > G.turbulence) {
+        G.turbulence = t;
+        addLog('🌊 The storm spreads! Subs in the churning outer waters are visible to all!');
+    }
+}
+
+// --- 10-second grace for disconnected players ---
+function clearGraceTimer() {
+    if (graceTimer) { clearTimeout(graceTimer); graceTimer = null; }
+}
+function armGraceIfNeeded() {
+    clearGraceTimer();
+    if (!G || G.phase !== 'game') return;
+    const p = G.players[G.turn];
+    if (p.alive && !p.connected) {
+        if (G.paused) {
+            // Frozen: countdown starts (or resumes) when the host unpauses
+            if (!G.graceLeftMs) G.graceLeftMs = GRACE_MS;
+            G.graceUntil = 0;
+        } else {
+            G.graceUntil = Date.now() + GRACE_MS;
+            graceTimer = setTimeout(onGraceExpired, GRACE_MS);
+        }
+    } else {
+        G.graceUntil = 0;
+        G.graceLeftMs = 0;
+    }
+}
+function onGraceExpired() {
+    graceTimer = null;
+    if (!G || G.phase !== 'game') return;
+    const p = G.players[G.turn];
+    if (p.alive && !p.connected) {
+        G.graceUntil = 0;
+        addLog(`⏱️ No word from ${p.name} — their turn drifts by.`);
+        advanceTurn();
+        broadcastViews();
+    }
+}
+
+// --- Pause (host only; freezes the game and any grace countdown) ---
+function pauseGame() {
+    if (!isHost || !G || G.phase !== 'game' || G.paused) return;
+    G.paused = true;
+    if (G.graceUntil) {
+        G.graceLeftMs = Math.max(0, G.graceUntil - Date.now());
+        G.graceUntil = 0;
+    }
+    clearGraceTimer();
+    addLog(`⏸️ ${myName} paused the game.`);
+    broadcastViews();
+}
+function resumeGame() {
+    if (!isHost || !G || G.phase !== 'game' || !G.paused) return;
+    G.paused = false;
+    addLog('▶️ Game resumed.');
+    const p = G.players[G.turn];
+    if (p.alive && !p.connected) {
+        const ms = G.graceLeftMs > 0 ? G.graceLeftMs : GRACE_MS;
+        G.graceUntil = Date.now() + ms;
+        graceTimer = setTimeout(onGraceExpired, ms);
+    }
+    G.graceLeftMs = 0;
+    broadcastViews();
+}
+
+function buildView(idx) {
+    const me = G.players[idx];
+    const revealAll = G.phase === 'over';
+    const visibleSubs = [];
+    G.players.forEach((p, i) => {
+        if (!p.alive) return;
+        if (i === idx && !revealAll) return;
+        if (revealAll || isTurbulent(p.pos.x, p.pos.y, G.size, G.turbulence)) {
+            visibleSubs.push({ idx: i, x: p.pos.x, y: p.pos.y });
+        }
+    });
+    return {
+        type: 'view', phase: G.phase, roomCode,
+        size: G.size, round: G.round, turbulence: G.turbulence,
+        turnIdx: G.turn, winnerIdx: G.winnerIdx,
+        paused: !!G.paused,
+        graceMs: G.graceUntil ? Math.max(0, G.graceUntil - Date.now()) : 0,
+        pausedGraceS: G.paused && G.graceLeftMs > 0 ? Math.ceil(G.graceLeftMs / 1000) : 0,
+        players: G.players.map(p => ({ name: p.name, alive: p.alive, connected: p.connected })),
+        youIdx: idx, youAlive: me.alive,
+        youPos: me.alive ? me.pos : null,
+        trails: G.trails
+            .filter(t => G.round - t.round <= 1)
+            .map(t => ({ cells: t.cells, player: t.player, bright: t.round === G.round })),
+        pings: G.pings.filter(p => G.round - p.round <= 1).map(p => ({ quad: p.quad })),
+        wrecks: G.wrecks,
+        visibleSubs,
+        log: G.log,
+        notes: me.notes.slice(),
+        lastResult: me.lastResult,
+    };
+}
+
+function broadcastViews() {
+    for (let i = 0; i < G.players.length; i++) {
+        if (G.players[i].connected) sendTo(G.players[i].id, buildView(i));
+    }
+    sendBackupToGuests();
+    autoSaveState();
+}
+
+function playAgain() {
+    if (!isHost) return;
+    clearGraceTimer();
+    lobbyPlayers = lobbyPlayers.filter(p => p.connected);
+    G = null;
+    broadcastLobby();
+}
+
+// ============================================================
+// CLIENT - RENDERING (host and guests both render from views)
+// ============================================================
+function updateFromView(view) {
+    // Keep an in-progress move/fire menu open if it's still our turn
+    const stillMyTurn = V && V.phase === 'game' && view.phase === 'game' &&
+        V.turnIdx === V.youIdx && view.turnIdx === view.youIdx;
+    if (!stillMyTurn) uiMode = 'choose';
+    actionPending = false;
+    stopGraceCountdown();
+
+    if (view.phase === 'game') {
+        const mine = view.turnIdx === view.youIdx && view.youAlive;
+        if (mine && !prevTurnMine) vibrate(100);
+        if (prevAlive && !view.youAlive) vibrate([200, 100, 400]);
+        prevTurnMine = mine;
+        prevAlive = view.youAlive;
+    } else {
+        prevTurnMine = false;
+        prevAlive = true;
+    }
+
+    V = view;
+    if (view.phase === 'lobby') { renderLobby(view); showScreen('screen-lobby'); }
+    else if (view.phase === 'game') { renderGame(view); showScreen('screen-game'); }
+    else if (view.phase === 'over') { renderOver(view); showScreen('screen-over'); }
+}
+
+function renderLobby(view) {
+    document.getElementById('lobby-room-code').textContent = view.roomCode;
+    document.getElementById('lobby-host-panel').style.display = isHost ? '' : 'none';
+    const list = document.getElementById('lobby-players');
+    list.innerHTML = '';
+    view.players.forEach((p, i) => {
+        const li = document.createElement('li');
+        const dot = document.createElement('span');
+        dot.className = 'dot';
+        dot.style.background = COLORS[i];
+        li.appendChild(dot);
+        li.appendChild(document.createTextNode(p.name));
+        const tag = document.createElement('span');
+        tag.className = 'tag';
+        tag.textContent = i === 0 ? 'host' : (p.connected ? 'aboard' : 'offline');
+        li.appendChild(tag);
+        list.appendChild(li);
+    });
+    if (isHost) {
+        const n = view.players.filter(p => p.connected).length;
+        const btn = document.getElementById('btn-start');
+        btn.disabled = n < 2 || n > 4;
+        btn.textContent = n < 2 ? 'Dive! (need 2–4 players)' : `Dive with ${n} subs! 🌊`;
+    }
+}
+
+function renderLog(el, log) {
+    el.innerHTML = '';
+    if (!log.length) el.innerHTML = '<li>All quiet on the open sea.</li>';
+    for (const msg of log) {
+        const li = document.createElement('li');
+        li.textContent = msg;
+        el.appendChild(li);
+    }
+}
+
+function renderGame(view) {
+    const turnP = view.players[view.turnIdx];
+    const myTurn = view.turnIdx === view.youIdx && view.youAlive;
+    const who = document.getElementById('game-who');
+    who.textContent = myTurn ? '🫡 Your turn!' : `⏳ ${turnP.name}'s turn`;
+    who.style.color = COLORS[view.turnIdx];
+    document.getElementById('game-round').textContent = `Round ${view.round}` +
+        (view.turbulence > 0 ? ` · 🌊×${view.turbulence}` : '');
+
+    const notices = document.getElementById('game-notices');
+    notices.innerHTML = '';
+    for (const n of view.notes) {
+        const div = document.createElement('div');
+        div.className = 'notice';
+        div.textContent = n;
+        notices.appendChild(div);
+    }
+
+    const result = document.getElementById('game-result');
+    if (view.lastResult) {
+        result.textContent = view.lastResult;
+        result.style.display = 'block';
+    } else {
+        result.style.display = 'none';
+    }
+
+    renderBoardV(document.getElementById('board'), view,
+        uiMode === 'move' && !view.paused ? { moveTargets: moveTargets(view) } : {});
+    renderLegend(document.getElementById('game-legend'), view);
+    renderActions(view, myTurn);
+    renderHostControls(view);
+    renderLog(document.getElementById('game-log'), view.log);
+}
+
+function renderHostControls(view) {
+    const box = document.getElementById('host-controls');
+    if (!isHost || view.phase !== 'game') { box.innerHTML = ''; return; }
+    box.innerHTML = view.paused
+        ? '<button class="btn go" onclick="resumeGame()">▶️ Resume Game</button>'
+        : '<button class="btn secondary" onclick="pauseGame()">⏸️ Pause Game</button>';
+}
+
+function renderLegend(el, view) {
+    el.innerHTML = '';
+    view.players.forEach((p, i) => {
+        const span = document.createElement('span');
+        const chip = document.createElement('i');
+        chip.className = 'chip';
+        chip.style.background = COLORS[i];
+        span.appendChild(chip);
+        let label = p.name;
+        if (!p.alive) label += ' ☠';
+        else if (!p.connected) label += ' (offline)';
+        span.appendChild(document.createTextNode(label));
+        el.appendChild(span);
+    });
+}
+
+function renderActions(view, myTurn) {
+    const box = document.getElementById('game-actions');
+    if (view.paused) {
+        const turnP = view.players[view.turnIdx];
+        let msg = isHost ? '⏸️ Game paused.' : '⏸️ Game paused by the host.';
+        if (view.pausedGraceS > 0) {
+            msg += ` ${turnP.name} will have ${view.pausedGraceS}s to reconnect once the game resumes.`;
+        }
+        box.innerHTML = `<div class="waiting">${msg}</div>`;
+        return;
+    }
+    if (!view.youAlive) {
+        box.innerHTML = '<div class="waiting">💀 Your sub rests on the seabed. Spectating...</div>';
+        return;
+    }
+    if (!myTurn) {
+        const turnP = view.players[view.turnIdx];
+        if (view.graceMs > 0) {
+            box.innerHTML = `<div class="waiting">📡 ${turnP.name} lost contact — their turn passes in <b id="grace-count"></b>s...</div>`;
+            startGraceCountdown(view.graceMs);
+        } else {
+            box.innerHTML = `<div class="waiting">Waiting for ${turnP.name}...</div>`;
+        }
+        return;
+    }
+    if (actionPending) {
+        box.innerHTML = '<div class="waiting">Transmitting orders...</div>';
+        return;
+    }
+    if (uiMode === 'choose') {
+        box.innerHTML = `
+            <div class="your-turn">Give your orders, Captain</div>
+            <div class="action-row">
+                <button class="btn action" onclick="modeMove()">🧭<br>Move</button>
+                <button class="btn" onclick="modeFire()">🚀<br>Fire</button>
+                <button class="btn go" onclick="sendPing()">📡<br>Ping</button>
+            </div>
+            <div class="hint">Move silently, fire a revealing torpedo, or ping the depths.</div>`;
+    } else if (uiMode === 'move') {
+        box.innerHTML = `
+            <div class="hint">Tap a highlighted square to move.</div>
+            <button class="btn secondary" onclick="cancelMode()">Cancel</button>`;
+    } else if (uiMode === 'fire') {
+        box.innerHTML = `
+            <div class="fire-pad">
+                <div class="spacer"></div>
+                <button class="btn" onclick="sendFire('up')">⬆️</button>
+                <div class="spacer"></div>
+                <button class="btn" onclick="sendFire('left')">⬅️</button>
+                <button class="btn secondary" onclick="cancelMode()">✖</button>
+                <button class="btn" onclick="sendFire('right')">➡️</button>
+                <div class="spacer"></div>
+                <button class="btn" onclick="sendFire('down')">⬇️</button>
+                <div class="spacer"></div>
+            </div>
+            <div class="hint">Torpedo runs to the edge — and reveals your position!</div>`;
+    }
+}
+
+// Live countdown for the reconnect grace window
+let graceInterval = null;
+function startGraceCountdown(ms) {
+    stopGraceCountdown();
+    const end = Date.now() + ms;
+    const tick = () => {
+        const el = document.getElementById('grace-count');
+        if (!el) { stopGraceCountdown(); return; }
+        el.textContent = Math.max(0, Math.ceil((end - Date.now()) / 1000));
+    };
+    tick();
+    graceInterval = setInterval(tick, 250);
+}
+function stopGraceCountdown() {
+    if (graceInterval) { clearInterval(graceInterval); graceInterval = null; }
+}
+
+function moveTargets(view) {
+    if (!view.youPos) return [];
+    const out = [];
+    for (const [dx, dy] of Object.values(DIRS)) {
+        const x = view.youPos.x + dx, y = view.youPos.y + dy;
+        if (x < 0 || y < 0 || x >= view.size || y >= view.size) continue;
+        if (view.wrecks.some(w => w.x === x && w.y === y)) continue;
+        out.push({ x, y });
+    }
+    return out;
+}
+
+function renderBoardV(container, view, opts = {}) {
+    const { moveTargets: targets = [] } = opts;
+    container.innerHTML = '';
+    container.style.gridTemplateColumns = `repeat(${view.size}, 1fr)`;
+
+    const trailMap = {};
+    for (const t of view.trails) {
+        t.cells.forEach((c, i) => {
+            const key = c.x + ',' + c.y;
+            const entry = { color: COLORS[t.player], bright: t.bright, origin: i === 0 };
+            const curE = trailMap[key];
+            if (!curE || (!curE.bright && entry.bright)) trailMap[key] = entry;
+        });
+    }
+    const activeQuads = new Set(view.pings.map(p => p.quad));
+    const targetSet = new Set(targets.map(c => c.x + ',' + c.y));
+    const h = view.size / 2;
+
+    for (let y = 0; y < view.size; y++) {
+        for (let x = 0; x < view.size; x++) {
+            const cell = document.createElement('div');
+            cell.className = 'cell';
+            if (isTurbulent(x, y, view.size, view.turbulence)) cell.classList.add('turb');
+            const quad = (y < h ? 'N' : 'S') + (x < h ? 'W' : 'E');
+            if (activeQuads.has(quad)) cell.classList.add('ping-quad');
+
+            const key = x + ',' + y;
+            const t = trailMap[key];
+            if (t) {
+                const div = document.createElement('div');
+                div.className = 'trail' + (t.origin ? ' origin' : '');
+                div.style.background = t.color;
+                div.style.opacity = t.bright ? 0.55 : 0.22;
+                cell.appendChild(div);
+            }
+            if (view.wrecks.some(w => w.x === x && w.y === y)) {
+                const w = document.createElement('span');
+                w.className = 'wreck';
+                w.textContent = '⚓';
+                cell.appendChild(w);
+            }
+            for (const s of view.visibleSubs) {
+                if (s.x !== x || s.y !== y) continue;
+                const sub = document.createElement('div');
+                sub.className = 'sub';
+                sub.style.background = COLORS[s.idx];
+                sub.textContent = s.idx === view.youIdx ? 'YOU'
+                    : view.players[s.idx].name[0].toUpperCase();
+                cell.appendChild(sub);
+            }
+            if (view.youPos && view.phase !== 'over' &&
+                view.youPos.x === x && view.youPos.y === y) {
+                const sub = document.createElement('div');
+                sub.className = 'sub';
+                sub.style.background = COLORS[view.youIdx];
+                sub.textContent = 'YOU';
+                cell.appendChild(sub);
+            }
+            if (targetSet.has(key)) {
+                cell.classList.add('move-target');
+                cell.addEventListener('click', () => sendMove(x, y));
+            }
+            container.appendChild(cell);
+        }
+    }
+}
+
+function renderOver(view) {
+    const el = document.getElementById('over-winner');
+    if (view.winnerIdx >= 0) {
+        const w = view.players[view.winnerIdx];
+        el.textContent = view.winnerIdx === view.youIdx
+            ? '🏆 You rule the seas!' : `🏆 ${w.name} rules the seas!`;
+        el.style.color = COLORS[view.winnerIdx];
+    } else {
+        el.textContent = 'The sea claims all...';
+    }
+    renderBoardV(document.getElementById('over-board'), view);
+    renderLog(document.getElementById('over-log'), view.log);
+    document.getElementById('over-host-panel').style.display = isHost ? '' : 'none';
+    document.getElementById('over-guest-note').style.display = isHost ? 'none' : '';
+}
+
+// ============================================================
+// CLIENT - ACTIONS
+// ============================================================
+function modeMove() { uiMode = 'move'; renderGame(V); }
+function modeFire() { uiMode = 'fire'; renderGame(V); }
+function cancelMode() { uiMode = 'choose'; renderGame(V); }
+
+function sendAction(msg) {
+    if (actionPending || !V || V.turnIdx !== V.youIdx || !V.youAlive) return;
+    actionPending = true;
+    uiMode = 'choose';
+    if (isHost) {
+        hostApplyAction(G.players.findIndex(p => p.id === 'host'), msg);
+    } else {
+        hostConn.send(Object.assign({ type: 'action' }, msg));
+        renderGame(V); // show "transmitting" state until the new view arrives
+    }
+}
+function sendMove(x, y) { sendAction({ action: 'move', x, y }); }
+function sendFire(dir) { sendAction({ action: 'fire', dir }); }
+function sendPing() { sendAction({ action: 'ping' }); }
+
+// ============================================================
+// INIT — auto-reconnect from a saved session, or prefill ?room=
+// ============================================================
+(function init() {
+    const session = getSession();
+    if (session && session.roomCode) {
+        if (session.isHost) reconnectAsHost(session);
+        else reconnectAsGuest(session, false);
+        return;
+    }
+    const params = new URLSearchParams(window.location.search);
+    const code = (params.get('room') || '').trim().toUpperCase().replace(/[^A-Z0-9]/g, '');
+    if (code.length >= 4 && code.length <= 12) {
+        switchTab('join');
+        document.getElementById('room-code-input').value = code;
+    }
+})();
+</script>
+</body>
+</html>
