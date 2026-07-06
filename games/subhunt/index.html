@@ -1143,13 +1143,16 @@ function buildView(idx) {
         trails: G.trails
             .filter(t => G.round - t.round <= 1)
             .map(t => ({ cells: t.cells, player: t.player, bright: t.round === G.round })),
-        // Everyone sees where each ping came from; only the pinger sees the echoes.
+        // Everyone sees where each ping came from; only the pinger sees the
+        // echoes. Sunk players' marks are dropped — only their wreck remains.
         pingMarks: G.pings
-            .filter(pg => G.round - pg.round <= 1)
+            .filter(pg => G.round - pg.round <= 1 && G.players[pg.player].alive)
             .map(pg => ({ x: pg.pos.x, y: pg.pos.y, idx: pg.player, bright: pg.round === G.round })),
         echoMarks: G.pings
             .filter(pg => G.round - pg.round <= 1 && pg.player === idx)
-            .flatMap(pg => pg.echoes.map(e => ({ ...e, bright: pg.round === G.round }))),
+            .flatMap(pg => pg.echoes
+                .filter(e => G.players[e.idx].alive)
+                .map(e => ({ ...e, bright: pg.round === G.round }))),
         wrecks: G.wrecks,
         visibleSubs,
         log: G.log,
