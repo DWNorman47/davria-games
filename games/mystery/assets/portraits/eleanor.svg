@@ -1,0 +1,38 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" role="img" aria-label="Lady Eleanor Ravenscroft portrait">
+  <defs>
+    <radialGradient id="bg" cx="45%" cy="28%" r="74%">
+      <stop offset="0" stop-color="#3f2639"/>
+      <stop offset="0.54" stop-color="#191522"/>
+      <stop offset="1" stop-color="#07070b"/>
+    </radialGradient>
+    <linearGradient id="skin" x1="0" x2="1" y1="0" y2="1">
+      <stop offset="0" stop-color="#f1d5bd"/>
+      <stop offset="1" stop-color="#b77b68"/>
+    </linearGradient>
+    <linearGradient id="gown" x1="0" x2="1">
+      <stop offset="0" stop-color="#121018"/>
+      <stop offset="0.55" stop-color="#07070c"/>
+      <stop offset="1" stop-color="#2b1627"/>
+    </linearGradient>
+  </defs>
+  <rect width="512" height="512" fill="url(#bg)"/>
+  <path d="M78 420c35-69 92-104 178-104s143 35 178 104v93H78z" fill="url(#gown)"/>
+  <path d="M180 367c22 43 48 75 76 96 28-21 54-53 76-96l-76-28z" fill="#171118"/>
+  <path d="M183 194c-9-73 24-126 73-126s82 53 73 126c-7 71-33 122-73 122s-66-51-73-122z" fill="url(#skin)"/>
+  <path d="M178 173c3-68 34-116 82-116 49 0 78 48 76 116-26-16-43-38-52-65-25 29-61 51-106 65z" fill="#332932"/>
+  <path d="M187 118c17-45 50-70 91-62 39 7 62 38 69 82-38-42-92-49-160-20z" fill="#5c5360"/>
+  <path d="M200 230c17-11 35-11 53 0M262 230c18-11 37-11 55 0" fill="none" stroke="#362129" stroke-width="7" stroke-linecap="round"/>
+  <circle cx="226" cy="244" r="6" fill="#1c1115"/>
+  <circle cx="288" cy="244" r="6" fill="#1c1115"/>
+  <path d="M237 294c13 8 27 8 41 0" fill="none" stroke="#6b3d44" stroke-width="6" stroke-linecap="round"/>
+  <path d="M218 333c21 17 55 17 76 0" fill="none" stroke="#efe7dc" stroke-width="8" stroke-linecap="round" opacity=".85"/>
+  <g fill="#efe7dc">
+    <circle cx="211" cy="346" r="6"/>
+    <circle cx="229" cy="356" r="6"/>
+    <circle cx="249" cy="361" r="6"/>
+    <circle cx="269" cy="359" r="6"/>
+    <circle cx="288" cy="350" r="6"/>
+  </g>
+  <path d="M164 418c29-27 61-42 92-43 32 1 63 16 92 43-31-14-62-21-92-21s-61 7-92 21z" fill="#2f202d"/>
+  <circle cx="256" cy="256" r="243" fill="none" stroke="#e8c77a" stroke-opacity=".18" stroke-width="10"/>
+</svg>

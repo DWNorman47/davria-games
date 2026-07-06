@@ -1,0 +1,34 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" role="img" aria-label="Theodore Ash portrait">
+  <defs>
+    <radialGradient id="bg" cx="48%" cy="32%" r="70%">
+      <stop offset="0" stop-color="#2d3032"/>
+      <stop offset="0.6" stop-color="#121416"/>
+      <stop offset="1" stop-color="#050607"/>
+    </radialGradient>
+    <linearGradient id="skin" x1="0" x2="1" y1="0" y2="1">
+      <stop offset="0" stop-color="#dfb590"/>
+      <stop offset="1" stop-color="#8f5d45"/>
+    </linearGradient>
+    <linearGradient id="tails" x1="0" x2="1">
+      <stop offset="0" stop-color="#15171d"/>
+      <stop offset="1" stop-color="#030406"/>
+    </linearGradient>
+  </defs>
+  <rect width="512" height="512" fill="url(#bg)"/>
+  <path d="M82 112h348M82 160h348M82 208h348" stroke="#e8c77a" stroke-opacity=".08" stroke-width="8"/>
+  <path d="M84 493c20-101 78-150 172-150s152 49 172 150z" fill="url(#tails)"/>
+  <path d="M205 354l51 123 51-123-51-25z" fill="#f2eee3"/>
+  <path d="M221 370h70l-35 56z" fill="#111015"/>
+  <path d="M185 205c-8-74 24-126 71-126s79 52 71 126c-6 70-30 119-71 119s-65-49-71-119z" fill="url(#skin)"/>
+  <path d="M181 171c7-63 36-100 76-100 42 0 70 36 77 100-33-8-62-23-88-45-15 22-36 37-65 45z" fill="#24201f"/>
+  <path d="M201 231c16-10 33-10 51 0M265 231c17-10 34-10 50 0" fill="none" stroke="#201718" stroke-width="7" stroke-linecap="round"/>
+  <circle cx="227" cy="247" r="6" fill="#171010"/>
+  <circle cx="290" cy="247" r="6" fill="#171010"/>
+  <path d="M235 292c14 8 29 8 43 0" fill="none" stroke="#4d2e2a" stroke-width="6" stroke-linecap="round"/>
+  <path d="M220 280c24 8 48 8 72 0" fill="none" stroke="#2b1d1b" stroke-width="8" stroke-linecap="round"/>
+  <path d="M184 389l39-34 33 122-81-48zM328 389l-39-34-33 122 81-48z" fill="#08090d"/>
+  <circle cx="256" cy="391" r="6" fill="#d9d1bf"/>
+  <circle cx="256" cy="423" r="5" fill="#d9d1bf"/>
+  <circle cx="256" cy="455" r="5" fill="#d9d1bf"/>
+  <circle cx="256" cy="256" r="243" fill="none" stroke="#e8c77a" stroke-opacity=".18" stroke-width="10"/>
+</svg>

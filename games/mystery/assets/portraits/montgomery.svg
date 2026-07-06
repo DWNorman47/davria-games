@@ -1,0 +1,35 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" role="img" aria-label="Dr. Julian Montgomery portrait">
+  <defs>
+    <radialGradient id="bg" cx="52%" cy="35%" r="72%">
+      <stop offset="0" stop-color="#233947"/>
+      <stop offset="0.56" stop-color="#111924"/>
+      <stop offset="1" stop-color="#06070b"/>
+    </radialGradient>
+    <linearGradient id="skin" x1="0" x2="1" y1="0" y2="1">
+      <stop offset="0" stop-color="#eac8aa"/>
+      <stop offset="1" stop-color="#a96f58"/>
+    </linearGradient>
+    <linearGradient id="coat" x1="0" x2="1">
+      <stop offset="0" stop-color="#151b22"/>
+      <stop offset="1" stop-color="#05070a"/>
+    </linearGradient>
+  </defs>
+  <rect width="512" height="512" fill="url(#bg)"/>
+  <path d="M106 126c52-24 105-36 159-36 55 0 101 12 139 36" stroke="#d5b36b" stroke-opacity=".12" stroke-width="16" fill="none"/>
+  <path d="M94 493c22-96 77-143 162-143 84 0 139 47 162 143z" fill="url(#coat)"/>
+  <path d="M204 365l52 111 52-111-52-25z" fill="#d8d3c6"/>
+  <path d="M225 381h62l-31 90z" fill="#621d28"/>
+  <path d="M182 206c-7-76 24-129 74-129s81 53 74 129c-6 71-31 122-74 122s-68-51-74-122z" fill="url(#skin)"/>
+  <path d="M178 177c9-69 38-106 82-106 50 0 76 44 77 111-38-16-70-34-96-56-14 21-35 38-63 51z" fill="#3b322e"/>
+  <path d="M198 226c16-10 35-10 53 0M263 226c17-10 36-10 53 0" fill="none" stroke="#2a1c1b" stroke-width="7" stroke-linecap="round"/>
+  <circle cx="225" cy="242" r="5" fill="#1d1211"/>
+  <circle cx="289" cy="242" r="5" fill="#1d1211"/>
+  <circle cx="225" cy="243" r="24" fill="none" stroke="#b7a57c" stroke-width="5"/>
+  <circle cx="289" cy="243" r="24" fill="none" stroke="#b7a57c" stroke-width="5"/>
+  <path d="M249 243h16" stroke="#b7a57c" stroke-width="5" stroke-linecap="round"/>
+  <path d="M232 291c17 10 33 10 50 0" fill="none" stroke="#4c2e2d" stroke-width="7" stroke-linecap="round"/>
+  <path d="M224 278c22 10 43 10 64 0" fill="none" stroke="#4a3833" stroke-width="10" stroke-linecap="round"/>
+  <path d="M123 439c17-20 38-34 64-42l17 96h-87zM389 439c-17-20-38-34-64-42l-17 96h87z" fill="#080a0d"/>
+  <path d="M358 403c28 0 50 23 50 51v34h-32v-34c0-11-7-20-18-20z" fill="#17120f" opacity=".65"/>
+  <circle cx="256" cy="256" r="243" fill="none" stroke="#e8c77a" stroke-opacity=".18" stroke-width="10"/>
+</svg>

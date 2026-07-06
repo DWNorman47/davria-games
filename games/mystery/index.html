@@ -206,13 +206,21 @@
         width: 80px;
         height: 80px;
         border-radius: 50%;
-        background: var(--bg-secondary);
+        background: #0d0e14;
         border: 3px solid var(--border);
         display: inline-flex;
         align-items: center;
         justify-content: center;
         font-size: 2.5rem;
         flex-shrink: 0;
+        overflow: hidden;
+        box-shadow: 0 10px 28px rgba(0, 0, 0, 0.35);
+    }
+    .portrait img {
+        width: 100%;
+        height: 100%;
+        object-fit: cover;
+        display: block;
     }
     body.cast-view .portrait { width: 140px; height: 140px; font-size: 5rem; border-width: 5px; }
     .portrait.victim { border-color: #a03030; background: #2a1414; }
@@ -230,6 +238,16 @@
     body.cast-view .suspect-lineup {
         grid-template-columns: repeat(4, 1fr);
         gap: 20px;
+    }
+    @media (max-width: 900px) {
+        body.cast-view .portrait { width: 92px; height: 92px; font-size: 3rem; border-width: 3px; }
+        body.cast-view .portrait.large { width: 124px; height: 124px; font-size: 3.4rem; }
+        body.cast-view .suspect-lineup {
+            grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+            gap: 12px;
+        }
+        body.cast-view .suspect-card .name { font-size: 1rem; }
+        body.cast-view .suspect-card .bio { font-size: 0.85rem; }
     }
     .suspect-card {
         background: var(--bg-secondary);
@@ -352,6 +370,8 @@
     }
     .clue-item.private { border-left-color: #888; }
     .clue-item.shared { border-left-color: #5dade2; }
+    .clue-item.hint { border-left-color: #e8c77a; }
+    .clue-item.contradiction { border-left-color: #e74c3c; background: rgba(231, 76, 60, 0.1); }
     .clue-item .meta {
         color: var(--text-secondary);
         font-size: 0.75rem;
@@ -394,6 +414,108 @@
         padding: 12px;
         font-size: 0.95rem;
         font-weight: 500;
+    }
+    .question-menu .btn.evidence-question {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 12px;
+        border-color: rgba(232, 199, 122, 0.45);
+    }
+    .question-bonus {
+        flex: 0 0 auto;
+        padding: 3px 7px;
+        border-radius: 999px;
+        background: rgba(232, 199, 122, 0.16);
+        color: #e8c77a;
+        font-size: 0.72rem;
+        font-weight: 800;
+    }
+
+    .case-board {
+        display: grid;
+        grid-template-columns: repeat(auto-fit, minmax(130px, 1fr));
+        gap: 8px;
+        margin-top: 10px;
+    }
+    .case-suspect {
+        background: var(--bg-secondary);
+        border: 1px solid var(--border);
+        border-radius: 8px;
+        padding: 10px;
+    }
+    .case-suspect.leading {
+        border-color: rgba(232, 199, 122, 0.65);
+        box-shadow: 0 0 0 1px rgba(232, 199, 122, 0.14);
+    }
+    .case-suspect .name {
+        font-weight: 800;
+        font-size: 0.9rem;
+        margin-bottom: 6px;
+    }
+    .case-score {
+        color: #e8c77a;
+        font-size: 0.82rem;
+        margin-bottom: 6px;
+    }
+    .case-chip {
+        display: inline-block;
+        margin: 2px 3px 2px 0;
+        padding: 3px 6px;
+        border-radius: 999px;
+        background: rgba(93, 173, 226, 0.14);
+        border: 1px solid rgba(93, 173, 226, 0.28);
+        color: var(--text-primary);
+        font-size: 0.72rem;
+    }
+    .case-chip.contradiction {
+        background: rgba(231, 76, 60, 0.14);
+        border-color: rgba(231, 76, 60, 0.35);
+    }
+    .case-empty {
+        color: var(--text-secondary);
+        font-size: 0.78rem;
+        font-style: italic;
+    }
+
+    .evidence-support-grid {
+        display: grid;
+        grid-template-columns: 1fr;
+        gap: 8px;
+        margin-top: 10px;
+    }
+    .evidence-card {
+        width: 100%;
+        text-align: left;
+        background: var(--bg-secondary);
+        color: var(--text-primary);
+        border: 1px solid var(--border);
+        border-left: 4px solid #888;
+        border-radius: 8px;
+        padding: 10px;
+        cursor: pointer;
+        font-family: inherit;
+    }
+    .evidence-card.selected {
+        border-color: #e8c77a;
+        border-left-color: #e8c77a;
+        box-shadow: 0 0 0 1px rgba(232, 199, 122, 0.18);
+    }
+    .evidence-card .title {
+        font-weight: 800;
+        font-size: 0.86rem;
+        margin-bottom: 4px;
+    }
+    .evidence-card .text {
+        color: var(--text-secondary);
+        font-size: 0.82rem;
+        line-height: 1.35;
+    }
+    .evidence-card .points {
+        color: #e8c77a;
+        font-size: 0.75rem;
+        font-weight: 800;
+        margin-top: 5px;
     }
 
     /* Player strip */
@@ -491,6 +613,186 @@
     }
     .tap-button-huge:active { transform: scale(0.98); background: var(--accent-hover); }
 
+    .minigame-stage {
+        display: grid;
+        gap: 12px;
+        margin-top: 14px;
+    }
+    .minigame-main-challenge {
+        margin-top: 12px;
+    }
+    .minigame-main-challenge:empty {
+        display: none;
+    }
+    .minigame-main-challenge .mini-visual {
+        max-width: 760px;
+        margin: 0 auto;
+    }
+    .mini-visual {
+        background: radial-gradient(circle at 18% 0%, rgba(232, 199, 122, 0.18), transparent 28%),
+            linear-gradient(135deg, rgba(93, 173, 226, 0.12), rgba(20, 20, 32, 0.65));
+        border: 1px solid var(--border);
+        border-radius: 10px;
+        padding: 14px;
+        text-align: center;
+    }
+    .cipher-code {
+        font-size: 2.2rem;
+        letter-spacing: 8px;
+        color: #e8c77a;
+        margin: 10px 0;
+        font-family: Georgia, serif;
+    }
+    .cipher-context {
+        font-size: 1.05rem;
+        font-weight: 800;
+        margin-top: 10px;
+    }
+    .cipher-clue {
+        color: var(--text-secondary);
+        font-size: 0.9rem;
+        margin-top: 10px;
+    }
+    .cipher-key {
+        display: flex;
+        flex-wrap: wrap;
+        justify-content: center;
+        gap: 6px;
+    }
+    .cipher-key span, .mini-badge {
+        display: inline-block;
+        padding: 5px 8px;
+        border-radius: 999px;
+        background: rgba(255, 255, 255, 0.08);
+        border: 1px solid var(--border);
+        font-size: 0.8rem;
+    }
+    .fingerprint-art {
+        display: inline-grid;
+        --print-size: 12;
+        --print-rotation: 0deg;
+        grid-template-columns: repeat(var(--print-size), 4px);
+        gap: 1px;
+        padding: 9px;
+        border-radius: 30px;
+        background: rgba(0, 0, 0, 0.22);
+        border: 2px solid rgba(232, 199, 122, 0.45);
+        margin: 12px auto;
+        transform: rotate(var(--print-rotation));
+        transform-origin: center;
+    }
+    .fingerprint-art span {
+        width: 4px;
+        height: 4px;
+        border-radius: 50%;
+        background: rgba(232, 199, 122, 0.11);
+    }
+    .fingerprint-art span.on {
+        background: #e8c77a;
+        box-shadow: 0 0 5px rgba(232, 199, 122, 0.42);
+    }
+    .mini-option.fingerprint-option {
+        min-height: 142px;
+        display: flex;
+        flex-direction: column;
+        justify-content: center;
+        align-items: center;
+        gap: 8px;
+        overflow: hidden;
+    }
+    .mini-option.fingerprint-option .fingerprint-art {
+        margin: 10px auto 6px;
+    }
+    .mini-options {
+        display: grid;
+        grid-template-columns: repeat(auto-fit, minmax(130px, 1fr));
+        gap: 8px;
+        margin-top: 12px;
+    }
+    .mini-option {
+        min-height: 74px;
+        padding: 12px;
+        border-radius: 10px;
+        border: 1px solid var(--border);
+        background: var(--bg-secondary);
+        color: var(--text-primary);
+        cursor: pointer;
+        font-family: inherit;
+        font-weight: 700;
+        touch-action: manipulation;
+        user-select: none;
+    }
+    .mini-option:disabled {
+        cursor: not-allowed;
+        opacity: 0.7;
+    }
+    .mini-option.correct {
+        border-color: #27ae60;
+        background: rgba(39, 174, 96, 0.18);
+    }
+    .mini-option.wrong {
+        border-color: #e74c3c;
+        background: rgba(231, 76, 60, 0.14);
+    }
+    .mini-response-list {
+        display: grid;
+        gap: 8px;
+        margin-top: 10px;
+    }
+    .mini-response {
+        display: flex;
+        justify-content: space-between;
+        gap: 10px;
+        padding: 9px 11px;
+        border-radius: 8px;
+        background: var(--bg-secondary);
+        border-left: 4px solid #888;
+    }
+    .mini-response.correct { border-left-color: #27ae60; }
+    .mini-response.wrong { border-left-color: #e74c3c; }
+
+    .dev-minigame-panel {
+        border-style: dashed;
+        border-color: rgba(232, 199, 122, 0.55);
+        background: rgba(232, 199, 122, 0.06);
+    }
+    .dev-minigame-kicker {
+        color: var(--accent);
+        font-size: 0.72rem;
+        font-weight: 800;
+        letter-spacing: 1.4px;
+        text-transform: uppercase;
+    }
+    .dev-minigame-title {
+        font-family: Georgia, serif;
+        font-size: 1.2rem;
+        font-weight: 800;
+        margin-top: 3px;
+    }
+    .dev-minigame-grid {
+        display: grid;
+        grid-template-columns: repeat(auto-fit, minmax(130px, 1fr));
+        gap: 8px;
+        margin-top: 10px;
+    }
+    .dev-minigame-grid .btn {
+        margin-top: 0;
+        min-height: 0;
+        padding: 10px 12px;
+    }
+    .dev-minigame-grid span {
+        display: block;
+        color: var(--text-secondary);
+        font-size: 0.74rem;
+        font-weight: 500;
+        margin-top: 3px;
+    }
+    .dev-minigame-note {
+        color: var(--text-secondary);
+        font-size: 0.78rem;
+        margin-top: 8px;
+    }
+
     /* Map for leader */
     .room-map {
         display: grid;
@@ -510,6 +812,7 @@
     .room-tile:hover { background: var(--border); border-color: var(--accent); }
     .room-tile.visited { opacity: 0.6; }
     .room-tile.current { border-color: #e8c77a; background: #2d251a; }
+    .room-tile.hot-lead { border-color: #e8c77a; box-shadow: 0 0 0 2px rgba(232, 199, 122, 0.18); }
     .room-tile .icon { font-size: 2rem; margin-bottom: 6px; }
     .room-tile .cost { color: var(--accent); font-size: 0.75rem; margin-top: 4px; }
 
@@ -541,6 +844,20 @@
         background: rgba(233, 69, 96, 0.15);
     }
     .choice-btn:hover { border-color: var(--accent-hover); }
+
+    .hot-lead-badge {
+        display: inline-block;
+        margin-top: 6px;
+        padding: 4px 8px;
+        border-radius: 999px;
+        background: rgba(232, 199, 122, 0.16);
+        border: 1px solid rgba(232, 199, 122, 0.45);
+        color: #e8c77a;
+        font-size: 0.72rem;
+        font-weight: 800;
+        text-transform: uppercase;
+        letter-spacing: 0;
+    }
 
     .timer {
         font-size: 2rem;
@@ -906,6 +1223,7 @@
             <button class="btn" id="btn-start-game-tv" onclick="hostStartGame()">Start Mystery</button>
         </div>
         <div id="lobby-guest-status" class="status-line hide-on-tv" style="display:none;">Connected! Waiting for host to start...</div>
+        <div class="panel dev-minigame-panel" data-minigame-tester style="display:none;"></div>
     </div>
 
     <!-- ================= INTRO ================= -->
@@ -914,7 +1232,7 @@
             <div class="label">Tonight's Mystery</div>
             <div class="answer" id="intro-title">Murder at Ravenscroft Manor</div>
             <div style="margin-top:14px;">
-                <div class="portrait victim" style="margin:0 auto;">💀</div>
+                <div class="portrait victim" id="intro-victim-portrait" style="margin:0 auto;">💀</div>
                 <div style="margin-top:10px; font-weight:700;" id="intro-victim-name">Lord Alistair Ravenscroft</div>
                 <div style="color:var(--text-secondary); font-size:0.95rem; margin-top:6px;" id="intro-backstory"></div>
             </div>
@@ -926,6 +1244,7 @@
         <button class="btn hide-on-tv" id="btn-begin-investigation" onclick="hostBeginInvestigation()" style="display:none;">Begin Investigation</button>
         <button class="btn tv-only" onclick="hostBeginInvestigation()">Begin Investigation</button>
         <div id="intro-guest-status" class="status-line hide-on-tv" style="display:none;">Get ready — the host will start the investigation.</div>
+        <div class="panel dev-minigame-panel" data-minigame-tester style="display:none;"></div>
     </div>
 
     <!-- ================= ROOM ================= -->
@@ -966,10 +1285,11 @@
     <!-- ================= MINIGAME ================= -->
     <div id="screen-minigame" class="screen">
         <div class="panel minigame-wrap">
-            <h2 style="font-family:Georgia,serif; color:#e8c77a;">⚡ Tap Race!</h2>
-            <div class="subtitle">Tap your phone as fast as you can!</div>
+            <h2 id="minigame-title" style="font-family:Georgia,serif; color:#e8c77a;">⚡ Tap Race!</h2>
+            <div class="subtitle" id="minigame-subtitle">Tap your phone as fast as you can!</div>
             <div class="minigame-count" id="minigame-count">5</div>
             <div id="minigame-status" class="status-line"></div>
+            <div id="minigame-main-challenge" class="minigame-main-challenge"></div>
         </div>
         <div class="panel tv-only">
             <div class="tap-bars" id="minigame-tap-bars"></div>
@@ -1019,6 +1339,7 @@
         </div>
         <!-- Phone form -->
         <div class="hide-on-tv" id="accusation-phone-form">
+            <div id="accusation-phone-case-board"></div>
             <div class="panel">
                 <label>Culprit</label>
                 <div class="choice-grid" id="accuse-culprit-grid"></div>
@@ -1031,6 +1352,11 @@
                 <label>Location</label>
                 <div class="choice-grid" id="accuse-location-grid"></div>
             </div>
+            <div class="panel">
+                <label>Evidence Support</label>
+                <div class="status-line">Pick up to 3 evidence cards. Correct support is +5 each.</div>
+                <div class="evidence-support-grid" id="accuse-evidence-grid"></div>
+            </div>
             <button class="btn success" id="btn-submit-accusation" onclick="submitAccusation()">Submit Accusation</button>
             <div class="status-line" id="accusation-phone-status"></div>
         </div>
@@ -1041,6 +1367,7 @@
         </div>
         <!-- Host-as-player accusation form -->
         <div id="accusation-host-player-form" style="display:none;">
+            <div id="accusation-host-case-board"></div>
             <div class="panel">
                 <label>Culprit</label>
                 <div class="choice-grid" id="host-accuse-culprit-grid"></div>
@@ -1052,6 +1379,11 @@
             <div class="panel">
                 <label>Location</label>
                 <div class="choice-grid" id="host-accuse-location-grid"></div>
+            </div>
+            <div class="panel">
+                <label>Evidence Support</label>
+                <div class="status-line">Pick up to 3 evidence cards. Correct support is +5 each.</div>
+                <div class="evidence-support-grid" id="host-accuse-evidence-grid"></div>
             </div>
             <button class="btn success" id="btn-host-submit-accusation" onclick="hostPlayerSubmitAccusation()">Submit Accusation</button>
             <div class="status-line" id="accusation-host-player-status"></div>
@@ -1097,19 +1429,24 @@ const SCENARIO = {
     victim: {
         name: "Lord Alistair Ravenscroft",
         icon: "💀",
+        portrait: "assets/portraits/alistair-ai.png",
         backstory: "Lord Alistair Ravenscroft was hosting a formal dinner party. He was found dead in the Library at 10:30 PM. The door was unlocked. A crystal decanter lies shattered beside his body."
     },
     suspects: [
         { id: 'eleanor', name: "Lady Eleanor Ravenscroft", icon: "👑",
+          portrait: "assets/portraits/eleanor-ai.png",
           bio: "Alistair's wife. Cold and composed.",
           motive: "Recently discovered his affair; inheritance." },
         { id: 'montgomery', name: "Dr. Julian Montgomery", icon: "🎩",
+          portrait: "assets/portraits/montgomery-ai.png",
           bio: "Old friend and family doctor.",
           motive: "Alistair was about to cut him out of the will." },
         { id: 'ash', name: "Theodore Ash", icon: "🤵",
+          portrait: "assets/portraits/ash-ai.png",
           bio: "The butler.",
           motive: "Alistair discovered his embezzlement from the estate." },
         { id: 'vivian', name: "Miss Vivian Crane", icon: "💃",
+          portrait: "assets/portraits/vivian-ai.png",
           bio: "An actress; Alistair's mistress.",
           motive: "Alistair was ending their affair tonight." }
     ],
@@ -1128,15 +1465,15 @@ const SCENARIO = {
                 { id: 'decanter', icon: "🍾", label: "Shattered Decanter", tier: 1,
                   clue: "The decanter is shattered — edges bloodied. A crystal shard is missing." },
                 { id: 'carpet',   icon: "🩸", label: "Bloodstained Carpet", tier: 1,
-                  clue: "Pool of blood where the body lay. A single red silk thread caught in the fibers." },
+                  clue: "Pool of blood where the body lay. A single red silk thread caught in the fibers; red fabric appears elsewhere at the party too." },
                 { id: 'window',   icon: "🪟", label: "Open Window", tier: 1,
                   clue: "The window was open. Wet leaves and a faint muddy smudge on the sill." },
                 { id: 'letter',   icon: "✉️", label: "Desk Letter", tier: 1,
-                  clue: "An unfinished note: 'Vivian, I can't continue this... -A'" },
-                { id: 'shelf',    icon: "📖", label: "Gap in Bookshelf", tier: 2,
-                  clue: "A clearly empty space. Dust outlines a hidden ledger — now missing." },
-                { id: 'ashes',    icon: "🔥", label: "Fireplace Ashes", tier: 3,
-                  clue: "Fresh ashes in the fireplace. Someone burned papers recently — only scraps remain, too charred to read." },
+                  clue: "An unfinished note: 'V., I can't continue this after tonight. -A' The name line is blotted." },
+                { id: 'shelf',    icon: "📖", label: "Gap in Bookshelf", tier: 2, requires: ['kitchen_pantry'],
+                  clue: "A clearly empty space. Dust outlines a hidden ledger — the same size as the Kitchen inventory book." },
+                { id: 'ashes',    icon: "🔥", label: "Fireplace Ashes", tier: 3, requires: ['library_shelf'],
+                  clue: "Fresh ashes in the fireplace. One unburned scrap shows pantry tallies and Lord Alistair's initials." },
                 { id: 'clock',    icon: "🕰️", label: "Grandfather Clock", tier: 4,
                   clue: "Stopped at 10:28. Could have been knocked during a struggle — or the mechanism simply wound down." }
             ]
@@ -1151,12 +1488,12 @@ const SCENARIO = {
                 { id: 'seating',  icon: "🪑", label: "Seating Chart", tier: 1,
                   clue: "Lady Eleanor was seated with three guests from 9:30 to 10:15 PM." },
                 { id: 'fabric',   icon: "🧵", label: "Torn Dress Fabric", tier: 1,
-                  clue: "A scrap of red silk caught on the chair — color matches Miss Crane's gown." },
+                  clue: "A scrap of red silk caught on the chair - the same shade as the Library thread, but not enough to prove whose garment it came from." },
                 { id: 'piano',    icon: "🎹", label: "Piano", tier: 1,
-                  clue: "Dr. Montgomery was playing until roughly 10:20, says the hostess." },
+                  clue: "Dr. Montgomery was playing until roughly 10:20, says the hostess. Two guests remember music a little later, but disagree on the tune." },
                 { id: 'vase',     icon: "🏺", label: "Overturned Vase", tier: 2,
                   clue: "A porcelain vase knocked sideways. Water stains the carpet — could have happened during the party's commotion." },
-                { id: 'guestbook', icon: "📓", label: "Guest Book", tier: 3,
+                { id: 'guestbook', icon: "📓", label: "Guest Book", tier: 3, requires: ['drawing_seating'],
                   clue: "Signatures of all attendees. Miss Crane signed with a flourish; Dr. Montgomery's hand looks shaky." },
                 { id: 'painting', icon: "🖼️", label: "Painting Askew", tier: 4,
                   clue: "The portrait of Lord Alistair hangs crooked. Behind it: solid wall, no hidden compartment. Just a bump from the party." }
@@ -1169,17 +1506,17 @@ const SCENARIO = {
             hotspots: [
                 { id: 'pantry',  icon: "🗄️", label: "Pantry Inventory", tier: 1,
                   clue: "The inventory ledger shows crossed-out items — clumsy attempts to hide missing goods." },
-                { id: 'knives',  icon: "🔪", label: "Knife Rack", tier: 2,
+                { id: 'knives',  icon: "🔪", label: "Knife Rack", tier: 2, requires: ['library_decanter'],
                   clue: "All carving knives are present and clean. Not the weapon." },
                 { id: 'boot',    icon: "🥾", label: "Muddy Boot", tier: 1,
-                  clue: "A butler's boot, fresh mud caked on — someone walked in the garden tonight." },
+                  clue: "A butler's boot, fresh mud caked on - the tread is broader than one narrow trail in the Garden." },
                 { id: 'backdoor',icon: "🚪", label: "Back Door", tier: 1,
                   clue: "Unlocked. The butler insists he locked it at 9:00 PM." },
                 { id: 'receipt', icon: "🧾", label: "Crumpled Receipt", tier: 1,
-                  clue: "A receipt for a fine silk scarf — delivered to Miss Vivian Crane." },
+                  clue: "A receipt for a scarlet silk scarf. The recipient line is smeared; only '...ian C...' is readable, and Ash signed it in." },
                 { id: 'spices',  icon: "🧂", label: "Spice Rack", tier: 3,
                   clue: "Several jars open. Ash checked — they're all cooking spices. No poison, despite what mystery novels suggest." },
-                { id: 'cellarkey', icon: "🔑", label: "Wine Cellar Key", tier: 4,
+                { id: 'cellarkey', icon: "🔑", label: "Wine Cellar Key", tier: 4, requires: ['kitchen_backdoor'],
                   clue: "A key hanging on a hook labeled 'Cellar'. The cellar is locked and undisturbed — a dead end." }
             ]
         },
@@ -1189,18 +1526,18 @@ const SCENARIO = {
             suspectId: 'vivian',
             hotspots: [
                 { id: 'prints',  icon: "👣", label: "Footprints", tier: 1,
-                  clue: "Small, narrow heeled prints leading from the library window to the garden gate." },
+                  clue: "Several wet trails cross here. One narrow heeled track angles from the Library window toward the gate, overlapping a broader boot print near the hedge." },
                 { id: 'scarf',   icon: "🧣", label: "Torn Scarf Fragment", tier: 1,
-                  clue: "A silk scarf fragment, red — snagged on the rosebush near the library window." },
-                { id: 'gloves',  icon: "🧤", label: "Garden Gloves", tier: 1,
-                  clue: "A pair of lady's gloves, dropped in a puddle. Monogrammed 'V.C.'." },
+                  clue: "A red silk fragment snagged on the rosebush near the Library window. It could be scarf or gown fabric." },
+                { id: 'gloves',  icon: "🧤", label: "Soaked Gloves", tier: 2, requires: ['garden_scarf'],
+                  clue: "A pair of soaked ladies' gloves, half-buried in mud. The monogram is damaged: one letter looks like a C; the other could be a V or a torn stitch." },
                 { id: 'puddle',  icon: "💧", label: "Puddle with Red Stain", tier: 1,
                   clue: "A muddy puddle. The red stain is not blood — it's wine. But mixed with... something sharper." },
                 { id: 'shed',    icon: "🏚️", label: "Tool Shed", tier: 2,
                   clue: "The shed is undisturbed. Nothing taken." },
                 { id: 'flowerpot', icon: "🪴", label: "Overturned Flower Pot", tier: 3,
                   clue: "Knocked over near the path. Soil scattered. Could be the wind, or someone running in haste." },
-                { id: 'bench',   icon: "🪑", label: "Garden Bench", tier: 4,
+                { id: 'bench',   icon: "🪑", label: "Garden Bench", tier: 4, requires: ['drawing_piano'],
                   clue: "A wet bench near the roses. A forgotten cigarette, half-smoked. Dr. Montgomery's brand — but he claims he quit months ago." }
             ]
         },
@@ -1214,26 +1551,26 @@ const SCENARIO = {
                 { id: 'will',    icon: "📃", label: "Recent Will Draft", tier: 1,
                   clue: "A draft will removing Dr. Montgomery as beneficiary — dated today, unsigned." },
                 { id: 'book',    icon: "📅", label: "Appointment Book", tier: 1,
-                  clue: "10:00 PM entry: 'V — it ends tonight.' Underlined twice." },
-                { id: 'whiskey', icon: "🥃", label: "Whiskey Glass", tier: 2,
+                  clue: "10:00 PM entry: 'V. - it ends tonight.' Underlined twice. A second initial is scratched out." },
+                { id: 'whiskey', icon: "🥃", label: "Whiskey Glass", tier: 2, requires: ['study_safe'],
                   clue: "Half-empty whiskey. Dr. Montgomery's prints on the glass — he was here recently." },
                 { id: 'note',    icon: "📝", label: "Threatening Note", tier: 1,
                   clue: "A typed note: 'Change the will and you'll regret it — J.M.' (Dr. Montgomery's initials — but typed, not signed.)" },
                 { id: 'dustypainting', icon: "🖼️", label: "Dusty Painting", tier: 3,
                   clue: "A painting of Ravenscroft ancestors. Slightly askew. Nothing behind it — checked." },
-                { id: 'telephone', icon: "📞", label: "Telephone Receiver", tier: 4,
+                { id: 'telephone', icon: "📞", label: "Telephone Receiver", tier: 4, requires: ['library_letter'],
                   clue: "Off the hook. The last call was at 9:45 PM — to an unknown London number. Could be anyone's." }
             ]
         }
     ],
-    // Canned Q&A per suspect. Each question has an optional `requires` array of hotspot IDs
-    // (format: 'roomId_hotspotId') that must be in state.discoveredHotspots before the question appears.
+    // Canned Q&A per suspect. Evidence-backed questions unlock when a player
+    // personally knows the required clue or that clue has been shared publicly.
     questions: {
         eleanor: [
             { q: "Where were you at 10:30 PM?", a: "In the Drawing Room. Three guests sat with me. I never left." },
             { q: "What was your relationship with the victim?", a: "We were... distant. I knew of his affair. I had not decided yet what to do about it." },
             { q: "When did you last see Lord Alistair alive?", a: "At 9:45 PM. He excused himself to the Study. Said he had a 'private matter' to settle." },
-            { q: "Who do you think did it?", a: "That woman. Vivian. She sinks her claws in and they don't come out." },
+            { q: "Who do you think did it?", a: "Julian was desperate about the will. Or perhaps the actress. This house was full of motives." },
             { q: "Did you hear anything unusual?", a: "A faint crash from the Library around 10:30. I assumed the cat knocked a glass.",
               requires: ['library_decanter'] },
             { q: "What were you wearing?", a: "A black velvet gown. Not a thread out of place — I haven't left the Drawing Room.",
@@ -1243,7 +1580,9 @@ const SCENARIO = {
             { q: "Three wine glasses were found in the Drawing Room. One has your lipstick.", a: "Of course. I was hosting. I drank wine with guests — it's hardly incriminating.",
               requires: ['drawing_wine'] },
             { q: "The seating chart puts you in the Drawing Room until 10:15. What happened after?", a: "I stayed. The guests left one by one. I remained until the commotion.",
-              requires: ['drawing_seating'] }
+              requires: ['drawing_seating'] },
+            { q: "The guest book shows Montgomery's hand was shaky tonight. Did you notice?", a: "I noticed many things. Julian was rattled, Vivian was wounded, and Ash was avoiding my eye. Choose which one matters.",
+              requires: ['drawing_guestbook'] }
         ],
         montgomery: [
             { q: "Where were you at 10:30 PM?", a: "In the Study. Alistair asked me to witness the new will. He was alive when I left around 10:20." },
@@ -1260,7 +1599,11 @@ const SCENARIO = {
             { q: "Only you and Alistair knew the safe combination. Why was it open?", a: "He opened it himself to retrieve the will draft. I didn't touch it.",
               requires: ['study_safe'] },
             { q: "The new will removes you as beneficiary. Quite the motive.", a: "I knew about the change weeks ago. If I wanted to stop it, I wouldn't have waited until tonight.",
-              requires: ['study_will'] }
+              requires: ['study_will'] },
+            { q: "Your cigarette was found on the Garden bench.", a: "I lent my case around after dinner. Half the party could have taken one. I was not skulking in the roses.",
+              requires: ['garden_bench'] },
+            { q: "The Study telephone was left off the hook after a call to London.", a: "Alistair had London business constantly. If he called someone before dying, I would very much like to know who.",
+              requires: ['study_telephone'] }
         ],
         ash: [
             { q: "Where were you at 10:30 PM?", a: "In the Kitchen, finishing the washing-up. Alone — my usual routine." },
@@ -1277,8 +1620,12 @@ const SCENARIO = {
               requires: ['kitchen_boot'] },
             { q: "You insist you locked the back door at 9 PM, yet it was found open.", a: "Someone else must have opened it after me. I locked it — I'm certain.",
               requires: ['kitchen_backdoor'] },
-            { q: "A receipt for a silk scarf delivered to Miss Crane was found in the Kitchen.", a: "Deliveries come through the Kitchen, sir. I sign for all parcels. That proves nothing.",
-              requires: ['kitchen_receipt'] }
+            { q: "A scarf receipt in the Kitchen has a smeared recipient line and your signature.", a: "Deliveries come through the Kitchen, sir. I sign for all parcels. A smear is not a confession.",
+              requires: ['kitchen_receipt'] },
+            { q: "A missing ledger in the Library matches your altered pantry book.", a: "His lordship moved records wherever he pleased. I did not hide a ledger in the Library, and I did not burn one.",
+              requires: ['library_shelf'] },
+            { q: "A burned pantry tally was found in the Library fireplace.", a: "Then someone wanted my troubles to look larger than murder. Or wanted me too frightened to speak.",
+              requires: ['library_ashes'] }
         ],
         vivian: [
             { q: "Where were you at 10:30 PM?", a: "In the Garden. Taking some air. The rain had stopped." },
@@ -1286,19 +1633,19 @@ const SCENARIO = {
             { q: "When did you last see Lord Alistair alive?", a: "At dinner. I left the Drawing Room early — I had a headache." },
             { q: "Who do you think did it?", a: "The wife. She knew. Women always know." },
             { q: "Did you hear anything unusual?", a: "No. Nothing at all. The Garden is very quiet." },
-            { q: "What were you wearing?", a: "My red silk gown. Alistair bought it for me. It's perfectly intact, I assure you.",
+            { q: "What were you wearing?", a: "My red silk gown. Alistair bought it for me. It tore on a chair earlier, but I did not go near the Library.",
               requires: ['drawing_fabric'] },
-            { q: "A silk scrap was found in the Library. Red. Like your dress.", a: "I... have never been in the Library tonight. That must belong to someone else.",
+            { q: "A red silk thread was found by the body. Could it be from your gown?", a: "Half the room was red silk by dinner's end. My gown tore earlier in the Drawing Room, not the Library.",
               requires: ['library_carpet'] },
-            { q: "Gloves monogrammed 'V.C.' were found wet in the Garden.", a: "Those are old. Not mine. I don't own garden gloves.",
+            { q: "Soaked gloves with a damaged monogram were found in the Garden.", a: "They look like old estate gloves. Don't turn a torn stitch into my name.",
               requires: ['garden_gloves'] },
-            { q: "There are heeled footprints leading from the Library window to the garden gate.", a: "Many women wear heels. That proves nothing.",
+            { q: "One narrow heel trail runs from the Library window toward the gate.", a: "Eleanor wears narrow heels too. And I was not the only person in the Garden.",
               requires: ['garden_prints'] },
-            { q: "I found a fragment of red silk on the rosebush near the Library window.", a: "I... the wind must have carried it. I was nowhere near the Library window.",
+            { q: "A red silk fragment was on the rosebush near the Library window.", a: "My scarf snagged in the Garden earlier when I stepped out. That does not put me inside the Library.",
               requires: ['garden_scarf'] },
-            { q: "Alistair's note says 'it ends tonight.' He was breaking up with you?", a: "He... he wouldn't. He loved me. You're twisting his words.",
+            { q: "Alistair's book says 'V. - it ends tonight.' He was breaking up with you?", a: "V could mean Vivian, or a business matter, or one of his theatrical little vows. You are choosing the cruelest reading.",
               requires: ['study_book'] },
-            { q: "The letter on his desk reads: 'Vivian, I can't continue this.'", a: "That letter... he was writing to me? I didn't know. I swear I didn't know tonight.",
+            { q: "The letter on his desk starts 'V., I can't continue this after tonight.'", a: "If that was meant for me, I never saw it. He said nothing of it at dinner.",
               requires: ['library_letter'] }
         ]
     },
@@ -1309,6 +1656,167 @@ const SCENARIO = {
         motive: "Lord Alistair ended their affair that evening. Vivian, enraged, followed him to the Library, argued, and struck him with the crystal decanter before fleeing through the window into the Garden."
     }
 };
+
+const CASE_SIGNALS = [
+    { suspectId: 'vivian', type: 'Fiber', label: 'red silk at body', requires: ['library_carpet'], weight: 0.75 },
+    { suspectId: 'vivian', type: 'Route', label: 'possible window route', requires: ['library_window', 'garden_prints'], weight: 1.1 },
+    { suspectId: 'vivian', type: 'Fiber', label: 'red silk near roses', requires: ['garden_scarf'], weight: 0.75 },
+    { suspectId: 'vivian', type: 'Object', label: 'damaged monogram gloves', requires: ['garden_gloves'], weight: 0.45 },
+    { suspectId: 'vivian', type: 'Motive', label: 'initialed breakup trail', requires: ['study_book', 'library_letter'], weight: 1.6 },
+    { suspectId: 'montgomery', type: 'Motive', label: 'cut from will', requires: ['study_will'], weight: 1.1 },
+    { suspectId: 'montgomery', type: 'Opportunity', label: 'safe access', requires: ['study_safe'], weight: 0.9 },
+    { suspectId: 'montgomery', type: 'Suspicious', label: 'typed J.M. note', requires: ['study_note'], weight: 0.9 },
+    { suspectId: 'montgomery', type: 'Presence', label: 'whiskey glass', requires: ['study_whiskey'], weight: 0.7 },
+    { suspectId: 'montgomery', type: 'Timeline', label: 'uncertain piano alibi', requires: ['drawing_piano'], weight: 0.6 },
+    { suspectId: 'montgomery', type: 'Presence', label: 'cigarette in Garden', requires: ['garden_bench'], weight: 0.7 },
+    { suspectId: 'ash', type: 'Motive', label: 'hidden inventory', requires: ['kitchen_pantry'], weight: 1.1 },
+    { suspectId: 'ash', type: 'Route', label: 'muddy boot', requires: ['kitchen_boot'], weight: 0.8 },
+    { suspectId: 'ash', type: 'Access', label: 'back door open', requires: ['kitchen_backdoor'], weight: 0.9 },
+    { suspectId: 'ash', type: 'Paper Trail', label: 'scarf receipt signed in', requires: ['kitchen_receipt'], weight: 0.6 },
+    { suspectId: 'ash', type: 'Cover-up', label: 'missing estate ledger', requires: ['library_shelf', 'kitchen_pantry'], weight: 1.1 },
+    { suspectId: 'eleanor', type: 'Motive', label: 'inheritance pressure', requires: ['study_will'], weight: 0.9 },
+    { suspectId: 'eleanor', type: 'Timeline', label: 'gap after 10:15', requires: ['drawing_seating'], weight: 0.8 },
+    { suspectId: 'eleanor', type: 'Presence', label: 'hostess wine glass', requires: ['drawing_wine'], weight: 0.4 },
+    { suspectId: 'eleanor', type: 'Fiber', label: 'red silk in her room', requires: ['drawing_fabric'], weight: 0.6 }
+];
+
+const CONTRADICTION_RULES = [
+    {
+        suspectId: 'vivian',
+        evidence: ['library_carpet'],
+        question: "A red silk thread was found by the body",
+        title: "Vivian moves the silk",
+        detail: "The body scene has red silk, but Vivian says her tear happened only in the Drawing Room."
+    },
+    {
+        suspectId: 'vivian',
+        evidence: ['garden_gloves'],
+        question: "Soaked gloves with a damaged monogram were found in the Garden.",
+        title: "Vivian dismisses the gloves",
+        detail: "The gloves might connect to her, but she refuses even the possibility."
+    },
+    {
+        suspectId: 'ash',
+        evidence: ['kitchen_backdoor'],
+        question: "You insist you locked the back door at 9 PM, yet it was found open.",
+        title: "Ash's locked-door problem",
+        detail: "Ash insists the back door was locked, but the door was found open."
+    },
+    {
+        suspectId: 'montgomery',
+        evidence: ['study_note'],
+        question: "That threatening note bearing your initials",
+        title: "The J.M. note is too convenient",
+        detail: "The note points at Montgomery, but it was typed instead of signed."
+    }
+];
+
+const MAX_SUPPORT_EVIDENCE = 3;
+const SUPPORT_EVIDENCE_POINTS = 5;
+const TRUE_SUPPORT_EVIDENCE = new Set([
+    'library_decanter',
+    'library_carpet',
+    'library_letter',
+    'library_window',
+    'garden_prints',
+    'garden_scarf',
+    'study_book'
+]);
+
+const MINIGAME_ROTATION = ['tap', 'cipher', 'fingerprint', 'evidence'];
+const MINIGAME_TESTER_COPY = {
+    tap: { label: 'Tap Race', detail: 'Speed and stamina' },
+    cipher: { label: 'Cipher Crack', detail: 'Decode the clue word' },
+    fingerprint: { label: 'Print Match', detail: 'Pattern matching' },
+    evidence: { label: 'Evidence Call', detail: 'Pick the strongest clue' }
+};
+const CIPHER_KEY = {
+    A: '△', B: '▣', C: '◇', D: '◍', E: '○', F: '◈', G: '⬟', H: '⌂',
+    I: '│', K: '✦', L: '□', M: '≋', N: '∩', O: '●', P: '▱', R: '◇',
+    S: '◆', T: '✚', V: '▽', W: '▵', Y: '⌁'
+};
+const CIPHER_PUZZLES = [
+    {
+        context: "The garden map says: MEET BY THE ____.",
+        clue: "The last two cipher marks match. Use the sentence, not just the symbols.",
+        answer: "WELL",
+        reveal: ["W", "E"],
+        options: ["WELL", "WILL", "WEST", "WIRE"]
+    },
+    {
+        context: "A torn inventory card says: KEY HIDDEN IN THE ____.",
+        clue: "One unknown symbol remains. Pick the place where a hidden key belongs.",
+        answer: "SAFE",
+        reveal: ["S", "A", "E"],
+        options: ["SAFE", "SAGE", "SANE", "SAVE"]
+    },
+    {
+        context: "A coded reminder says: ASK ____ ABOUT THE GLASS.",
+        clue: "This is a person in the house, not just any matching word.",
+        answer: "ASH",
+        reveal: ["A", "S"],
+        options: ["ASH", "AGE", "ARM", "ART"]
+    },
+    {
+        context: "The unsigned warning says: BURN THE ____ BEFORE MORNING.",
+        clue: "Choose the object that would hide a confession.",
+        answer: "NOTE",
+        reveal: ["N", "O", "E"],
+        options: ["NOTE", "VASE", "ROSE", "GATE"]
+    },
+    {
+        context: "A back-door message says: LEAVE BY THE ____.",
+        clue: "Pick the estate exit that completes the sentence.",
+        answer: "GATE",
+        reveal: ["G", "A", "E"],
+        options: ["GATE", "VASE", "SAFE", "ROSE"]
+    }
+];
+const FINGERPRINT_GRID_SIZE = 12;
+const FINGERPRINT_SAMPLE_ROTATION_MIN = 140;
+const FINGERPRINT_SAMPLE_ROTATION_MAX = 220;
+const EVIDENCE_MINIGAMES = [
+    {
+        prompt: "Which evidence best proves someone fled through wet ground?",
+        correct: "Fresh muddy footprints leading away from a window",
+        options: [
+            "Fresh muddy footprints leading away from a window",
+            "A dusty portrait hanging crooked",
+            "A clean knife rack",
+            "A guest book signature"
+        ]
+    },
+    {
+        prompt: "Which detail is strongest for catching a false alibi?",
+        correct: "A witness places the suspect elsewhere at the same time",
+        options: [
+            "A witness places the suspect elsewhere at the same time",
+            "The suspect looks nervous",
+            "The room has expensive furniture",
+            "The suspect disliked the victim years ago"
+        ]
+    },
+    {
+        prompt: "Which clue most directly points to the weapon?",
+        correct: "Blood on the broken object found beside the body",
+        options: [
+            "Blood on the broken object found beside the body",
+            "A muddy boot near the back door",
+            "A crossed-out pantry list",
+            "A half-smoked cigarette"
+        ]
+    },
+    {
+        prompt: "Which clue is probably a red herring?",
+        correct: "A dramatic note that is typed but not signed",
+        options: [
+            "A dramatic note that is typed but not signed",
+            "Matching fibers on the victim and suspect",
+            "A timed witness statement",
+            "A clear trail from the scene"
+        ]
+    }
+];
 
 // ============================================================
 // STATE
@@ -1325,6 +1833,9 @@ const state = {
     extraInspections: {}, // playerId -> count of purchased extra inspections this visit
     minigame: null,  // {type:'tap', startTime, endTime, tapCounts:{playerId:n}, placements:[]}
     leaderId: null,
+    hotLead: null,
+    hotLeadHistory: [],
+    hotLeadRoomId: null,
     accusationEndTime: 0,
     accusations: {}, // playerId -> {culpritId, weaponId, locationId}
     maxRooms: 5,     // after all 5 rooms visited (or host can end) move to accusation
@@ -1370,6 +1881,7 @@ let accusationTickInterval = null;
 let readyTimeoutHandle = null;
 let gameClockInterval = null;
 let accusationVoteTimer = null;
+let minigameReturnTarget = null;
 
 // ============================================================
 // UI HELPERS
@@ -1510,6 +2022,9 @@ function autoSaveState() {
             inspectionsThisRoom: state.inspectionsThisRoom,
             extraInspections: state.extraInspections,
             leaderId: state.leaderId,
+            hotLead: state.hotLead,
+            hotLeadHistory: state.hotLeadHistory,
+            hotLeadRoomId: state.hotLeadRoomId,
             accusations: state.accusations,
             maxRooms: state.maxRooms,
             discoveredHotspots: state.discoveredHotspots,
@@ -1538,6 +2053,13 @@ function setStatus(id, text) {
 function escapeHtml(s) {
     return String(s == null ? '' : s).replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
 }
+function portraitInner(character) {
+    if (character && character.portrait) {
+        return '<img src="' + escapeHtml(character.portrait) + '" alt="' +
+            escapeHtml((character.name || 'Character') + ' portrait') + '">';
+    }
+    return escapeHtml((character && character.icon) || '?');
+}
 function getHotspotsForRoom(room) {
     const playerCount = state.players.length;
     let maxTier;
@@ -1545,7 +2067,538 @@ function getHotspotsForRoom(room) {
     else if (playerCount <= 6) maxTier = 2;  // 5 hotspots
     else if (playerCount <= 9) maxTier = 3;  // 6 hotspots
     else maxTier = 4;                         // 7 hotspots
-    return room.hotspots.filter(hs => (hs.tier || 1) <= maxTier);
+    return room.hotspots.filter(hs => {
+        if (hs.requires && hs.requires.length) return hotspotUnlocked(hs);
+        return (hs.tier || 1) <= maxTier;
+    });
+}
+function clueText(clue) {
+    return clue ? (clue.text || clue.clueText || '') : '';
+}
+function isEvidenceQuestion(qa) {
+    return !!(qa && qa.requires && qa.requires.length > 0);
+}
+function questionButtonHtml(qa, idx, askFn, showBonus) {
+    const evidence = showBonus && isEvidenceQuestion(qa);
+    const className = 'btn secondary' + (evidence ? ' evidence-question' : '');
+    const bonus = evidence ? '<span class="question-bonus">+2 coins</span>' : '';
+    return '<button class="' + className + '" onclick="' + askFn + '(' + idx + ')"><span>' +
+        escapeHtml(qa.q) + '</span>' + bonus + '</button>';
+}
+function hotspotKey(roomId, hotspotId) {
+    return roomId + '_' + hotspotId;
+}
+function globalDiscoveredKeys() {
+    const keys = new Set(state.discoveredHotspots || []);
+    (state.publicClues || []).forEach(c => keys.add(hotspotKey(c.roomId, c.hotspotId)));
+    (state.players || []).forEach(p => {
+        (p.privateClues || []).forEach(c => keys.add(hotspotKey(c.roomId, c.hotspotId)));
+    });
+    return keys;
+}
+function hotspotUnlocked(hotspot) {
+    if (!hotspot || !hotspot.requires || hotspot.requires.length === 0) return true;
+    const known = globalDiscoveredKeys();
+    return hotspot.requires.every(key => known.has(key));
+}
+function hotspotDiscovered(roomId, hotspotId) {
+    const key = hotspotKey(roomId, hotspotId);
+    if ((state.discoveredHotspots || []).includes(key)) return true;
+    if ((state.publicClues || []).some(c => c.roomId === roomId && c.hotspotId === hotspotId)) return true;
+    return (state.players || []).some(p =>
+        (p.privateClues || []).some(c => c.roomId === roomId && c.hotspotId === hotspotId)
+    );
+}
+function playerKnownKeys(player) {
+    const keys = new Set();
+    if (player && player.privateClues) {
+        player.privateClues.forEach(c => keys.add(hotspotKey(c.roomId, c.hotspotId)));
+    }
+    (state.publicClues || []).forEach(c => keys.add(hotspotKey(c.roomId, c.hotspotId)));
+    return keys;
+}
+function hasKnownEvidence(player, keys) {
+    const known = playerKnownKeys(player);
+    return (keys || []).every(key => known.has(key));
+}
+function questionWasAsked(suspectId, needle) {
+    return (state.questionLog || []).some(q =>
+        q.suspectId === suspectId && q.q && q.q.indexOf(needle) !== -1
+    );
+}
+function getKnownSignals(player) {
+    return CASE_SIGNALS.filter(signal => hasKnownEvidence(player, signal.requires));
+}
+function getKnownContradictions(player) {
+    return CONTRADICTION_RULES.filter(rule =>
+        hasKnownEvidence(player, rule.evidence) && questionWasAsked(rule.suspectId, rule.question)
+    );
+}
+function signalWeight(signal) {
+    const weight = Number(signal && signal.weight);
+    return Number.isFinite(weight) ? weight : 1;
+}
+function formatPressure(score) {
+    const rounded = Math.round(Number(score || 0) * 10) / 10;
+    return Number.isInteger(rounded) ? String(rounded) : rounded.toFixed(1);
+}
+function getSuspectCaseScore(suspectId, player) {
+    const signals = getKnownSignals(player)
+        .filter(s => s.suspectId === suspectId)
+        .reduce((sum, signal) => sum + signalWeight(signal), 0);
+    const contradictions = getKnownContradictions(player).filter(c => c.suspectId === suspectId).length;
+    return Math.round((signals + contradictions * 1.6) * 10) / 10;
+}
+function getTopLead(player) {
+    const ranked = SCENARIO.suspects.map(s => ({
+        suspect: s,
+        score: getSuspectCaseScore(s.id, player)
+    })).sort((a, b) => b.score - a.score);
+    if (!ranked.length || ranked[0].score < 2.5) return null;
+    if (ranked[1] && ranked[0].score - ranked[1].score < 0.8) return null;
+    return ranked[0];
+}
+function getSmartHint(player) {
+    const known = playerKnownKeys(player);
+    const hintCount = (player.caseHints || []).length;
+    const knows = key => known.has(key);
+    if (!knows('library_decanter')) {
+        return hintCount > 0
+            ? 'Direct hint: inspect the shattered decanter in the Library. It points to the weapon.'
+            : 'Start at the body. The murder weapon left a very loud clue behind.';
+    }
+    if (!knows('library_window')) {
+        return 'Before naming a culprit, map the exit from the body scene. The window matters.';
+    }
+    if (!knows('library_carpet')) {
+        return hintCount > 1
+            ? 'Direct hint: inspect the bloodstained carpet in the Library. Clothing evidence matters.'
+            : 'The body scene has a clothing clue that can test a suspect story.';
+    }
+    if (!knows('drawing_fabric')) {
+        return 'Compare red fabric in more than one room before deciding whose story it supports.';
+    }
+    if (!knows('garden_scarf') || !knows('garden_prints')) {
+        return 'The Garden is useful as a route. Treat it as movement evidence, not a verdict.';
+    }
+    if (!knows('study_book') && !knows('library_letter')) {
+        return "Look for motive in Alistair's papers. One initial is not enough; two notes are stronger.";
+    }
+    if (!questionWasAsked('vivian', 'A red silk thread was found by the body')) {
+        return 'Ask suspects about evidence that conflicts with their story. Contradictions beat loose clues.';
+    }
+    const top = getTopLead(player);
+    if (top) {
+        return 'Current strongest theory: ' + top.suspect.name + '. Confirm it with motive, route, and contradiction evidence before accusing.';
+    }
+    return 'Build at least two suspect theories. A single suspicious object should not settle the case.';
+}
+function hotspotByKey(key) {
+    const parts = String(key || '').split('_');
+    const roomId = parts[0];
+    const hotspotId = parts.slice(1).join('_');
+    const room = SCENARIO.rooms.find(r => r.id === roomId);
+    const hotspot = room && room.hotspots.find(h => h.id === hotspotId);
+    return { room, hotspot, roomId, hotspotId };
+}
+function knownEvidenceCards(player) {
+    const byKey = new Map();
+    const addCard = clue => {
+        if (!clue) return;
+        const key = hotspotKey(clue.roomId, clue.hotspotId);
+        if (byKey.has(key)) return;
+        const found = hotspotByKey(key);
+        const title = (found.room ? found.room.name : clue.roomId) +
+            ' - ' + (found.hotspot ? found.hotspot.label : clue.hotspotId);
+        byKey.set(key, {
+            key,
+            roomId: clue.roomId,
+            hotspotId: clue.hotspotId,
+            title,
+            text: clueText(clue)
+        });
+    };
+    (player && player.privateClues || []).forEach(addCard);
+    (state.publicClues || []).forEach(addCard);
+    return Array.from(byKey.values()).sort((a, b) => a.title.localeCompare(b.title));
+}
+function validSupportEvidenceKeys(player, keys) {
+    const known = new Set(knownEvidenceCards(player).map(card => card.key));
+    const clean = [];
+    (keys || []).forEach(key => {
+        if (known.has(key) && !clean.includes(key) && clean.length < MAX_SUPPORT_EVIDENCE) {
+            clean.push(key);
+        }
+    });
+    return clean;
+}
+function scoreSupportEvidence(keys) {
+    let points = 0;
+    let correct = 0;
+    (keys || []).forEach(key => {
+        if (TRUE_SUPPORT_EVIDENCE.has(key)) {
+            correct += 1;
+            points += SUPPORT_EVIDENCE_POINTS;
+        }
+    });
+    return { correct, points };
+}
+function shuffleCopy(arr) {
+    const copy = arr.slice();
+    for (let i = copy.length - 1; i > 0; i--) {
+        const j = Math.floor(Math.random() * (i + 1));
+        const tmp = copy[i];
+        copy[i] = copy[j];
+        copy[j] = tmp;
+    }
+    return copy;
+}
+function buildMinigame(type, now) {
+    if (type === 'cipher') return buildCipherMinigame(now);
+    if (type === 'fingerprint') return buildFingerprintMinigame(now);
+    if (type === 'evidence') return buildEvidenceMinigame(now);
+    return buildTapMinigame(now);
+}
+function buildBaseMinigame(type, now, durationMs) {
+    return {
+        type,
+        phase: 'countdown',
+        startTime: now + 3000,
+        endTime: now + 3000 + durationMs,
+        responses: {},
+        placements: []
+    };
+}
+function buildTapMinigame(now) {
+    const mg = buildBaseMinigame('tap', now, 5000);
+    mg.title = 'Tap Race';
+    mg.subtitle = 'Fast fingers grab the next lead.';
+    mg.tapCounts = {};
+    state.players.forEach(p => { mg.tapCounts[p.id] = 0; });
+    return mg;
+}
+function buildCipherMinigame(now) {
+    const puzzle = CIPHER_PUZZLES[Math.floor(Math.random() * CIPHER_PUZZLES.length)];
+    const answer = puzzle.answer;
+    const shuffled = shuffleCopy(puzzle.options);
+    const key = (puzzle.reveal || []).map(letter => ({ letter, symbol: CIPHER_KEY[letter] || '?' }));
+    const mg = buildBaseMinigame('cipher', now, 14000);
+    mg.title = 'Cipher Crack';
+    mg.subtitle = 'Use partial code and case context to infer the hidden word.';
+    mg.prompt = 'Which word completes the intercepted message?';
+    mg.context = puzzle.context;
+    mg.clue = puzzle.clue;
+    mg.code = answer.split('').map(letter => CIPHER_KEY[letter] || '?').join(' ');
+    mg.key = key;
+    mg.options = shuffled;
+    mg.correctIndex = shuffled.indexOf(answer);
+    return mg;
+}
+function randomFingerprintSampleRotation(targetRotation, usedRotations = []) {
+    let rotation = targetRotation + FINGERPRINT_SAMPLE_ROTATION_MIN;
+    let attempts = 0;
+    while (attempts < 30) {
+        const direction = Math.random() < 0.5 ? -1 : 1;
+        const delta = FINGERPRINT_SAMPLE_ROTATION_MIN +
+            Math.floor(Math.random() * (FINGERPRINT_SAMPLE_ROTATION_MAX - FINGERPRINT_SAMPLE_ROTATION_MIN + 1));
+        rotation = targetRotation + (direction * delta);
+        if (!usedRotations.some(r => Math.abs(r - rotation) < 12)) break;
+        attempts += 1;
+    }
+    return rotation;
+}
+function fingerprintBits(pattern) {
+    return String(pattern || '').replace(/\|/g, '');
+}
+function fingerprintDistance(a, b) {
+    const aa = fingerprintBits(a);
+    const bb = fingerprintBits(b);
+    const n = Math.min(aa.length, bb.length);
+    let distance = Math.abs(aa.length - bb.length);
+    for (let i = 0; i < n; i++) {
+        if (aa[i] !== bb[i]) distance += 1;
+    }
+    return distance;
+}
+function fingerprintActiveCount(pattern) {
+    return fingerprintBits(pattern).split('').filter(bit => bit === '1').length;
+}
+function fingerprintPatternFromBits(bits) {
+    const rows = [];
+    for (let i = 0; i < bits.length; i += FINGERPRINT_GRID_SIZE) {
+        rows.push(bits.slice(i, i + FINGERPRINT_GRID_SIZE).join(''));
+    }
+    return rows.join('|');
+}
+function randomArrayItem(arr) {
+    return arr[Math.floor(Math.random() * arr.length)];
+}
+function randomRange(min, max) {
+    return min + Math.random() * (max - min);
+}
+function generateFingerprintPattern() {
+    const size = FINGERPRINT_GRID_SIZE;
+    const mid = (size - 1) / 2;
+    const style = Math.floor(Math.random() * 4);
+    const phase = randomRange(0, Math.PI * 2);
+    const tilt = randomRange(-0.28, 0.28);
+    const curl = randomRange(0.35, 0.82);
+    const centerX = randomRange(-0.26, 0.26);
+    const centerY = randomRange(-0.18, 0.22);
+    const spacing = randomRange(11.5, 14.5);
+    const thickness = randomRange(0.38, 0.5);
+    const ellipseX = randomRange(0.82, 1.18);
+    const ellipseY = randomRange(0.88, 1.2);
+    const rows = [];
+    for (let y = 0; y < size; y++) {
+        let row = '';
+        for (let x = 0; x < size; x++) {
+            const nx = (x - mid) / mid;
+            const ny = (y - mid) / mid;
+            const dx = nx - centerX;
+            const dy = ny - centerY;
+            const dist = Math.hypot(dx * ellipseX, dy * ellipseY);
+            const angle = Math.atan2(dy, dx || 0.001);
+            let ridgeField;
+            if (style === 0) {
+                ridgeField = (ny + Math.sin((nx + phase) * Math.PI * 0.85) * curl + nx * tilt) * spacing;
+            } else if (style === 1) {
+                ridgeField = dist * spacing + Math.sin(angle * 2.2 + phase) * 1.15;
+            } else if (style === 2) {
+                ridgeField = (ny - Math.abs(nx - centerX) * curl + nx * tilt) * spacing + phase;
+            } else {
+                ridgeField = (ny + Math.abs(nx + centerX) * curl + Math.sin(nx * Math.PI) * 0.24 + nx * tilt) * spacing + phase;
+            }
+            const wave = Math.abs(Math.sin(ridgeField));
+            const island = dist < 1.28;
+            const smallBreak = Math.random() < 0.02;
+            row += (island && wave < thickness && !smallBreak) ? '1' : '0';
+        }
+        rows.push(row);
+    }
+    return rows.join('|');
+}
+function fingerprintDensityUseful(pattern) {
+    const active = fingerprintActiveCount(pattern);
+    return active >= 34 && active <= 72;
+}
+function uniqueFingerprintPattern(existing) {
+    let pattern = generateFingerprintPattern();
+    let attempts = 0;
+    while (attempts < 80 && (!fingerprintDensityUseful(pattern) || existing.some(p => fingerprintDistance(pattern, p) < 24))) {
+        pattern = generateFingerprintPattern();
+        attempts += 1;
+    }
+    return pattern;
+}
+function mutateFingerprintPattern(pattern) {
+    const bits = fingerprintBits(pattern).split('');
+    const on = [];
+    const off = [];
+    bits.forEach((bit, idx) => {
+        if (bit === '1') on.push(idx);
+        else off.push(idx);
+    });
+    const swaps = Math.min(on.length, off.length, 8 + Math.floor(Math.random() * 5));
+    const usedOn = new Set();
+    const usedOff = new Set();
+    for (let i = 0; i < swaps; i++) {
+        let onIdx = randomArrayItem(on);
+        let offIdx = randomArrayItem(off);
+        let guard = 0;
+        while (guard < 20 && usedOn.has(onIdx)) { onIdx = randomArrayItem(on); guard += 1; }
+        guard = 0;
+        while (guard < 20 && usedOff.has(offIdx)) { offIdx = randomArrayItem(off); guard += 1; }
+        usedOn.add(onIdx);
+        usedOff.add(offIdx);
+        bits[onIdx] = '0';
+        bits[offIdx] = '1';
+    }
+    return fingerprintPatternFromBits(bits);
+}
+function buildFingerprintMinigame(now) {
+    const targetPattern = uniqueFingerprintPattern([]);
+    const targetRotation = 0;
+    const decoys = [];
+    while (decoys.length < 3) {
+        let candidate = mutateFingerprintPattern(targetPattern);
+        let attempts = 0;
+        while (attempts < 70 && [targetPattern].concat(decoys).some(p => fingerprintDistance(candidate, p) < 18)) {
+            candidate = mutateFingerprintPattern(targetPattern);
+            attempts += 1;
+        }
+        decoys.push(candidate);
+    }
+    const shuffled = shuffleCopy([
+        { matchId: 'target', pattern: targetPattern },
+        ...decoys.map((pattern, idx) => ({ matchId: 'decoy-' + idx, pattern }))
+    ]);
+    const usedRotations = [];
+    shuffled.forEach((sample, idx) => {
+        sample.name = 'Sample ' + String.fromCharCode(65 + idx);
+        sample.rotation = randomFingerprintSampleRotation(targetRotation, usedRotations);
+        usedRotations.push(sample.rotation);
+    });
+    const mg = buildBaseMinigame('fingerprint', now, 12000);
+    mg.title = 'Print Match';
+    mg.subtitle = 'Match the lifted print after a heavy rotation.';
+    mg.prompt = 'Which sample has the same dot pattern as the lifted print?';
+    mg.target = { name: 'Lifted print', pattern: targetPattern, rotation: targetRotation };
+    mg.correctIndex = shuffled.findIndex(p => p.matchId === 'target');
+    mg.options = shuffled.map(sample => ({
+        name: sample.name,
+        pattern: sample.pattern,
+        rotation: sample.rotation
+    }));
+    return mg;
+}
+function buildEvidenceMinigame(now) {
+    const puzzle = EVIDENCE_MINIGAMES[Math.floor(Math.random() * EVIDENCE_MINIGAMES.length)];
+    const options = shuffleCopy(puzzle.options);
+    const mg = buildBaseMinigame('evidence', now, 10000);
+    mg.title = 'Evidence Call';
+    mg.subtitle = 'Pick the clue that actually proves the point.';
+    mg.prompt = puzzle.prompt;
+    mg.options = options;
+    mg.correctIndex = options.indexOf(puzzle.correct);
+    return mg;
+}
+function chooseMinigameType() {
+    const index = Math.max(0, state.visitedRoomIds.length - 1) % MINIGAME_ROTATION.length;
+    return MINIGAME_ROTATION[index];
+}
+function isMinigameType(type) {
+    return MINIGAME_ROTATION.includes(type);
+}
+function minigameTesterHtml() {
+    let html = '<div class="dev-minigame-kicker">Temporary tester</div>' +
+        '<div class="dev-minigame-title">Play a minigame</div>' +
+        '<div class="dev-minigame-grid">';
+    MINIGAME_ROTATION.forEach(type => {
+        const copy = MINIGAME_TESTER_COPY[type] || { label: type, detail: 'Practice run' };
+        html += '<button class="btn secondary small" type="button" onclick="startTestMinigame(\'' + type + '\')">' +
+            escapeHtml(copy.label) + '<span>' + escapeHtml(copy.detail) + '</span></button>';
+    });
+    html += '</div><div class="dev-minigame-note">Practice runs return here and do not award coins.</div>';
+    return html;
+}
+function renderMinigameTesters() {
+    document.querySelectorAll('[data-minigame-tester]').forEach(el => {
+        if (!isHost) {
+            el.style.display = 'none';
+            el.innerHTML = '';
+            return;
+        }
+        el.innerHTML = minigameTesterHtml();
+        el.style.display = '';
+    });
+}
+function startTestMinigame(type) {
+    if (!isHost || !isMinigameType(type)) return;
+    if (state.phase === 'minigame') return;
+    minigameReturnTarget = {
+        phase: state.phase || 'lobby',
+        currentRoomId: state.currentRoomId,
+        roomTimerEnd: state.roomTimerEnd
+    };
+    startMinigame(type, { testRun: true });
+    const copy = MINIGAME_TESTER_COPY[type] || { label: type };
+    showNotification('Practice: ' + copy.label, 'info');
+}
+function minigameLabel(mg, answerIndex) {
+    if (!mg || answerIndex == null) return '';
+    const option = mg.options && mg.options[answerIndex];
+    if (!option) return '';
+    return typeof option === 'string' ? option : option.name;
+}
+function playerAnsweredMinigame(playerId) {
+    return !!(state.minigame && state.minigame.responses && state.minigame.responses[playerId]);
+}
+function recordMinigameAnswer(player, answerIndex) {
+    const mg = state.minigame;
+    if (!player || !mg || mg.type === 'tap' || mg.phase !== 'racing') return;
+    if (playerAnsweredMinigame(player.id)) return;
+    const idx = Number(answerIndex);
+    if (!Number.isInteger(idx) || !mg.options || idx < 0 || idx >= mg.options.length) return;
+    const now = Date.now();
+    const correct = idx === mg.correctIndex;
+    mg.responses[player.id] = {
+        answerIndex: idx,
+        label: minigameLabel(mg, idx),
+        correct,
+        timeMs: Math.max(0, now - mg.startTime),
+        score: correct ? 1 : 0
+    };
+    const alive = state.players.filter(p => !p.disconnected);
+    if (alive.length > 0 && alive.every(p => playerAnsweredMinigame(p.id))) {
+        finishMinigameNow();
+    }
+}
+function finishMinigameNow() {
+    if (minigameTickInterval) {
+        clearInterval(minigameTickInterval);
+        minigameTickInterval = null;
+    }
+    if (state.minigame) state.minigame.phase = 'done';
+    finishMinigame();
+}
+function randomFrom(arr) {
+    if (!arr || !arr.length) return null;
+    return arr[Math.floor(Math.random() * arr.length)];
+}
+function hotLeadHistory() {
+    if (!Array.isArray(state.hotLeadHistory)) state.hotLeadHistory = [];
+    return state.hotLeadHistory;
+}
+function getHotLeadOptions() {
+    const seen = new Set(hotLeadHistory());
+    const options = [];
+    SCENARIO.rooms.forEach(room => {
+        (room.hotspots || []).forEach(hs => {
+            if (!hs.requires || hs.requires.length === 0) return;
+            if (!hotspotUnlocked(hs)) return;
+            if (hotspotDiscovered(room.id, hs.id)) return;
+            const id = 'evidence:' + room.id + ':' + hs.id;
+            if (!seen.has(id)) {
+                options.push({ id, roomId: room.id, kind: 'evidence' });
+            }
+        });
+    });
+    SCENARIO.rooms.forEach(room => {
+        if (!room.suspectId) return;
+        const questions = SCENARIO.questions[room.suspectId] || [];
+        questions.forEach((qa, idx) => {
+            if (!qa.requires || qa.requires.length === 0) return;
+            const alreadyAsked = (state.questionLog || []).some(q =>
+                q.suspectId === room.suspectId && q.q === qa.q
+            );
+            if (alreadyAsked) return;
+            const availableToSomeone = (state.players || []).some(p =>
+                qa.requires.every(reqId => playerKnowsHotspot(p, reqId))
+            );
+            if (!availableToSomeone) return;
+            const id = 'question:' + room.suspectId + ':' + idx;
+            if (!seen.has(id)) {
+                options.push({ id, roomId: room.id, kind: 'question' });
+            }
+        });
+    });
+    return options;
+}
+function chooseHotLeadRoom() {
+    const lead = randomFrom(getHotLeadOptions());
+    if (!lead) {
+        state.hotLead = null;
+        return null;
+    }
+    state.hotLead = {
+        id: lead.id,
+        roomId: lead.roomId,
+        kind: lead.kind,
+        claimed: false
+    };
+    hotLeadHistory().push(lead.id);
+    return lead.roomId;
 }
 function genRoomCode() {
     const chars = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
@@ -1692,7 +2745,7 @@ function createGame() {
             myPlayerId = myPeerId;
             state.players.push({
                 id: myPeerId, name: myName, color: PLAYER_COLORS[0],
-                coins: 0, privateClues: [], ready: false,
+                coins: 0, privateClues: [], caseHints: [], ready: false,
                 submitted: false, accusation: null, disconnected: false
             });
         }
@@ -1827,7 +2880,7 @@ function handleGuestMessage(conn, msg) {
                 const color = PLAYER_COLORS[colorIdx];
                 state.players.push({
                     id: peerId, name, color, coins: 0,
-                    privateClues: [], ready: false, submitted: false,
+                    privateClues: [], caseHints: [], ready: false, submitted: false,
                     accusation: null, disconnected: false
                 });
                 try { conn.send({ type: 'role_assignment', playerId: peerId, roomCode }); } catch(e){}
@@ -1874,10 +2927,12 @@ function handleGuestMessage(conn, msg) {
             const alreadyPublic = state.publicClues.some(c => c.roomId === msg.roomId && c.hotspotId === msg.hotspotId);
             if (alreadyPublic) return;
             clue.shared = true;
+            player.coins += 1;
+            showNotification('+1 coin for sharing evidence', 'success');
             state.publicClues.push({
                 roomId: clue.roomId,
                 hotspotId: clue.hotspotId,
-                text: clue.text,
+                text: clueText(clue),
                 fromPlayerId: player.id,
                 fromPlayerName: player.name
             });
@@ -1903,6 +2958,7 @@ function handleGuestMessage(conn, msg) {
                     askerId: player.id, askerName: player.name,
                     suspectId: suspect.id, q: qa.q, a: qa.a, roomId: room.id
                 });
+                if (isEvidenceQuestion(qa)) player.coins += 2;
                 state.askedThisRoom[player.id] = true;
             } else if (state.phase === 'final_questioning') {
                 if (state.finalAsked[player.id]) return; // already asked in final
@@ -1969,9 +3025,19 @@ function handleGuestMessage(conn, msg) {
             if (!player) return;
             if (state.phase !== 'minigame') return;
             if (!state.minigame || Date.now() < state.minigame.startTime || Date.now() > state.minigame.endTime) return;
+            if (state.minigame.type !== 'tap') return;
             state.minigame.tapCounts[player.id] = (state.minigame.tapCounts[player.id] || 0) + (msg.taps || 1);
             // broadcast frequently but lightly
             // We'll rely on tick interval for bar updates (already set up).
+            return;
+        }
+        case 'minigame_answer': {
+            if (!player) return;
+            if (state.phase !== 'minigame') return;
+            if (!state.minigame || Date.now() < state.minigame.startTime || Date.now() > state.minigame.endTime) return;
+            recordMinigameAnswer(player, msg.answerIndex);
+            broadcastState();
+            renderAll();
             return;
         }
         case 'pick_room': {
@@ -1987,6 +3053,11 @@ function handleGuestMessage(conn, msg) {
                 return;
             }
             player.coins -= cost;
+            if (targetRoom.id === state.hotLeadRoomId) {
+                player.coins += 2;
+                if (state.hotLead) state.hotLead.claimed = true;
+                showNotification(player.name + ' followed the hot lead! +2 coins', 'success');
+            }
             enterRoom(targetRoom.id);
             return;
         }
@@ -2005,10 +3076,12 @@ function handleGuestMessage(conn, msg) {
             const validWeapon = SCENARIO.weapons.some(w => w.id === msg.weaponId);
             const validLoc = SCENARIO.rooms.some(r => r.id === msg.locationId);
             if (!validCulprit || !validWeapon || !validLoc) return;
+            const evidenceKeys = validSupportEvidenceKeys(player, msg.evidenceKeys || []);
             player.accusation = {
                 culpritId: msg.culpritId,
                 weaponId: msg.weaponId,
-                locationId: msg.locationId
+                locationId: msg.locationId,
+                evidenceKeys
             };
             player.submitted = true;
             broadcastState();
@@ -2057,7 +3130,9 @@ function handleHostMessage(msg) {
             // live tap bar update (pushed from host during minigame)
             if (state.minigame) {
                 state.minigame.tapCounts = msg.tapCounts || state.minigame.tapCounts;
+                state.minigame.responses = msg.responses || state.minigame.responses;
                 state.minigame.remainingMs = msg.remainingMs;
+                if (msg.phase) state.minigame.phase = msg.phase;
             }
             renderMinigame();
             return;
@@ -2099,7 +3174,7 @@ function broadcastState() {
         phase: state.phase,
         players: state.players.map(p => ({
             id: p.id, name: p.name, color: p.color, coins: p.coins,
-            privateClues: p.privateClues, ready: p.ready,
+            privateClues: p.privateClues, caseHints: p.caseHints || [], ready: p.ready,
             submitted: p.submitted, accusation: p.accusation,
             disconnected: !!p.disconnected
         })),
@@ -2112,13 +3187,28 @@ function broadcastState() {
         extraInspections: state.extraInspections,
         minigame: state.minigame ? {
             type: state.minigame.type,
+            testRun: !!state.minigame.testRun,
+            title: state.minigame.title,
+            subtitle: state.minigame.subtitle,
+            prompt: state.minigame.prompt,
+            context: state.minigame.context,
+            clue: state.minigame.clue,
+            code: state.minigame.code,
+            key: state.minigame.key,
+            target: state.minigame.target,
+            options: state.minigame.options,
+            correctIndex: state.minigame.correctIndex,
             startTime: state.minigame.startTime,
             endTime: state.minigame.endTime,
             tapCounts: state.minigame.tapCounts,
+            responses: state.minigame.responses,
             placements: state.minigame.placements,
             phase: state.minigame.phase
         } : null,
         leaderId: state.leaderId,
+        hotLead: state.hotLead,
+        hotLeadHistory: state.hotLeadHistory,
+        hotLeadRoomId: state.hotLeadRoomId,
         accusationEndTime: state.accusationEndTime,
         accusations: state.accusations,
         maxRooms: state.maxRooms,
@@ -2160,7 +3250,7 @@ function hostStartGame() {
     }
     // reset derived fields
     state.players.forEach(p => {
-        p.coins = 0; p.privateClues = []; p.ready = false;
+        p.coins = 0; p.privateClues = []; p.caseHints = []; p.ready = false;
         p.submitted = false; p.accusation = null;
     });
     state.visitedRoomIds = [];
@@ -2169,6 +3259,9 @@ function hostStartGame() {
     state.askedThisRoom = {};
     state.minigame = null;
     state.leaderId = null;
+    state.hotLead = null;
+    state.hotLeadHistory = [];
+    state.hotLeadRoomId = null;
     state.accusations = {};
     state.discoveredHotspots = [];
     state.accusationCalled = false;
@@ -2196,6 +3289,7 @@ function hostBeginInvestigation() {
 function enterRoom(roomId) {
     state.phase = 'room';
     state.currentRoomId = roomId;
+    state.hotLeadRoomId = null;
     if (!state.visitedRoomIds.includes(roomId)) state.visitedRoomIds.push(roomId);
     state.askedThisRoom = {};
     state.inspectionsThisRoom = {};
@@ -2255,18 +3349,18 @@ function beginMinigameOrAccusation() {
     startMinigame();
 }
 
-function startMinigame() {
+function startMinigame(forcedType, options = {}) {
+    if (!options.testRun) minigameReturnTarget = null;
     state.phase = 'minigame';
     const now = Date.now();
-    state.minigame = {
-        type: 'tap',
-        phase: 'countdown', // 3,2,1 then 'racing' then 'done'
-        startTime: now + 3000,
-        endTime: now + 3000 + 5000, // 5s of tapping
-        tapCounts: {},
-        placements: []
-    };
-    state.players.forEach(p => { state.minigame.tapCounts[p.id] = 0; });
+    const type = isMinigameType(forcedType) ? forcedType : chooseMinigameType();
+    state.minigame = buildMinigame(type, now);
+    if (options.testRun) {
+        state.minigame.testRun = true;
+        state.minigame.subtitle = 'Practice run - ' + (state.minigame.subtitle || '');
+        state.minigame.startTime = now + 1800;
+        state.minigame.endTime = state.minigame.startTime + (state.minigame.type === 'tap' ? 12000 : 30000);
+    }
     broadcastState();
     renderAll();
 
@@ -2280,41 +3374,57 @@ function startMinigame() {
             state.minigame.phase = 'countdown';
             broadcast({ type: 'minigame_tap_update',
                 tapCounts: state.minigame.tapCounts,
+                responses: state.minigame.responses,
+                phase: state.minigame.phase,
                 remainingMs: state.minigame.startTime - t });
         } else if (t < state.minigame.endTime) {
             state.minigame.phase = 'racing';
             broadcast({ type: 'minigame_tap_update',
                 tapCounts: state.minigame.tapCounts,
+                responses: state.minigame.responses,
+                phase: state.minigame.phase,
                 remainingMs: state.minigame.endTime - t });
         } else {
             // finished
-            clearInterval(minigameTickInterval);
-            minigameTickInterval = null;
-            state.minigame.phase = 'done';
-            finishMinigame();
+            finishMinigameNow();
         }
         renderMinigame();
     }, 120);
 }
 
 function finishMinigame() {
+    if (!state.minigame) return;
     // Compute placements
-    const entries = state.players.map(p => ({
-        id: p.id, name: p.name, taps: state.minigame.tapCounts[p.id] || 0
-    }));
-    entries.sort((a, b) => b.taps - a.taps);
+    let entries;
+    if (state.minigame.type === 'tap') {
+        entries = state.players.map(p => ({
+            id: p.id, name: p.name, score: state.minigame.tapCounts[p.id] || 0,
+            resultLabel: (state.minigame.tapCounts[p.id] || 0) + ' taps'
+        }));
+        entries.sort((a, b) => b.score - a.score);
+    } else {
+        const responses = state.minigame.responses || {};
+        entries = state.players.map(p => {
+            const r = responses[p.id];
+            return {
+                id: p.id,
+                name: p.name,
+                score: r ? r.score : 0,
+                correct: !!(r && r.correct),
+                timeMs: r ? r.timeMs : 999999,
+                resultLabel: r ? ((r.correct ? 'correct' : 'wrong') + ' - ' + r.label) : 'no answer'
+            };
+        });
+        entries.sort((a, b) => (b.score - a.score) || (a.timeMs - b.timeMs));
+    }
     state.minigame.placements = entries;
     // Award coins
-    const coinByPlacement = (i) => {
-        if (i === 0) return 5;
-        if (i === 1) return 3;
-        if (i === 2) return 2;
-        return 1;
-    };
     entries.forEach((e, i) => {
         const p = state.players.find(pl => pl.id === e.id);
         if (!p) return;
-        p.coins += coinByPlacement(i);
+        const award = state.minigame.testRun ? 0 : (state.minigame.type === 'tap' || e.correct ? coinForMinigamePlacement(i) : 0);
+        e.coinsAwarded = award;
+        p.coins += award;
     });
     // Winner becomes leader (sole advantage: picks next room)
     const winnerId = entries[0] ? entries[0].id : null;
@@ -2324,7 +3434,23 @@ function finishMinigame() {
     renderAll();
 
     // After 3 seconds showing results, go to leader pick
+    const returnTarget = minigameReturnTarget;
     setTimeout(() => {
+        if (returnTarget && minigameReturnTarget === returnTarget) {
+            minigameReturnTarget = null;
+            state.minigame = null;
+            state.phase = returnTarget.phase || 'lobby';
+            state.currentRoomId = returnTarget.currentRoomId || null;
+            state.roomTimerEnd = returnTarget.roomTimerEnd || 0;
+            if (state.phase !== 'room') {
+                state.roomTimerEnd = 0;
+                const timerEl = document.getElementById('room-timer');
+                if (timerEl) timerEl.style.display = 'none';
+            }
+            broadcastState();
+            renderAll();
+            return;
+        }
         if ((state.visitedRoomIds.length >= state.maxRooms || state.visitedRoomIds.length >= SCENARIO.rooms.length)
             && !state.finalQuestioningDone) {
             startFinalQuestioning();
@@ -2345,6 +3471,7 @@ function startLeaderPick() {
         else startAccusation();
         return;
     }
+    state.hotLeadRoomId = chooseHotLeadRoom();
     broadcastState();
     renderAll();
 }
@@ -2353,6 +3480,7 @@ function startAccusation() {
     state.phase = 'accusation';
     state.accusationEndTime = Date.now() + 60 * 1000; // 60s timer
     state.players.forEach(p => { p.submitted = false; p.accusation = null; });
+    accusationDraft = { culpritId: null, weaponId: null, locationId: null, evidenceKeys: [] };
     broadcastState();
     renderAll();
     if (accusationTickInterval) clearInterval(accusationTickInterval);
@@ -2376,11 +3504,15 @@ function finishAccusation() {
     const truth = SCENARIO.truth;
     state.players.forEach(p => {
         let score = p.coins; // 1x coins
-        let detail = { coins: p.coins, culprit: 0, weapon: 0, location: 0, shares: 0 };
+        let detail = { coins: p.coins, culprit: 0, weapon: 0, location: 0, evidence: 0, evidenceCorrect: 0, shares: 0 };
         if (p.accusation) {
-            if (p.accusation.culpritId === truth.culpritId) { score += 5; detail.culprit = 5; }
-            if (p.accusation.weaponId === truth.weaponId) { score += 3; detail.weapon = 3; }
-            if (p.accusation.locationId === truth.locationId) { score += 2; detail.location = 2; }
+            if (p.accusation.culpritId === truth.culpritId) { score += 12; detail.culprit = 12; }
+            if (p.accusation.weaponId === truth.weaponId) { score += 8; detail.weapon = 8; }
+            if (p.accusation.locationId === truth.locationId) { score += 6; detail.location = 6; }
+            const evidenceScore = scoreSupportEvidence(p.accusation.evidenceKeys || []);
+            score += evidenceScore.points;
+            detail.evidence = evidenceScore.points;
+            detail.evidenceCorrect = evidenceScore.correct;
         }
         // Sharing bonus: 1 per shared clue
         const sharedCount = (p.privateClues || []).filter(c => c.shared).length;
@@ -2414,6 +3546,9 @@ function hostNewGame() {
     state.askedThisRoom = {};
     state.minigame = null;
     state.leaderId = null;
+    state.hotLead = null;
+    state.hotLeadHistory = [];
+    state.hotLeadRoomId = null;
     state.accusations = {};
     state.discoveredHotspots = [];
     state.gameStartTime = 0;
@@ -2431,7 +3566,7 @@ function hostNewGame() {
         state.players = state.players.filter(p => guestConns.has(p.id));
     }
     state.players.forEach(p => {
-        p.coins = 0; p.privateClues = []; p.ready = false;
+        p.coins = 0; p.privateClues = []; p.caseHints = []; p.ready = false;
         p.submitted = false; p.accusation = null;
         p.finalScore = undefined; p.scoreDetail = undefined;
     });
@@ -2463,6 +3598,7 @@ function renderAll() {
         case 'accusation': showScreen('screen-accusation'); renderAccusation(); break;
         case 'results': showScreen('screen-results'); renderResults(); break;
     }
+    renderMinigameTesters();
 }
 
 function renderLobby() {
@@ -2502,13 +3638,15 @@ function renderIntro() {
     document.getElementById('intro-title').textContent = SCENARIO.title;
     document.getElementById('intro-victim-name').textContent = SCENARIO.victim.name;
     document.getElementById('intro-backstory').textContent = SCENARIO.victim.backstory;
+    const victimPortrait = document.getElementById('intro-victim-portrait');
+    if (victimPortrait) victimPortrait.innerHTML = portraitInner(SCENARIO.victim);
     const grid = document.getElementById('intro-suspects');
     grid.innerHTML = '';
     SCENARIO.suspects.forEach(s => {
         const card = document.createElement('div');
         card.className = 'suspect-card';
         card.innerHTML =
-            '<div class="portrait large" style="margin:0 auto;">' + s.icon + '</div>' +
+            '<div class="portrait large" style="margin:0 auto;">' + portraitInner(s) + '</div>' +
             '<div class="name">' + escapeHtml(s.name) + '</div>' +
             '<div class="bio">' + escapeHtml(s.bio) + '</div>';
         grid.appendChild(card);
@@ -2549,7 +3687,7 @@ function renderRoom() {
             // TV display shows inspected status; actual interaction is in the controls panel
             if (inspectedByAnyone) inner += '<div class="check">✓ inspected</div>';
         } else if (myClue) {
-            inner += '<div style="margin-top:6px; font-size:0.82rem; color:var(--text-primary);">' + escapeHtml(myClue.text) + '</div>';
+            inner += '<div style="margin-top:6px; font-size:0.82rem; color:var(--text-primary);">' + escapeHtml(clueText(myClue)) + '</div>';
             const alreadyOnBoard = state.publicClues.some(c => c.roomId === room.id && c.hotspotId === hs.id);
             if (!myClue.shared && !alreadyOnBoard) {
                 inner += '<button class="btn small success" onclick="event.stopPropagation(); shareClue(\'' + room.id + '\',\'' + hs.id + '\');">Share with Group</button>';
@@ -2590,7 +3728,7 @@ function renderRoom() {
         const suspect = SCENARIO.suspects.find(s => s.id === room.suspectId);
         if (suspect) {
             let html = '<div class="suspect-present">' +
-                '<div class="portrait large">' + suspect.icon + '</div>' +
+                '<div class="portrait large">' + portraitInner(suspect) + '</div>' +
                 '<div class="info">' +
                     '<div class="label">Present:</div>' +
                     '<div class="sname">' + escapeHtml(suspect.name) + '</div>' +
@@ -2614,7 +3752,7 @@ function renderRoom() {
             state.publicClues.slice().reverse().forEach(c => {
                 const div = document.createElement('div');
                 div.className = 'clue-item shared';
-                div.innerHTML = escapeHtml(c.text) +
+                div.innerHTML = escapeHtml(clueText(c)) +
                     '<div class="meta"><span>' + escapeHtml(roomNameById(c.roomId)) + '</span>' +
                     '<span>via ' + escapeHtml(c.fromPlayerName) + '</span></div>';
                 cb.appendChild(div);
@@ -2692,8 +3830,62 @@ function renderPlayerStrip() {
     });
 }
 
+function buildCaseBoardHtml(me) {
+    const knownSignals = getKnownSignals(me);
+    const contradictions = getKnownContradictions(me);
+    const top = getTopLead(me);
+    let html = '<div class="panel">';
+    html += '<h3>Case Board</h3>';
+    if (top) {
+        html += '<div class="status-line">Strongest theory: <strong>' + escapeHtml(top.suspect.name) + '</strong> (pressure ' + formatPressure(top.score) + '). Treat it as a theory, not a verdict.</div>';
+    } else {
+        html += '<div class="status-line">No strong theory yet. Build pressure on more than one suspect, then challenge their stories.</div>';
+    }
+    if (contradictions.length) {
+        contradictions.forEach(c => {
+            const suspect = SCENARIO.suspects.find(s => s.id === c.suspectId);
+            html += '<div class="clue-item contradiction"><strong>' + escapeHtml(c.title) + '</strong>' +
+                '<div style="margin-top:4px;">' + escapeHtml(c.detail) + '</div>' +
+                '<div class="meta"><span>' + escapeHtml(suspect ? suspect.name : c.suspectId) + '</span><span>contradiction</span></div>' +
+                '</div>';
+        });
+    }
+    html += '<div class="case-board">';
+    SCENARIO.suspects.forEach(suspect => {
+        const score = getSuspectCaseScore(suspect.id, me);
+        const suspectSignals = knownSignals.filter(signal => signal.suspectId === suspect.id);
+        const suspectContradictions = contradictions.filter(c => c.suspectId === suspect.id);
+        html += '<div class="case-suspect' + (top && top.suspect.id === suspect.id ? ' leading' : '') + '">';
+        html += '<div class="name">' + suspect.icon + ' ' + escapeHtml(suspect.name) + '</div>';
+        html += '<div class="case-score">' + (score ? 'pressure ' + formatPressure(score) : 'no pressure') + '</div>';
+        if (!suspectSignals.length && !suspectContradictions.length) {
+            html += '<div class="case-empty">Nothing solid yet.</div>';
+        } else {
+            suspectSignals.forEach(signal => {
+                html += '<span class="case-chip">' + escapeHtml(signal.type) + ': ' + escapeHtml(signal.label) + '</span>';
+            });
+            suspectContradictions.forEach(() => {
+                html += '<span class="case-chip contradiction">Contradiction</span>';
+            });
+        }
+        html += '</div>';
+    });
+    html += '</div>';
+    if (me.caseHints && me.caseHints.length) {
+        html += '<details class="collapsible"><summary>Smart Hints (' + me.caseHints.length + ')</summary>';
+        me.caseHints.slice().reverse().forEach(hint => {
+            html += '<div class="clue-item hint">' + escapeHtml(hint.text || hint) +
+                '<div class="meta"><span>hint</span><span>' + escapeHtml(hint.time || '') + '</span></div></div>';
+        });
+        html += '</details>';
+    }
+    html += '</div>';
+    return html;
+}
+
 function buildPlayerActionsHtml(me, room, forHost) {
     let html = '';
+    html += '<div class="status-line">Case rewards: share evidence +1 coin - ask evidence-backed questions +2 coins.</div>';
 
     // Question menu — free-form: any player who hasn't asked yet can ask
     if (room.suspectId && !state.askedThisRoom[me.id]) {
@@ -2706,7 +3898,7 @@ function buildPlayerActionsHtml(me, room, forHost) {
             const askFn = forHost ? 'hostPlayerAskQuestion' : 'askQuestion';
             const skipFn = forHost ? 'hostPlayerSkipQuestion' : 'skipQuestion';
             pool.forEach((qa, idx) => {
-                html += '<button class="btn secondary" onclick="' + askFn + '(' + idx + ')">' + escapeHtml(qa.q) + '</button>';
+                html += questionButtonHtml(qa, idx, askFn, true);
             });
             html += '<button class="btn small" onclick="' + skipFn + '()">Skip question</button>';
             html += '</div></div>';
@@ -2730,7 +3922,7 @@ function buildPlayerActionsHtml(me, room, forHost) {
                 (!inspected && !locked ? ' onclick="hostPlayerInspect(\'' + room.id + '\',\'' + hs.id + '\')"' : '') + '>';
             html += '<span class="icon">' + hs.icon + '</span><div>' + escapeHtml(hs.label) + '</div>';
             if (myClue) {
-                html += '<div style="margin-top:6px; font-size:0.82rem; color:var(--text-primary);">' + escapeHtml(myClue.text) + '</div>';
+                html += '<div style="margin-top:6px; font-size:0.82rem; color:var(--text-primary);">' + escapeHtml(clueText(myClue)) + '</div>';
                 const alreadyOnBoard = state.publicClues.some(c => c.roomId === room.id && c.hotspotId === hs.id);
                 if (!myClue.shared && !alreadyOnBoard) {
                     html += '<button class="btn small success" onclick="event.stopPropagation(); hostPlayerShareClue(\'' + room.id + '\',\'' + hs.id + '\');">Share with Group</button>';
@@ -2745,6 +3937,8 @@ function buildPlayerActionsHtml(me, room, forHost) {
         html += '</div></div>';
     }
 
+    html += buildCaseBoardHtml(me);
+
     // Notebook (collapsible)
     html += '<details class="collapsible"><summary>📓 My Notebook (' + (me.privateClues || []).length + ' clues)</summary>';
     if ((me.privateClues || []).length === 0) {
@@ -2752,7 +3946,7 @@ function buildPlayerActionsHtml(me, room, forHost) {
     } else {
         (me.privateClues || []).forEach(c => {
             html += '<div class="clue-item ' + (c.shared ? 'shared' : 'private') + '">' +
-                escapeHtml(c.text) +
+                escapeHtml(clueText(c)) +
                 '<div class="meta"><span>' + escapeHtml(roomNameById(c.roomId)) + '</span>' +
                 '<span>' + (c.shared ? 'shared' : 'private') + '</span></div>' +
                 '</div>';
@@ -2777,10 +3971,10 @@ function buildPlayerActionsHtml(me, room, forHost) {
     const extraFn = forHost ? 'hostPlayerSpendCoins(\'extra_inspect\')' : 'spendCoins(\'extra_inspect\')';
     html += '<button class="btn secondary small"' + extraDisabled + ' onclick="' + extraFn + '">🔓 Extra Inspection — 3 🪙<br><span style="font-size:0.75rem;color:var(--text-secondary)">Search one more piece of evidence this room</span></button>';
 
-    // Unlock Hint (5 coins) - get a random clue you haven't found yet
+    // Smart Hint (5 coins) - get guidance without blocking casual players
     const hintDisabled = me.coins < 5 ? ' disabled' : '';
     const hintFn = forHost ? 'hostPlayerSpendCoins(\'hint\')' : 'spendCoins(\'hint\')';
-    html += '<button class="btn secondary small"' + hintDisabled + ' onclick="' + hintFn + '">🔎 Unlock Hint — 5 🪙<br><span style="font-size:0.75rem;color:var(--text-secondary)">Get a random clue you haven\'t found</span></button>';
+    html += '<button class="btn secondary small"' + hintDisabled + ' onclick="' + hintFn + '">🔎 Smart Hint — 5 🪙<br><span style="font-size:0.75rem;color:var(--text-secondary)">Add a progressively clearer clue to your case board</span></button>';
 
     // Eavesdrop (8 coins) - peek at a rival's private clue
     const otherPlayers = state.players.filter(p => p.id !== me.id && p.privateClues && p.privateClues.some(c => !c.shared));
@@ -2831,12 +4025,137 @@ function getMyPlayer() {
 // ============================================================
 // Minigame render
 // ============================================================
+function coinForMinigamePlacement(i) {
+    if (i === 0) return 5;
+    if (i === 1) return 3;
+    if (i === 2) return 2;
+    return 1;
+}
+function fingerprintHtml(pattern, rotation = 0) {
+    const bits = String(pattern || '').replace(/\|/g, '');
+    const size = FINGERPRINT_GRID_SIZE || 7;
+    const safeRotation = Number(rotation) || 0;
+    let html = '<div class="fingerprint-art" aria-hidden="true" style="--print-size:' + size + '; --print-rotation:' + safeRotation + 'deg;">';
+    for (let i = 0; i < size * size; i++) {
+        html += '<span class="' + (bits[i] === '1' ? 'on' : '') + '"></span>';
+    }
+    html += '</div>';
+    return html;
+}
+function miniChallengeVisualHtml(mg) {
+    if (!mg) return '';
+    if (mg.type === 'cipher') {
+        let html = '<div class="mini-visual"><div class="mini-badge">Intercepted note</div>';
+        html += '<div class="cipher-context">' + escapeHtml(mg.context || 'Complete the hidden word.') + '</div>';
+        html += '<div class="cipher-code">' + escapeHtml(mg.code || '') + '</div><div class="cipher-key">';
+        (mg.key || []).forEach(k => { html += '<span>' + escapeHtml(k.symbol) + ' = ' + escapeHtml(k.letter) + '</span>'; });
+        html += '</div><div class="cipher-clue">' + escapeHtml(mg.clue || 'Some key letters are missing. Use the case context.') + '</div></div>';
+        return html;
+    }
+    if (mg.type === 'fingerprint') {
+        return '<div class="mini-visual"><div class="mini-badge">Lifted print</div>' +
+            fingerprintHtml(mg.target && mg.target.pattern, mg.target && mg.target.rotation) +
+            '<div style="color:var(--text-secondary);">Find the matching dot grid. Samples may be heavily rotated.</div></div>';
+    }
+    if (mg.type === 'evidence') {
+        return '<div class="mini-visual"><div class="mini-badge">Detective call</div>' +
+            '<div style="font-size:1.1rem; font-weight:800; margin-top:8px;">' + escapeHtml(mg.prompt || '') + '</div></div>';
+    }
+    return '';
+}
+function miniOptionsHtml(mg, answerFn, me) {
+    if (!mg || mg.type === 'tap') return '';
+    const response = me && mg.responses && mg.responses[me.id];
+    let html = '<div class="mini-options">';
+    (mg.options || []).forEach((option, idx) => {
+        const label = typeof option === 'string' ? option : option.name;
+        const selected = response && response.answerIndex === idx;
+        let cls = 'mini-option';
+        if (mg.type === 'fingerprint') cls += ' fingerprint-option';
+        if (response && selected) cls += response.correct ? ' correct' : ' wrong';
+        const disabled = response ? ' disabled' : '';
+        const actionAttrs = answerFn && !response
+            ? ' data-answer-fn="' + answerFn + '" data-answer-index="' + idx + '"'
+            : '';
+        html += '<button type="button" class="' + cls + '"' + disabled + actionAttrs + '>';
+        if (mg.type === 'fingerprint') html += fingerprintHtml(option.pattern, option.rotation);
+        html += '<div>' + escapeHtml(label) + '</div>';
+        if (selected) html += '<div class="points">' + (response.correct ? 'Correct' : 'Not it') + '</div>';
+        html += '</button>';
+    });
+    html += '</div>';
+    return html;
+}
+function miniResponsesHtml(mg) {
+    if (!mg || mg.type === 'tap') return '';
+    let html = '<div class="mini-response-list">';
+    state.players.forEach(p => {
+        const r = mg.responses && mg.responses[p.id];
+        const cls = r ? (r.correct ? ' correct' : ' wrong') : '';
+        const text = r ? (r.correct ? 'correct' : 'wrong') : 'thinking...';
+        html += '<div class="mini-response' + cls + '"><span>' + escapeHtml(p.name) + '</span><span>' + escapeHtml(text) + '</span></div>';
+    });
+    html += '</div>';
+    return html;
+}
+function minigameResultsHtml(mg) {
+    if (!mg || !mg.placements || mg.placements.length === 0) {
+        return '<div class="panel"><div class="status-line">Moving on...</div></div>';
+    }
+    let html = '<div class="panel"><h3>Results</h3>';
+    mg.placements.forEach((pl, i) => {
+        const coins = pl.coinsAwarded != null ? pl.coinsAwarded : coinForMinigamePlacement(i);
+        html += '<div class="leader-row' + (i === 0 ? ' winner' : '') + '">' +
+            '<span class="rank">' + (i + 1) + '</span>' +
+            '<div style="flex:1;"><span class="name">' + escapeHtml(pl.name) + '</span>' +
+            '<div class="breakdown">' + escapeHtml(pl.resultLabel || '') + '</div></div>' +
+            '<span class="score">+' + coins + ' 🪙</span></div>';
+    });
+    html += '</div>';
+    return html;
+}
+function wireMinigameControls(root) {
+    if (!root) return;
+    root.querySelectorAll('.mini-option[data-answer-index]').forEach(btn => {
+        const submitAnswer = ev => {
+            if (ev) ev.preventDefault();
+            if (btn.disabled) return;
+            const answerIndex = Number(btn.dataset.answerIndex);
+            if (!Number.isInteger(answerIndex)) return;
+            btn.disabled = true;
+            if (btn.dataset.answerFn === 'hostPlayerSubmitMinigameAnswer') {
+                hostPlayerSubmitMinigameAnswer(answerIndex);
+            } else {
+                submitMinigameAnswer(answerIndex);
+            }
+        };
+        btn.addEventListener('pointerdown', submitAnswer);
+        btn.addEventListener('click', submitAnswer);
+    });
+    root.querySelectorAll('[data-minigame-tap]').forEach(btn => {
+        btn.addEventListener('pointerdown', ev => {
+            ev.preventDefault();
+            if (btn.dataset.minigameTap === 'host') {
+                hostPlayerTapMinigame(ev);
+            } else {
+                tapMinigame(ev);
+            }
+        });
+    });
+}
 function renderMinigame() {
     if (state.phase !== 'minigame') return;
     const mg = state.minigame;
+    if (!mg) return;
+    const titleEl = document.getElementById('minigame-title');
+    const subtitleEl = document.getElementById('minigame-subtitle');
     const countEl = document.getElementById('minigame-count');
     const statusEl = document.getElementById('minigame-status');
+    const mainChallengeEl = document.getElementById('minigame-main-challenge');
     const phoneUI = document.getElementById('minigame-phone-ui');
+    const typeIcon = mg.type === 'cipher' ? '🔐' : (mg.type === 'fingerprint' ? '🌀' : (mg.type === 'evidence' ? '🧠' : '⚡'));
+    if (titleEl) titleEl.textContent = typeIcon + ' ' + (mg.title || 'Minigame');
+    if (subtitleEl) subtitleEl.textContent = mg.subtitle || '';
 
     let phase = mg ? mg.phase : 'countdown';
     const now = Date.now();
@@ -2855,15 +4174,27 @@ function renderMinigame() {
     } else if (phase === 'racing') {
         const secs = Math.max(0, Math.ceil(remMs / 1000));
         countEl.textContent = secs;
-        if (statusEl) statusEl.textContent = 'TAP! TAP! TAP!';
+        if (statusEl) statusEl.textContent = mg.type === 'tap' ? 'TAP! TAP! TAP!' : (mg.prompt || 'Solve the clue.');
     } else if (phase === 'done') {
         countEl.textContent = '✓';
         // Show placements
         if (statusEl && mg && mg.placements && mg.placements.length > 0) {
             const winner = mg.placements[0];
-            statusEl.innerHTML = '<strong>' + escapeHtml(winner ? winner.name : '') + '</strong> wins! (+5 🪙)';
+            const awardText = mg.testRun ? 'Practice complete.' : '(+' + coinForMinigamePlacement(0) + ' coins)';
+            statusEl.innerHTML = '<strong>' + escapeHtml(winner ? winner.name : '') + '</strong> wins! ' + awardText;
         } else if (statusEl) {
-            statusEl.textContent = 'Tap race complete.';
+            statusEl.textContent = 'Challenge complete.';
+        }
+    }
+
+    if (mainChallengeEl) {
+        if (phase === 'done') {
+            mainChallengeEl.innerHTML = '';
+        } else if (mg.type === 'tap') {
+            mainChallengeEl.innerHTML = '<div class="mini-visual"><div class="mini-badge">Speed challenge</div>' +
+                '<div style="font-size:1.1rem; font-weight:800; margin-top:8px;">Tap as many times as you can before the timer runs out.</div></div>';
+        } else {
+            mainChallengeEl.innerHTML = miniChallengeVisualHtml(mg);
         }
     }
 
@@ -2871,7 +4202,11 @@ function renderMinigame() {
     const barsEl = document.getElementById('minigame-tap-bars');
     if (barsEl) {
         barsEl.innerHTML = '';
-        if (state.players.length === 0) {
+        if (mg.type !== 'tap') {
+            barsEl.innerHTML = phase === 'done'
+                ? minigameResultsHtml(mg)
+                : '<div class="minigame-stage">' + miniResponsesHtml(mg) + '</div>';
+        } else if (state.players.length === 0) {
             barsEl.innerHTML = '<div style="color:var(--text-secondary); text-align:center;">No players in race.</div>';
         } else {
             const counts = (mg && mg.tapCounts) || {};
@@ -2898,12 +4233,18 @@ function renderMinigame() {
             if (me) {
                 hostPlayerUI.style.display = '';
                 if (phase === 'racing') {
-                    const myTaps = (mg && mg.tapCounts && mg.tapCounts[me.id]) || 0;
-                    hostPlayerUI.innerHTML = '<button class="tap-button-huge" onclick="hostPlayerTapMinigame()" ontouchstart="hostPlayerTapMinigame(event)" style="max-width:720px; min-height:200px;">TAP!<br>' + myTaps + '</button>';
+                    if (mg.type === 'tap') {
+                        const myTaps = (mg && mg.tapCounts && mg.tapCounts[me.id]) || 0;
+                        hostPlayerUI.innerHTML = '<button type="button" class="tap-button-huge" data-minigame-tap="host" style="max-width:720px; min-height:200px;">TAP!<br>' + myTaps + '</button>';
+                    } else {
+                        hostPlayerUI.innerHTML = '<div class="panel minigame-stage" style="max-width:760px;">' +
+                            '<div class="mini-badge">Choose your answer</div>' +
+                            miniOptionsHtml(mg, 'hostPlayerSubmitMinigameAnswer', me) + '</div>';
+                    }
                 } else if (phase === 'countdown') {
-                    hostPlayerUI.innerHTML = '<div class="panel" style="text-align:center; font-size:1.2rem; max-width:720px;">Get ready to tap!</div>';
+                    hostPlayerUI.innerHTML = '<div class="panel" style="text-align:center; font-size:1.2rem; max-width:720px;">Get ready: ' + escapeHtml(mg.title || '') + '</div>';
                 } else {
-                    hostPlayerUI.innerHTML = '';
+                    hostPlayerUI.innerHTML = minigameResultsHtml(mg);
                 }
             } else {
                 hostPlayerUI.style.display = 'none';
@@ -2911,15 +4252,29 @@ function renderMinigame() {
         } else {
             hostPlayerUI.style.display = 'none';
         }
+        wireMinigameControls(hostPlayerUI);
     }
 
     // Phone: big tap button (only during racing)
     if (phoneUI && !isHost) {
         const me = getMyPlayer();
         if (!me) { phoneUI.innerHTML = ''; return; }
+        if (mg.type !== 'tap') {
+            if (phase === 'racing') {
+                phoneUI.innerHTML = '<div class="panel minigame-stage">' +
+                    '<div class="mini-badge">Choose your answer</div>' +
+                    miniOptionsHtml(mg, 'submitMinigameAnswer', me) + '</div>';
+            } else if (phase === 'countdown') {
+                phoneUI.innerHTML = '<div class="panel" style="text-align:center; font-size:1.2rem;">Get ready: ' + escapeHtml(mg.title || '') + '</div>';
+            } else {
+                phoneUI.innerHTML = minigameResultsHtml(mg);
+            }
+            wireMinigameControls(phoneUI);
+            return;
+        }
         if (phase === 'racing') {
             const myTaps = (mg && mg.tapCounts && mg.tapCounts[me.id]) || 0;
-            phoneUI.innerHTML = '<button class="tap-button-huge" onclick="tapMinigame()" ontouchstart="tapMinigame(event)">TAP!<br>' + myTaps + '</button>';
+            phoneUI.innerHTML = '<button type="button" class="tap-button-huge" data-minigame-tap="guest">TAP!<br>' + myTaps + '</button>';
         } else if (phase === 'countdown') {
             phoneUI.innerHTML = '<div class="panel" style="text-align:center; font-size:1.2rem;">Get ready to tap!</div>';
         } else {
@@ -2940,6 +4295,7 @@ function renderMinigame() {
                 phoneUI.innerHTML = '<div class="panel"><div class="status-line">Moving on...</div></div>';
             }
         }
+        wireMinigameControls(phoneUI);
     }
 }
 
@@ -2955,7 +4311,7 @@ function renderLeaderPick() {
     if (statusEl) {
         if (leader) {
             if (isLeader) {
-                statusEl.innerHTML = '<strong>You won the tap race!</strong> Pick the next room.';
+                statusEl.innerHTML = '<strong>You won the detective challenge!</strong> Pick the next room.' + (state.hotLeadRoomId ? ' A Hot Lead is on the board.' : '');
             } else {
                 statusEl.textContent = leader.name + ' is choosing the next room...';
             }
@@ -2970,16 +4326,18 @@ function renderLeaderPick() {
         const tile = document.createElement('div');
         tile.className = 'room-tile' + (visited ? ' visited' : '');
         if (r.id === state.currentRoomId) tile.classList.add('current');
+        if (r.id === state.hotLeadRoomId) tile.classList.add('hot-lead');
         const cost = visited ? 2 : 0;
         let html = '<div class="icon">' + r.icon + '</div><div>' + escapeHtml(r.name) + '</div>';
         // Show suspect in room
         if (r.suspectId) {
             const suspect = SCENARIO.suspects.find(s => s.id === r.suspectId);
             if (suspect) {
-                html += '<div class="suspect-tag">' + suspect.icon + ' ' + escapeHtml(suspect.name) + '</div>';
+                html += '<div class="suspect-tag">Interview: ' + suspect.icon + ' ' + escapeHtml(suspect.name) + '</div>';
             }
         }
         if (visited) html += '<div class="cost">Revisit: 2 🪙</div>';
+        if (r.id === state.hotLeadRoomId) html += '<div class="hot-lead-badge">Hot Lead +2</div>';
         tile.innerHTML = html;
         // Only leader can click (on phone or host-as-player)
         if (isLeader) {
@@ -3028,6 +4386,9 @@ function renderAccusation() {
         buildChoiceGrid('accuse-culprit-grid', SCENARIO.suspects, 'culpritId');
         buildChoiceGrid('accuse-weapon-grid', SCENARIO.weapons, 'weaponId');
         buildChoiceGrid('accuse-location-grid', SCENARIO.rooms, 'locationId');
+        buildEvidenceSupportGrid('accuse-evidence-grid', me);
+        const phoneCaseBoard = document.getElementById('accusation-phone-case-board');
+        if (phoneCaseBoard) phoneCaseBoard.innerHTML = me ? buildCaseBoardHtml(me) : '';
         const phoneForm = document.getElementById('accusation-phone-form');
         const status = document.getElementById('accusation-phone-status');
         if (me && me.submitted) {
@@ -3048,6 +4409,9 @@ function renderAccusation() {
             buildChoiceGrid('host-accuse-culprit-grid', SCENARIO.suspects, 'culpritId');
             buildChoiceGrid('host-accuse-weapon-grid', SCENARIO.weapons, 'weaponId');
             buildChoiceGrid('host-accuse-location-grid', SCENARIO.rooms, 'locationId');
+            buildEvidenceSupportGrid('host-accuse-evidence-grid', me);
+            const hostCaseBoard = document.getElementById('accusation-host-case-board');
+            if (hostCaseBoard) hostCaseBoard.innerHTML = buildCaseBoardHtml(me);
             const status = document.getElementById('accusation-host-player-status');
             const btn = document.getElementById('btn-host-submit-accusation');
             if (me.submitted) {
@@ -3078,7 +4442,7 @@ function renderAccusation() {
     }
 }
 
-let accusationDraft = { culpritId: null, weaponId: null, locationId: null };
+let accusationDraft = { culpritId: null, weaponId: null, locationId: null, evidenceKeys: [] };
 
 function buildChoiceGrid(elId, items, key) {
     const container = document.getElementById(elId);
@@ -3096,6 +4460,50 @@ function buildChoiceGrid(elId, items, key) {
         };
         container.appendChild(btn);
     });
+}
+
+function buildEvidenceSupportGrid(elId, player) {
+    const container = document.getElementById(elId);
+    if (!container) return;
+    container.innerHTML = '';
+    if (!player) {
+        container.innerHTML = '<div class="status-line">Waiting for your evidence...</div>';
+        return;
+    }
+    accusationDraft.evidenceKeys = validSupportEvidenceKeys(player, accusationDraft.evidenceKeys);
+    const cards = knownEvidenceCards(player);
+    if (!cards.length) {
+        container.innerHTML = '<div class="status-line">No evidence cards known yet.</div>';
+        return;
+    }
+    cards.forEach(card => {
+        const selected = accusationDraft.evidenceKeys.includes(card.key);
+        const btn = document.createElement('button');
+        btn.type = 'button';
+        btn.className = 'evidence-card' + (selected ? ' selected' : '');
+        btn.disabled = !!player.submitted;
+        btn.innerHTML =
+            '<div class="title">' + escapeHtml(card.title) + '</div>' +
+            '<div class="text">' + escapeHtml(card.text) + '</div>' +
+            '<div class="points">' + (selected ? 'Selected' : '+5 if this truly supports the solution') + '</div>';
+        btn.onclick = () => toggleSupportEvidence(card.key);
+        container.appendChild(btn);
+    });
+}
+
+function toggleSupportEvidence(key) {
+    if (!accusationDraft.evidenceKeys) accusationDraft.evidenceKeys = [];
+    const idx = accusationDraft.evidenceKeys.indexOf(key);
+    if (idx >= 0) {
+        accusationDraft.evidenceKeys.splice(idx, 1);
+    } else {
+        if (accusationDraft.evidenceKeys.length >= MAX_SUPPORT_EVIDENCE) {
+            showNotification('Pick up to ' + MAX_SUPPORT_EVIDENCE + ' evidence cards.', 'warning');
+            return;
+        }
+        accusationDraft.evidenceKeys.push(key);
+    }
+    renderAccusation();
 }
 
 function renderAccusationTimer() {
@@ -3138,6 +4546,7 @@ function renderResults() {
             ' · culprit +' + (d.culprit || 0) +
             ' · weapon +' + (d.weapon || 0) +
             ' · location +' + (d.location || 0) +
+            ' · evidence +' + (d.evidence || 0) +
             ' · shares +' + (d.shares || 0);
         row.innerHTML =
             '<span class="rank">' + (i + 1) + '</span>' +
@@ -3187,6 +4596,7 @@ let tapBatchTimer = null;
 function tapMinigame(ev) {
     if (ev && ev.preventDefault) ev.preventDefault();
     if (state.phase !== 'minigame' || !state.minigame || state.minigame.phase !== 'racing') return;
+    if (state.minigame.type !== 'tap') return;
     tapBatch++;
     // local optimistic update for feel
     const me = getMyPlayer();
@@ -3204,6 +4614,23 @@ function tapMinigame(ev) {
         }, 60);
     }
 }
+function submitMinigameAnswer(answerIndex) {
+    if (state.phase !== 'minigame' || !state.minigame || state.minigame.phase !== 'racing') return;
+    if (state.minigame.type === 'tap') return;
+    const me = getMyPlayer();
+    if (!me || playerAnsweredMinigame(me.id)) return;
+    if (!hostConn || !hostConn.open) return;
+    hostConn.send({ type: 'minigame_answer', answerIndex });
+    if (!state.minigame.responses) state.minigame.responses = {};
+    state.minigame.responses[me.id] = {
+        answerIndex,
+        label: minigameLabel(state.minigame, answerIndex),
+        correct: answerIndex === state.minigame.correctIndex,
+        timeMs: Math.max(0, Date.now() - state.minigame.startTime),
+        score: answerIndex === state.minigame.correctIndex ? 1 : 0
+    };
+    renderMinigame();
+}
 function pickRoom(roomId) {
     if (!hostConn || !hostConn.open) return;
     hostConn.send({ type: 'pick_room', roomId });
@@ -3215,8 +4642,11 @@ function submitAccusation() {
         return;
     }
     if (!hostConn || !hostConn.open) return;
+    const me = getMyPlayer();
+    const evidenceKeys = validSupportEvidenceKeys(me, d.evidenceKeys || []);
     hostConn.send({ type: 'submit_accusation',
-        culpritId: d.culpritId, weaponId: d.weaponId, locationId: d.locationId });
+        culpritId: d.culpritId, weaponId: d.weaponId, locationId: d.locationId,
+        evidenceKeys });
 }
 
 // ============================================================
@@ -3255,8 +4685,10 @@ function hostPlayerShareClue(roomId, hotspotId) {
     const alreadyPublic = state.publicClues.some(c => c.roomId === roomId && c.hotspotId === hotspotId);
     if (alreadyPublic) return;
     clue.shared = true;
+    player.coins += 1;
+    showNotification('+1 coin for sharing evidence', 'success');
     state.publicClues.push({
-        roomId: clue.roomId, hotspotId: clue.hotspotId, text: clue.text,
+        roomId: clue.roomId, hotspotId: clue.hotspotId, text: clueText(clue),
         fromPlayerId: player.id, fromPlayerName: player.name
     });
     broadcastState();
@@ -3280,6 +4712,10 @@ function hostPlayerAskQuestion(idx) {
             askerId: player.id, askerName: player.name,
             suspectId: suspect.id, q: qa.q, a: qa.a, roomId: room.id
         });
+        if (isEvidenceQuestion(qa)) {
+            player.coins += 2;
+            showNotification('+2 coins for an evidence-backed question', 'success');
+        }
         state.askedThisRoom[player.id] = true;
     } else if (state.phase === 'final_questioning') {
         if (state.finalAsked[player.id]) return;
@@ -3333,28 +4769,12 @@ function processSpendCoins(player, action) {
     }
     if (action === 'hint') {
         if (player.coins < 5) return;
-        // Find a clue this player hasn't discovered yet
-        const allHotspots = [];
-        SCENARIO.rooms.forEach(room => {
-            getHotspotsForRoom(room).forEach(hs => {
-                const alreadyHas = player.privateClues.some(c => c.roomId === room.id && c.hotspotId === hs.id);
-                if (!alreadyHas) {
-                    allHotspots.push({ roomId: room.id, hotspotId: hs.id, clue: hs.clue });
-                }
-            });
-        });
-        if (allHotspots.length === 0) return;
         player.coins -= 5;
-        const pick = allHotspots[Math.floor(Math.random() * allHotspots.length)];
-        player.privateClues.push({
-            roomId: pick.roomId, hotspotId: pick.hotspotId,
-            clueText: pick.clue, shared: false
+        if (!player.caseHints) player.caseHints = [];
+        player.caseHints.push({
+            text: getSmartHint(player),
+            time: new Date().toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' })
         });
-        // Also track in discoveredHotspots
-        const hsKey = pick.roomId + '_' + pick.hotspotId;
-        if (!state.discoveredHotspots.includes(hsKey)) {
-            state.discoveredHotspots.push(hsKey);
-        }
     } else if (action === 'eavesdrop') {
         if (player.coins < 8) return;
         // Find another player with at least one unshared private clue
@@ -3374,7 +4794,7 @@ function processSpendCoins(player, action) {
         if (!alreadyHas) {
             player.privateClues.push({
                 roomId: stolen.roomId, hotspotId: stolen.hotspotId,
-                clueText: stolen.clueText, shared: false
+                text: clueText(stolen), shared: false
             });
         }
     }
@@ -3411,12 +4831,25 @@ function hostPlayerTapMinigame(ev) {
     if (ev && ev.preventDefault) ev.preventDefault();
     if (!isHost || !hostIsPlayer) return;
     if (state.phase !== 'minigame' || !state.minigame) return;
+    if (state.minigame.type !== 'tap') return;
     const now = Date.now();
     if (now < state.minigame.startTime || now > state.minigame.endTime) return;
     const player = state.players.find(p => p.id === myPeerId);
     if (!player) return;
     state.minigame.tapCounts[player.id] = (state.minigame.tapCounts[player.id] || 0) + 1;
     renderMinigame();
+}
+
+function hostPlayerSubmitMinigameAnswer(answerIndex) {
+    if (!isHost || !hostIsPlayer) return;
+    if (state.phase !== 'minigame' || !state.minigame || state.minigame.type === 'tap') return;
+    const now = Date.now();
+    if (now < state.minigame.startTime || now > state.minigame.endTime) return;
+    const player = state.players.find(p => p.id === myPeerId);
+    if (!player) return;
+    recordMinigameAnswer(player, answerIndex);
+    broadcastState();
+    renderAll();
 }
 
 function hostPlayerPickRoom(roomId) {
@@ -3433,6 +4866,11 @@ function hostPlayerPickRoom(roomId) {
         return;
     }
     player.coins -= cost;
+    if (targetRoom.id === state.hotLeadRoomId) {
+        player.coins += 2;
+        if (state.hotLead) state.hotLead.claimed = true;
+        showNotification('Hot lead followed! +2 coins', 'success');
+    }
     enterRoom(targetRoom.id);
 }
 
@@ -3449,7 +4887,8 @@ function hostPlayerSubmitAccusation() {
     const validWeapon = SCENARIO.weapons.some(w => w.id === d.weaponId);
     const validLoc = SCENARIO.rooms.some(r => r.id === d.locationId);
     if (!validCulprit || !validWeapon || !validLoc) return;
-    player.accusation = { culpritId: d.culpritId, weaponId: d.weaponId, locationId: d.locationId };
+    const evidenceKeys = validSupportEvidenceKeys(player, d.evidenceKeys || []);
+    player.accusation = { culpritId: d.culpritId, weaponId: d.weaponId, locationId: d.locationId, evidenceKeys };
     player.submitted = true;
     broadcastState();
     renderAll();
@@ -3719,7 +5158,7 @@ function renderFinalQuestioning() {
             card.className = 'suspect-card';
             card.style.cursor = 'pointer';
             card.innerHTML =
-                '<div class="portrait" style="margin:0 auto;">' + s.icon + '</div>' +
+                '<div class="portrait" style="margin:0 auto;">' + portraitInner(s) + '</div>' +
                 '<div class="name">' + escapeHtml(s.name) + '</div>';
             grid.appendChild(card);
         });

@@ -1,0 +1,35 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" role="img" aria-label="Lord Alistair Ravenscroft portrait">
+  <defs>
+    <radialGradient id="bg" cx="50%" cy="36%" r="70%">
+      <stop offset="0" stop-color="#4a3026"/>
+      <stop offset="0.55" stop-color="#221820"/>
+      <stop offset="1" stop-color="#09070b"/>
+    </radialGradient>
+    <linearGradient id="skin" x1="0" x2="1" y1="0" y2="1">
+      <stop offset="0" stop-color="#efd0ad"/>
+      <stop offset="1" stop-color="#b98263"/>
+    </linearGradient>
+    <linearGradient id="suit" x1="0" x2="1">
+      <stop offset="0" stop-color="#11151d"/>
+      <stop offset="1" stop-color="#050508"/>
+    </linearGradient>
+  </defs>
+  <rect width="512" height="512" fill="url(#bg)"/>
+  <path d="M70 100h372v300H70z" fill="none" stroke="#b88a45" stroke-opacity=".18" stroke-width="8"/>
+  <path d="M118 100v170M256 100v178M394 100v170" stroke="#b88a45" stroke-opacity=".12" stroke-width="7"/>
+  <circle cx="256" cy="238" r="188" fill="#e8c77a" opacity=".05"/>
+  <path d="M95 493c19-103 78-151 161-151s142 48 161 151z" fill="url(#suit)"/>
+  <path d="M204 356l52 115 52-115z" fill="#e8dfcf"/>
+  <path d="M213 373l43 43 43-43-43 112z" fill="#221116"/>
+  <path d="M183 214c-12-79 22-141 73-141s85 62 73 141c-7 74-32 127-73 127s-66-53-73-127z" fill="url(#skin)"/>
+  <path d="M178 191c6-75 39-120 81-120 48 0 83 48 79 128-29-24-49-48-62-75-19 34-51 56-98 67z" fill="#c9c2ba"/>
+  <path d="M188 151c26-68 112-74 143-7-31-20-84-29-143 7z" fill="#f0eee8" opacity=".58"/>
+  <path d="M199 231c20-12 39-12 56 0M262 231c18-12 37-12 56 0" fill="none" stroke="#3f2a25" stroke-width="7" stroke-linecap="round"/>
+  <circle cx="225" cy="246" r="6" fill="#211513"/>
+  <circle cx="288" cy="246" r="6" fill="#211513"/>
+  <path d="M233 300c16 10 32 10 47 0" fill="none" stroke="#5d352d" stroke-width="7" stroke-linecap="round"/>
+  <path d="M220 280c24 11 48 11 72 0" fill="none" stroke="#eee7dd" stroke-width="9" stroke-linecap="round" opacity=".88"/>
+  <path d="M205 206c31 8 69 8 102 0" fill="none" stroke="#2b1c20" stroke-width="10" stroke-linecap="round" opacity=".55"/>
+  <path d="M169 421l57-62 30 126-84-30zM343 421l-57-62-30 126 84-30z" fill="#07080d" opacity=".85"/>
+  <circle cx="256" cy="256" r="243" fill="none" stroke="#e8c77a" stroke-opacity=".2" stroke-width="10"/>
+</svg>
