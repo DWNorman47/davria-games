@@ -294,6 +294,44 @@
     }
     .leave-room-btn.visible { display: flex; }
     .host-toolbar button.danger { border-color: #c0392b; color: #ff8f87; }
+    .saved-room-list { display: flex; flex-wrap: wrap; gap: 7px; margin-top: 8px; }
+    .saved-room-list:empty { display: none; }
+    .saved-room {
+        display: flex; align-items: center; gap: 5px; min-width: 0;
+        background: var(--bg-secondary); border: 1px solid var(--border);
+        border-radius: 8px; padding: 4px 5px 4px 10px;
+    }
+    .saved-room button {
+        background: transparent; border: none; color: var(--text-primary);
+        font-weight: bold; cursor: pointer; padding: 5px;
+    }
+    .saved-room .forget { color: var(--text-secondary); font-size: 1.05rem; }
+    .host-controller-btn {
+        position: fixed; right: max(12px, env(safe-area-inset-right));
+        bottom: calc(max(12px, env(safe-area-inset-bottom)) + 62px);
+        width: 48px; height: 48px; display: none; align-items: center; justify-content: center;
+        border-radius: 50%; border: 1px solid #ffd671; background: var(--bg-card);
+        color: #ffd671; font-size: 1.3rem; cursor: pointer; z-index: 70;
+        box-shadow: 0 3px 14px rgba(0,0,0,0.45);
+    }
+    .host-controller-btn.visible { display: flex; }
+    .host-controller-overlay {
+        position: fixed; inset: 0; display: none; align-items: flex-end; justify-content: center;
+        padding: 16px; background: rgba(15,15,26,0.72); z-index: 80;
+    }
+    .host-controller-overlay.visible { display: flex; }
+    .host-controller-sheet {
+        width: min(520px, 100%); max-height: 80vh; overflow-y: auto;
+        background: var(--bg-card); border: 1px solid var(--border); border-radius: 8px;
+        padding: 16px; box-shadow: 0 8px 30px rgba(0,0,0,0.5);
+    }
+    .host-controller-head { display: flex; align-items: center; gap: 10px; margin-bottom: 10px; }
+    .host-controller-head h3 { flex: 1; }
+    .host-controller-head button {
+        width: 38px; height: 38px; border-radius: 50%; border: 1px solid var(--border);
+        background: var(--bg-secondary); color: var(--text-primary); cursor: pointer;
+    }
+    .display-only #host-toolbar, .display-only #tv-controls, .display-only #refresh-btn { display: none !important; }
     @media (max-width: 700px) {
         body.cast-view .app { max-width: 560px; }
         .lobby-summary { flex-direction: column; }
@@ -305,6 +343,17 @@
 <body>
 <button id="refresh-btn" class="refresh-btn" onclick="location.reload()" title="Refresh connection">🔄</button>
 <button id="leave-room-btn" class="leave-room-btn" onclick="confirmLeaveGame()" title="Leave room" aria-label="Leave room">←</button>
+<button id="host-controller-btn" class="host-controller-btn" onclick="toggleHostController()" title="Host controls" aria-label="Host controls">⚙</button>
+<div id="host-controller-overlay" class="host-controller-overlay" onclick="closeHostControllerFromBackdrop(event)">
+    <div class="host-controller-sheet">
+        <div class="host-controller-head">
+            <h3>Host Controls</h3>
+            <button onclick="toggleHostController(false)" title="Close host controls" aria-label="Close host controls">×</button>
+        </div>
+        <div class="mode-desc" id="host-controller-phase"></div>
+        <div id="host-phone-controls"></div>
+    </div>
+</div>
 <div class="app">
     <h1>Easel</h1>
     <div class="subtitle">Cast-to-TV painting party &middot; phones are your brushes</div>
@@ -312,11 +361,20 @@
     <!-- ENTRY -->
     <div id="screen-entry" class="screen active">
         <div class="tabs">
-            <button class="tab active" id="tab-create" onclick="switchTab('create')">Host (TV screen)</button>
-            <button class="tab" id="tab-join" onclick="switchTab('join')">Join (phone)</button>
+            <button class="tab active" id="tab-create" onclick="switchTab('create')">Host Player</button>
+            <button class="tab" id="tab-join" onclick="switchTab('join')">Join</button>
+            <button class="tab" id="tab-tv" onclick="switchTab('tv')">TV Display</button>
         </div>
         <div id="panel-create" class="panel">
-            <p style="color:var(--text-secondary);font-size:0.92rem">Open this on the screen everyone can see — a TV, cast tab, or laptop. Players join from their phones.</p>
+            <p style="color:var(--text-secondary);font-size:0.92rem">Create and control the room from your phone while playing as an artist.</p>
+            <label>Your name</label>
+            <input type="text" id="host-name" placeholder="Artist" maxlength="14">
+            <label>Room name <span class="tag">optional</span></label>
+            <input type="text" id="host-room-name" placeholder="e.g. Living Room" maxlength="24">
+            <label>Saved rooms</label>
+            <div class="saved-room-list" id="saved-rooms-create"></div>
+            <div class="mode-desc" id="host-room-choice">A new randomized room code will be created.</div>
+            <button class="btn secondary" id="new-random-room" onclick="useNewRandomRoom()" style="display:none">Use a New Random Code</button>
             <button class="btn go" onclick="createGame()">Create Room 🎨</button>
         </div>
         <div id="panel-join" class="panel" style="display:none">
@@ -324,7 +382,15 @@
             <input type="text" id="guest-name" placeholder="Artist" maxlength="14">
             <label>Room code</label>
             <input type="text" id="room-code-input" placeholder="e.g. ABX7QK" maxlength="12" autocapitalize="characters">
+            <div class="saved-room-list" id="saved-rooms-join"></div>
             <button class="btn go" onclick="joinGame()">Join Room</button>
+        </div>
+        <div id="panel-tv" class="panel" style="display:none">
+            <p style="color:var(--text-secondary);font-size:0.92rem">Connect this screen as a display. The host keeps all controls on their phone.</p>
+            <label>Room code</label>
+            <input type="text" id="tv-room-code-input" placeholder="e.g. ABX7QK" maxlength="12" autocapitalize="characters">
+            <div class="saved-room-list" id="saved-rooms-tv"></div>
+            <button class="btn go" onclick="joinTvDisplay()">Connect TV</button>
         </div>
         <div class="status" id="entry-status"></div>
         <div class="panel">
@@ -346,6 +412,7 @@
                 <div class="row">
                     <button class="btn secondary" onclick="copyRoomCode()">Copy Code</button>
                     <button class="btn secondary" onclick="copyJoinLink()">Copy Link</button>
+                    <button class="btn secondary" onclick="copyTvLink()">TV Link</button>
                 </div>
                 <div class="status" id="lobby-status"></div>
             </div>
@@ -390,6 +457,19 @@
         </div>
         <button class="btn go" id="btn-start" onclick="startGame()" disabled>Waiting for artists...</button>
         <button class="btn secondary" onclick="closeHostedRoom()">Close Room</button>
+    </div>
+
+    <!-- DISPLAY-ONLY TV LOBBY -->
+    <div id="screen-tv-lobby" class="screen">
+        <div class="panel" style="text-align:center">
+            <h3>Room code</h3>
+            <div class="room-code" id="tv-lobby-room-code"></div>
+            <p style="color:var(--text-secondary)">Display connected. The host starts and controls the game from their phone.</p>
+        </div>
+        <div class="panel">
+            <h3>Artists</h3>
+            <ul class="player-list" id="tv-lobby-players"></ul>
+        </div>
     </div>
 
     <!-- TV STAGE -->
@@ -1026,13 +1106,22 @@ function drawScene(ctx, W, H, id, imageData) {
 // SHARED STATE
 // ============================================================
 let isHost = false;
+let hostPlaying = false;
+let isTvDisplay = false;
 let peer = null;
 let roomCode = '';
 let myName = '';
 let hostConn = null;
 const guestConns = new Map();
+const displayIds = new Set();
+const displayImageTokens = new Map();
+const LOCAL_HOST_ID = '__easel_host_player__';
+let tvSnapshotTimer = null;
+let tvReconnectTimer = null;
+let tvConnected = false;
+let tvImageData = '';
 
-let lobbyPlayers = [];   // host: [{id, name, connected}] — guests only, host is the TV
+let lobbyPlayers = [];   // host: [{id, name, connected, local?}]
 let G = null;            // host: active game
 let phaseTimer = null;
 let graceTimer = null;
@@ -1065,6 +1154,9 @@ document.getElementById('custom-image-input').addEventListener('change', e => {
     const file = e.target.files && e.target.files[0];
     if (file) loadCustomImage(file);
 });
+document.getElementById('host-name').addEventListener('input', e => {
+    try { localStorage.setItem('easel-host-name', e.target.value.slice(0, 14)); } catch (err) {}
+});
 
 // ============================================================
 // UI HELPERS
@@ -1073,7 +1165,9 @@ const AWAKE_SCREENS = new Set(['screen-paint', 'screen-fs', 'screen-stage', 'scr
 const REFRESH_SCREENS = new Set(['screen-tlobby', 'screen-stage', 'screen-plobby', 'screen-select',
     'screen-memorize', 'screen-paint', 'screen-fs', 'screen-pwait', 'screen-host-lost']);
 const LEAVE_SCREENS = new Set(['screen-plobby', 'screen-select', 'screen-memorize', 'screen-paint',
-    'screen-fs', 'screen-prompt', 'screen-guess', 'screen-pwait']);
+    'screen-fs', 'screen-prompt', 'screen-guess', 'screen-pwait', 'screen-tv-lobby', 'screen-stage']);
+const HOST_PLAYER_SCREENS = new Set(['screen-select', 'screen-memorize', 'screen-paint', 'screen-fs',
+    'screen-prompt', 'screen-guess', 'screen-pwait']);
 
 function showScreen(id) {
     document.querySelectorAll('.screen').forEach(s => s.classList.remove('active'));
@@ -1084,6 +1178,8 @@ function showScreen(id) {
     if (btn) btn.classList.toggle('visible', REFRESH_SCREENS.has(id));
     const leaveBtn = document.getElementById('leave-room-btn');
     if (leaveBtn) leaveBtn.classList.toggle('visible', !isHost && LEAVE_SCREENS.has(id));
+    const hostBtn = document.getElementById('host-controller-btn');
+    if (hostBtn) hostBtn.classList.toggle('visible', isHost && hostPlaying && !!G && HOST_PLAYER_SCREENS.has(id));
 }
 function setStatus(id, text) {
     const el = document.getElementById(id);
@@ -1128,8 +1224,83 @@ function loadCustomImage(file) {
 function switchTab(which) {
     document.getElementById('tab-create').classList.toggle('active', which === 'create');
     document.getElementById('tab-join').classList.toggle('active', which === 'join');
+    document.getElementById('tab-tv').classList.toggle('active', which === 'tv');
     document.getElementById('panel-create').style.display = which === 'create' ? '' : 'none';
     document.getElementById('panel-join').style.display = which === 'join' ? '' : 'none';
+    document.getElementById('panel-tv').style.display = which === 'tv' ? '' : 'none';
+    renderSavedRooms();
+}
+const SAVED_ROOMS_KEY = 'easel-saved-rooms-v1';
+let selectedHostRoomCode = '';
+function normalizeRoomCode(value) {
+    return String(value || '').trim().toUpperCase().replace(/[^A-Z0-9]/g, '').slice(0, 12);
+}
+function savedRooms() {
+    try {
+        const rooms = JSON.parse(localStorage.getItem(SAVED_ROOMS_KEY) || '[]');
+        return Array.isArray(rooms) ? rooms.filter(r => r && normalizeRoomCode(r.code).length >= 4).slice(0, 12) : [];
+    } catch (e) { return []; }
+}
+function saveRoomCode(code, label) {
+    code = normalizeRoomCode(code);
+    if (code.length < 4) return;
+    const current = savedRooms();
+    const existing = current.find(r => normalizeRoomCode(r.code) === code);
+    const rooms = current.filter(r => normalizeRoomCode(r.code) !== code);
+    const nextLabel = String(label || (existing && existing.label) || '').trim().slice(0, 24);
+    rooms.unshift({ code, label: nextLabel, lastUsed: Date.now() });
+    try { localStorage.setItem(SAVED_ROOMS_KEY, JSON.stringify(rooms.slice(0, 12))); } catch (e) {}
+    renderSavedRooms();
+}
+function forgetRoomCode(code) {
+    code = normalizeRoomCode(code);
+    try { localStorage.setItem(SAVED_ROOMS_KEY, JSON.stringify(savedRooms().filter(r => normalizeRoomCode(r.code) !== code))); } catch (e) {}
+    if (selectedHostRoomCode === code) useNewRandomRoom();
+    renderSavedRooms();
+}
+function chooseSavedRoom(target, code, label) {
+    code = normalizeRoomCode(code);
+    if (target === 'create') {
+        selectedHostRoomCode = code;
+        document.getElementById('host-room-choice').textContent =
+            `Reusing ${label ? label + ' · ' : ''}${code}`;
+        document.getElementById('new-random-room').style.display = '';
+        if (label) document.getElementById('host-room-name').value = label;
+        return;
+    }
+    const inputIds = { join: 'room-code-input', tv: 'tv-room-code-input' };
+    const input = document.getElementById(inputIds[target]);
+    if (input) input.value = code;
+}
+function useNewRandomRoom() {
+    selectedHostRoomCode = '';
+    const choice = document.getElementById('host-room-choice');
+    if (choice) choice.textContent = 'A new randomized room code will be created.';
+    const button = document.getElementById('new-random-room');
+    if (button) button.style.display = 'none';
+}
+function renderSavedRooms() {
+    const rooms = savedRooms();
+    for (const target of ['create', 'join', 'tv']) {
+        const holder = document.getElementById('saved-rooms-' + target);
+        if (!holder) continue;
+        holder.innerHTML = '';
+        rooms.forEach(room => {
+            const wrap = document.createElement('div');
+            wrap.className = 'saved-room';
+            const pick = document.createElement('button');
+            pick.textContent = room.label ? room.label + ' · ' + room.code : room.code;
+            pick.title = 'Use room ' + room.code;
+            pick.onclick = () => chooseSavedRoom(target, room.code, room.label);
+            const forget = document.createElement('button');
+            forget.className = 'forget'; forget.textContent = '×';
+            forget.title = 'Forget ' + room.code;
+            forget.setAttribute('aria-label', 'Forget ' + room.code);
+            forget.onclick = () => forgetRoomCode(room.code);
+            wrap.append(pick, forget);
+            holder.appendChild(wrap);
+        });
+    }
 }
 function genRoomCode() {
     const chars = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
@@ -1147,6 +1318,12 @@ function copyJoinLink() {
     const url = window.location.origin + window.location.pathname + '?room=' + roomCode;
     try { navigator.clipboard.writeText(url); setStatus('lobby-status', 'Join link copied!'); }
     catch (e) { setStatus('lobby-status', 'Code: ' + roomCode); }
+}
+function copyTvLink() {
+    if (!roomCode) return;
+    const url = window.location.origin + window.location.pathname + '?room=' + roomCode + '&tv=1';
+    try { navigator.clipboard.writeText(url); setStatus('lobby-status', 'TV link copied!'); }
+    catch (e) { setStatus('lobby-status', 'TV: ' + url); }
 }
 function fmtClock(ms) {
     const s = Math.max(0, Math.ceil(ms / 1000));
@@ -1168,7 +1345,7 @@ function ensureAudioCues() {
     } catch (e) {}
 }
 function notifyCue(kind) {
-    if (isHost) return;
+    if (isHost && !hostPlaying) return;
     try { navigator.vibrate(kind === 'warning' ? [60, 50, 60] : 90); } catch (e) {}
     try {
         ensureAudioCues();
@@ -1203,7 +1380,7 @@ function startClock(elId, msLeft, hotAtMs, frozen) {
         if (!e) return;
         e.textContent = fmtClock(left);
         e.classList.toggle('hot', left < (hotAtMs || 15000));
-        if (!isHost && !frozen && left > 0 && left <= 10000 && activeCueKey && !warnedCueKeys.has(activeCueKey)) {
+        if ((!isHost || hostPlaying) && !frozen && left > 0 && left <= 10000 && activeCueKey && !warnedCueKeys.has(activeCueKey)) {
             warnedCueKeys.add(activeCueKey);
             notifyCue('warning');
         }
@@ -1241,7 +1418,7 @@ document.addEventListener('visibilitychange', () => {
 const SESSION_KEY = 'easel-session';
 const AUTOSAVE_KEY = 'easel-autosave';
 function saveSession() {
-    try { sessionStorage.setItem(SESSION_KEY, JSON.stringify({ isHost, roomCode, myName })); } catch (e) {}
+    try { sessionStorage.setItem(SESSION_KEY, JSON.stringify({ isHost, hostPlaying, roomCode, myName })); } catch (e) {}
 }
 function clearSession() {
     try { sessionStorage.removeItem(SESSION_KEY); sessionStorage.removeItem(AUTOSAVE_KEY); } catch (e) {}
@@ -1290,19 +1467,31 @@ function initHostPeer(onOpen, onError) {
     peer.on('connection', conn => {
         conn.on('open', () => guestConns.set(conn.peer, conn));
         conn.on('data', data => handleGuestMessage(conn, data));
-        conn.on('close', () => { guestConns.delete(conn.peer); onGuestLost(conn.peer); });
+        conn.on('close', () => {
+            guestConns.delete(conn.peer);
+            displayIds.delete(conn.peer);
+            displayImageTokens.delete(conn.peer);
+            onGuestLost(conn.peer);
+        });
         conn.on('error', e => console.warn('conn error', e));
     });
     peer.on('error', onError);
 }
 function createGame() {
+    ensureAudioCues();
+    try { history.replaceState(null, '', window.location.pathname); } catch (e) {}
+    const requestedCode = normalizeRoomCode(selectedHostRoomCode);
     isHost = true;
-    myName = 'TV';
-    document.body.classList.add('cast-view');
-    roomCode = genRoomCode();
+    hostPlaying = true;
+    isTvDisplay = false;
+    myName = (document.getElementById('host-name').value || 'Artist').trim().slice(0, 14) || 'Artist';
+    roomCode = requestedCode || genRoomCode();
+    document.body.classList.remove('cast-view', 'display-only');
+    try { localStorage.setItem('easel-host-name', myName); } catch (e) {}
     setStatus('entry-status', 'Creating room...');
     initHostPeer(() => {
-        lobbyPlayers = [];
+        lobbyPlayers = [{ id: LOCAL_HOST_ID, name: myName, connected: true, local: true }];
+        saveRoomCode(roomCode, document.getElementById('host-room-name').value);
         saveSession();
         startHostHeartbeat();
         renderTLobby();
@@ -1311,13 +1500,25 @@ function createGame() {
     }, err => {
         console.error(err);
         if (err.type === 'unavailable-id') {
-            setTimeout(() => { try { peer.destroy(); } catch (e) {} createGame(); }, 400);
+            try { peer.destroy(); } catch (e) {}
+            peer = null;
+            if (requestedCode) {
+                isHost = false; hostPlaying = false;
+                setStatus('entry-status', 'That saved room is currently in use.');
+            } else {
+                roomCode = genRoomCode();
+                setTimeout(createGame, 400);
+            }
         } else {
             setStatus('entry-status', 'Error: ' + err.type);
         }
     });
 }
 function sendTo(playerId, msg) {
+    if (playerId === LOCAL_HOST_ID && isHost && hostPlaying) {
+        if (G) handleHostMessage(msg);
+        return;
+    }
     const conn = guestConns.get(playerId);
     if (conn) { try { conn.send(msg); } catch (e) {} }
 }
@@ -1332,11 +1533,20 @@ function playerIdx(peerId) {
 
 function handleGuestMessage(conn, msg) {
     if (!isHost) return;
+    if (msg.type === 'display') {
+        displayIds.add(conn.peer);
+        sendTvState(conn.peer, true);
+        return;
+    }
     switch (msg.type) {
         case 'join': {
             const name = (msg.name || 'Artist').trim().slice(0, 14) || 'Artist';
             const existing = lobbyPlayers.find(p => p.name.toLowerCase() === name.toLowerCase());
             if (existing) {
+                if (existing.local) {
+                    conn.send({ type: 'reject', reason: 'That name is already used by the host.' });
+                    return;
+                }
                 if (existing.id !== conn.peer) {
                     const old = guestConns.get(existing.id);
                     if (old) { try { old.close(); } catch (e) {} }
@@ -1366,20 +1576,26 @@ function handleGuestMessage(conn, msg) {
             autoSaveState();
             break;
         }
-        case 'claim':   hostClaim(playerIdx(conn.peer), msg.c, msg.r); break;
-        case 'stroke':  hostStroke(playerIdx(conn.peer), msg.stroke); break;
-        case 'undo':    hostUndo(playerIdx(conn.peer)); break;
-        case 'clearTile': hostClearTile(playerIdx(conn.peer)); break;
-        case 'done':    hostPlayerDone(playerIdx(conn.peer)); break;
-        case 'fstroke': hostFsStroke(playerIdx(conn.peer), msg.stroke); break;
-        case 'fsUndo':  hostFsUndo(playerIdx(conn.peer)); break;
-        case 'fsClear': hostFsClear(playerIdx(conn.peer)); break;
-        case 'endTurn': hostEndTurn(playerIdx(conn.peer)); break;
-        case 'prompt':      hostPrompt(playerIdx(conn.peer), msg.text); break;
-        case 'submitDraw':  hostSubmitDraw(playerIdx(conn.peer), msg.strokes); break;
-        case 'submitGuess': hostSubmitGuess(playerIdx(conn.peer), msg.text); break;
-        case 'fav':         hostFav(playerIdx(conn.peer), msg.chain, msg.step); break;
-        case 'reaction':    hostTelephoneReaction(playerIdx(conn.peer), msg.chain, msg.category); break;
+        default: handlePlayerAction(conn.peer, msg); break;
+    }
+}
+function handlePlayerAction(peerId, msg) {
+    const idx = playerIdx(peerId);
+    switch (msg.type) {
+        case 'claim':   hostClaim(idx, msg.c, msg.r); break;
+        case 'stroke':  hostStroke(idx, msg.stroke); break;
+        case 'undo':    hostUndo(idx); break;
+        case 'clearTile': hostClearTile(idx); break;
+        case 'done':    hostPlayerDone(idx); break;
+        case 'fstroke': hostFsStroke(idx, msg.stroke); break;
+        case 'fsUndo':  hostFsUndo(idx); break;
+        case 'fsClear': hostFsClear(idx); break;
+        case 'endTurn': hostEndTurn(idx); break;
+        case 'prompt':      hostPrompt(idx, msg.text); break;
+        case 'submitDraw':  hostSubmitDraw(idx, msg.strokes); break;
+        case 'submitGuess': hostSubmitGuess(idx, msg.text); break;
+        case 'fav':         hostFav(idx, msg.chain, msg.step); break;
+        case 'reaction':    hostTelephoneReaction(idx, msg.chain, msg.category); break;
     }
 }
 function onGuestLost(peerId) {
@@ -1407,9 +1623,35 @@ function broadcastLobby() {
         players: lobbyPlayers.map(p => ({ name: p.name, connected: p.connected })),
     };
     lobbyPlayers.forEach((p, i) => {
-        if (p.connected) sendTo(p.id, Object.assign({ youIdx: i }, view));
+        if (p.connected && p.id !== LOCAL_HOST_ID) sendTo(p.id, Object.assign({ youIdx: i }, view));
     });
     if (isHost) renderTLobby();
+    queueTvSnapshot();
+}
+function tvGameState(includeImage) {
+    if (!G) return null;
+    return Object.assign({}, G, { imageData: includeImage ? (G.imageData || '') : '' });
+}
+function sendTvState(displayId, includeImage) {
+    const conn = guestConns.get(displayId);
+    if (!conn) return;
+    const needsImage = !!(G && G.imageId === -2 && G.imageData &&
+        displayImageTokens.get(displayId) !== G.imageToken);
+    try {
+        conn.send({
+            type: 'tvState', roomCode,
+            players: lobbyPlayers.map(p => ({ name: p.name, connected: p.connected })),
+            game: tvGameState(includeImage || needsImage)
+        });
+        if (needsImage || includeImage) displayImageTokens.set(displayId, G && G.imageToken);
+    } catch (e) {}
+}
+function queueTvSnapshot() {
+    if (!isHost || !displayIds.size || tvSnapshotTimer) return;
+    tvSnapshotTimer = setTimeout(() => {
+        tvSnapshotTimer = null;
+        displayIds.forEach(id => sendTvState(id, false));
+    }, 80);
 }
 
 // ============================================================
@@ -1421,6 +1663,7 @@ function connectToHost(onSuccess, onFail) {
         hostConn = peer.connect(PEER_PREFIX + roomCode, { reliable: true });
         hostConn.on('open', () => {
             hostConn.send({ type: 'join', name: myName });
+            saveRoomCode(roomCode, '');
             saveSession();
             startGuestWatchdog();
             onSuccess();
@@ -1436,17 +1679,132 @@ function connectToHost(onSuccess, onFail) {
 }
 function joinGame() {
     ensureAudioCues();
-    const code = (document.getElementById('room-code-input').value || '')
-        .trim().toUpperCase().replace(/[^A-Z0-9]/g, '');
+    try { history.replaceState(null, '', window.location.pathname); } catch (e) {}
+    const code = normalizeRoomCode(document.getElementById('room-code-input').value);
     if (code.length < 4 || code.length > 12) { setStatus('entry-status', 'Enter a valid room code'); return; }
     myName = (document.getElementById('guest-name').value || 'Artist').trim().slice(0, 14) || 'Artist';
     isHost = false;
+    hostPlaying = false;
+    isTvDisplay = false;
+    document.body.classList.remove('cast-view', 'display-only');
     roomCode = code;
     setStatus('entry-status', 'Connecting...');
     connectToHost(() => setStatus('entry-status', 'Connected!'), m => setStatus('entry-status', m));
 }
 function sendHost(msg) {
+    if (isHost && hostPlaying) {
+        handlePlayerAction(LOCAL_HOST_ID, msg);
+        return;
+    }
     if (hostConn) { try { hostConn.send(msg); } catch (e) {} }
+}
+function connectTvToHost(onSuccess, onFail) {
+    peer = new Peer({ debug: 1 });
+    peer.on('open', () => {
+        const connection = peer.connect(PEER_PREFIX + roomCode, { reliable: true });
+        hostConn = connection;
+        connection.on('open', () => {
+            connection.send({ type: 'display' });
+            startGuestWatchdog();
+            onSuccess();
+        });
+        connection.on('data', data => handleTvMessage(data));
+        connection.on('close', () => {
+            if (hostConn !== connection) return;
+            tvConnected = false;
+            stopHeartbeat(); handleHostDisconnect();
+        });
+        connection.on('error', () => onFail('Display connection error'));
+    });
+    peer.on('error', err => onFail(err.type === 'peer-unavailable' ? 'Room not found — check the code.' : 'Error: ' + err.type));
+}
+function joinTvDisplay(codeOverride) {
+    const code = normalizeRoomCode(codeOverride || document.getElementById('tv-room-code-input').value);
+    if (code.length < 4) { setStatus('entry-status', 'Enter a valid room code'); return; }
+    isHost = false;
+    hostPlaying = false;
+    isTvDisplay = true;
+    roomCode = code;
+    document.body.classList.add('cast-view', 'display-only');
+    setStatus('entry-status', 'Connecting TV display...');
+    beginTvConnection();
+}
+function beginTvConnection() {
+    if (!isTvDisplay) return;
+    if (tvReconnectTimer) { clearTimeout(tvReconnectTimer); tvReconnectTimer = null; }
+    const oldConnection = hostConn, oldPeer = peer;
+    hostConn = null; peer = null; tvConnected = false;
+    try { if (oldConnection) oldConnection.close(); } catch (e) {}
+    try { if (oldPeer) oldPeer.destroy(); } catch (e) {}
+    connectTvToHost(() => {
+        tvConnected = true;
+        if (tvReconnectTimer) { clearTimeout(tvReconnectTimer); tvReconnectTimer = null; }
+        saveRoomCode(roomCode, '');
+        setStatus('entry-status', 'TV connected!');
+        const url = window.location.pathname + '?room=' + roomCode + '&tv=1';
+        try { history.replaceState(null, '', url); } catch (e) {}
+    }, message => {
+        tvConnected = false;
+        setStatus('entry-status', message + ' Waiting for the host...');
+        scheduleTvReconnect();
+    });
+}
+function scheduleTvReconnect() {
+    if (!isTvDisplay || tvConnected || tvReconnectTimer) return;
+    tvReconnectTimer = setTimeout(() => {
+        tvReconnectTimer = null;
+        beginTvConnection();
+    }, 3000);
+}
+function renderTvDisplayLobby(players) {
+    document.getElementById('tv-lobby-room-code').textContent = roomCode;
+    const list = document.getElementById('tv-lobby-players');
+    list.innerHTML = '';
+    (players || []).forEach((player, index) => {
+        const li = document.createElement('li');
+        const dot = document.createElement('span');
+        dot.className = 'dot'; dot.style.background = PLAYER_COLORS[index % PLAYER_COLORS.length];
+        li.appendChild(dot);
+        li.appendChild(document.createTextNode(player.name));
+        const tag = document.createElement('span');
+        tag.className = 'tag'; tag.textContent = player.connected ? 'ready' : 'offline';
+        li.appendChild(tag); list.appendChild(li);
+    });
+    showScreen('screen-tv-lobby');
+}
+function handleTvMessage(msg) {
+    lastHeartbeat = Date.now();
+    if (msg.type === 'ping') return;
+    if (msg.type === 'roomClosed') {
+        leaveGame();
+        switchTab('tv');
+        setStatus('entry-status', 'The host closed the room.');
+        return;
+    }
+    if (msg.type !== 'tvState') return;
+    roomCode = msg.roomCode || roomCode;
+    if (!msg.game) {
+        G = null;
+        renderTvDisplayLobby(msg.players || []);
+        return;
+    }
+    if (msg.game.imageData) {
+        tvImageData = msg.game.imageData;
+        customSceneImage = new Image();
+        customSceneImage.onload = () => {
+            if (isTvDisplay && G && G.imageId === -2) {
+                restoreTvCanvases();
+                renderStage();
+            }
+        };
+        customSceneImage.src = tvImageData;
+    }
+    G = msg.game;
+    if (G.imageId === -2 && !G.imageData) G.imageData = tvImageData;
+    initTvCanvases();
+    restoreTvCanvases();
+    showScreen('screen-stage');
+    renderStage();
 }
 function handleHostMessage(msg) {
     lastHeartbeat = Date.now();
@@ -1474,8 +1832,14 @@ function handleHostDisconnect() {
     if (isHost) return;
     setStatus('host-lost-status', '');
     showScreen('screen-host-lost');
+    if (isTvDisplay) scheduleTvReconnect();
 }
 function tryReconnectGuest() {
+    if (isTvDisplay) {
+        setStatus('host-lost-status', 'Reconnecting display...');
+        beginTvConnection();
+        return;
+    }
     const session = getSession();
     if (!session || !session.roomCode) { leaveGame(); return; }
     isHost = false;
@@ -1490,13 +1854,21 @@ function tryReconnectGuest() {
         m => setStatus('host-lost-status', m));
 }
 function leaveGame() {
+    const wasTv = isTvDisplay;
     stopHeartbeat();
+    if (tvReconnectTimer) { clearTimeout(tvReconnectTimer); tvReconnectTimer = null; }
     try { if (hostConn) hostConn.close(); } catch (e) {}
     try { if (peer) peer.destroy(); } catch (e) {}
     hostConn = null; peer = null;
+    G = null; V = null;
+    tvConnected = false;
+    isHost = false; hostPlaying = false; isTvDisplay = false;
+    document.body.classList.remove('cast-view', 'display-only');
     clearSession();
     setStatus('entry-status', 'Left game');
     showScreen('screen-entry');
+    switchTab(wasTv ? 'tv' : 'join');
+    try { history.replaceState(null, '', window.location.pathname); } catch (e) {}
 }
 function confirmLeaveGame() {
     if (window.confirm('Leave this room?')) leaveGame();
@@ -1511,13 +1883,14 @@ function closeHostedRoom() {
     const oldConnections = Array.from(guestConns.values());
     peer = null;
     guestConns.clear();
+    displayIds.clear();
     G = null;
     lobbyPlayers = [];
     roomCode = '';
     stopHeartbeat();
     clearSession();
-    isHost = false;
-    document.body.classList.remove('cast-view');
+    isHost = false; hostPlaying = false; isTvDisplay = false;
+    document.body.classList.remove('cast-view', 'display-only');
     setStatus('entry-status', 'Room closed.');
     showScreen('screen-entry');
     setTimeout(() => {
@@ -1543,6 +1916,7 @@ function seg(containerId, options, current, onPick) {
 function removeLobbyPlayer(index) {
     if (G || index < 0 || index >= lobbyPlayers.length) return;
     const player = lobbyPlayers[index];
+    if (player.local || player.id === LOCAL_HOST_ID) return;
     const conn = guestConns.get(player.id);
     lobbyPlayers.splice(index, 1);
     guestConns.delete(player.id);
@@ -1564,15 +1938,17 @@ function renderTLobby() {
         li.appendChild(document.createTextNode(p.name));
         const tag = document.createElement('span');
         tag.className = 'tag';
-        tag.textContent = p.connected ? 'ready' : 'offline';
+        tag.textContent = p.local ? 'host · ready' : (p.connected ? 'ready' : 'offline');
         li.appendChild(tag);
-        const remove = document.createElement('button');
-        remove.className = 'icon-btn';
-        remove.textContent = '×';
-        remove.title = 'Remove ' + p.name;
-        remove.setAttribute('aria-label', 'Remove ' + p.name);
-        remove.onclick = () => removeLobbyPlayer(i);
-        li.appendChild(remove);
+        if (!p.local) {
+            const remove = document.createElement('button');
+            remove.className = 'icon-btn';
+            remove.textContent = '×';
+            remove.title = 'Remove ' + p.name;
+            remove.setAttribute('aria-label', 'Remove ' + p.name);
+            remove.onclick = () => removeLobbyPlayer(i);
+            li.appendChild(remove);
+        }
         list.appendChild(li);
     });
     seg('seg-mode', [
@@ -1698,6 +2074,7 @@ function startGame() {
             mode: 'copycat', phase: 'select', imageId,
             round: 1, rounds: settings.rounds, gridC: grid.c, gridR: grid.r,
             imageData: imageId === -2 ? settings.customImageData : '',
+            imageToken: imageId === -2 ? Date.now().toString(36) : '',
             paintMs: settings.paintSec * 1000,
             inkBudget: INK_BUDGETS[settings.ink],
             players, painted: [], phaseEndsAt: Date.now() + SELECT_MS,
@@ -1740,7 +2117,7 @@ function startGame() {
         setPhaseTimer(G.turnMs, () => hostEndTurn(G.painterIdx, true));
         broadcastFs(true);
     }
-    showScreen('screen-stage');
+    if (!hostPlaying) showScreen('screen-stage');
     renderStage();
     autoSaveState();
 }
@@ -1825,12 +2202,52 @@ function updateHostToolbar() {
     document.getElementById('host-add-time').disabled = !timed;
     document.getElementById('host-skip').disabled = !timed;
 }
+function toggleHostController(force) {
+    const overlay = document.getElementById('host-controller-overlay');
+    const show = typeof force === 'boolean' ? force : !overlay.classList.contains('visible');
+    if (show) renderHostPhoneControls();
+    overlay.classList.toggle('visible', show);
+}
+function closeHostControllerFromBackdrop(event) {
+    if (event.target === document.getElementById('host-controller-overlay')) toggleHostController(false);
+}
+function hostControlButton(holder, label, action, className) {
+    const button = document.createElement('button');
+    button.className = 'btn ' + (className || 'secondary');
+    button.textContent = label;
+    button.onclick = () => { action(); renderHostPhoneControls(); };
+    holder.appendChild(button);
+}
+function renderHostPhoneControls() {
+    if (!isHost || !hostPlaying || !G) return;
+    const holder = document.getElementById('host-phone-controls');
+    const phase = document.getElementById('host-controller-phase');
+    holder.innerHTML = '';
+    phase.textContent = `${G.mode[0].toUpperCase() + G.mode.slice(1)} · ${G.phase}${G.paused ? ' · paused' : ''}`;
+    if (currentPhaseHandler()) {
+        hostControlButton(holder, G.paused ? 'Resume' : 'Pause', togglePauseGame);
+        hostControlButton(holder, '+15 seconds', () => addGameTime(15000));
+        hostControlButton(holder, 'Skip Phase', skipCurrentPhase);
+    } else if (G.mode === 'copycat' && G.phase === 'reveal') {
+        hostControlButton(holder, G.revealPtr < G.lastScores.length ? 'Next Patch' : 'Continue',
+            G.revealPtr < G.lastScores.length ? advanceCopycatReveal : nextRound, 'go');
+    } else if (G.mode === 'telephone' && G.phase === 'reveal') {
+        if (G.revealPtr > 0) hostControlButton(holder, 'Previous Chain', revealPrevious);
+        if (G.revealPtr < G.chains.length) hostControlButton(holder, 'Next Chain', revealNext, 'go');
+        else hostControlButton(holder, 'New Round', telephoneNewRound, 'go');
+    }
+    if (G.phase === 'final' || (G.mode === 'telephone' && G.phase === 'reveal' && G.revealPtr >= G.chains.length)) {
+        hostControlButton(holder, 'Back to Lobby', () => { toggleHostController(false); returnRoomToLobby(); }, 'go');
+    }
+    hostControlButton(holder, 'Quit Game', () => { toggleHostController(false); quitCurrentGame(); }, 'secondary');
+}
 function returnRoomToLobby() {
     if (!isHost) return;
     clearPhaseTimer();
     setGalleryCycle(false);
     stopClock();
     G = null;
+    toggleHostController(false);
     lobbyPlayers = lobbyPlayers.filter(p => p.connected);
     broadcastLobby();
     showScreen('screen-tlobby');
@@ -2487,7 +2904,12 @@ function telephoneChainHtml(chain) {
 // TV RENDERING
 // ============================================================
 function renderStage() {
-    if (!isHost || !G) return;
+    if ((!isHost && !isTvDisplay) || !G) return;
+    if (isHost && hostPlaying) {
+        renderHostPhoneControls();
+        queueTvSnapshot();
+        return;
+    }
     const phaseEl = document.getElementById('tv-phase');
     const banner = document.getElementById('tv-banner');
     const controls = document.getElementById('tv-controls');
@@ -2496,7 +2918,8 @@ function renderStage() {
     controls.innerHTML = '';
     compare.classList.remove('visible');
     const msLeft = phaseRemaining();
-    updateHostToolbar();
+    if (isHost) updateHostToolbar();
+    else document.getElementById('host-toolbar').style.display = 'none';
 
     if (G.mode !== 'telephone') setGalleryCycle(false);
 
@@ -2575,6 +2998,7 @@ function renderStage() {
         }
     }
     renderTvScores();
+    if (isHost) queueTvSnapshot();
 }
 function renderCopycatComparison(result) {
     const hasPatch = Number.isFinite(result.c) && Number.isFinite(result.r);
@@ -3288,8 +3712,11 @@ function phoneFsClear() {
 // ============================================================
 function reconnectAsHost(session) {
     isHost = true;
-    myName = 'TV';
-    document.body.classList.add('cast-view');
+    hostPlaying = session.hostPlaying === true;
+    isTvDisplay = false;
+    myName = session.myName || (hostPlaying ? 'Artist' : 'TV');
+    document.body.classList.toggle('cast-view', !hostPlaying);
+    document.body.classList.remove('display-only');
     roomCode = session.roomCode;
     let saved = null;
     try {
@@ -3312,8 +3739,8 @@ function reconnectAsHost(session) {
         G.revealPtr = G.revealPtr || 0;
         G.turnStrokeStart = Number.isFinite(G.turnStrokeStart) ? G.turnStrokeStart : (G.strokes || []).length;
     }
-    lobbyPlayers.forEach(p => p.connected = false);
-    if (G) G.players.forEach(p => p.connected = false);
+    lobbyPlayers.forEach(p => p.connected = p.id === LOCAL_HOST_ID && hostPlaying);
+    if (G) G.players.forEach(p => p.connected = p.id === LOCAL_HOST_ID && hostPlaying);
     setStatus('entry-status', 'Reclaiming room...');
     const timeout = setTimeout(() => {
         setStatus('entry-status', 'Reconnection failed — start a new room.');
@@ -3329,7 +3756,10 @@ function reconnectAsHost(session) {
             initTvCanvases();
             restoreTvCanvases();
             resumePhase();
-            showScreen('screen-stage');
+            if (hostPlaying) {
+                const localIndex = playerIdx(LOCAL_HOST_ID);
+                if (localIndex >= 0) sendTo(LOCAL_HOST_ID, phaseViewFor(localIndex));
+            } else showScreen('screen-stage');
             renderStage();
         } else {
             renderTLobby();
@@ -3352,10 +3782,13 @@ function restoreTvCanvases() {
         for (const p of G.players) {
             if (p.tile) for (const s of p.strokes) drawTileStroke(p.tile, s);
         }
+    } else if (G.mode === 'freestyle') {
+        origCtx.clearRect(0, 0, IMG_W, IMG_H);
+        paintCtx.clearRect(0, 0, IMG_W, IMG_H);
+        for (const s of (G.strokes || [])) renderStrokeTo(paintCtx, s.stroke, IMG_W, IMG_H);
     } else {
         origCtx.clearRect(0, 0, IMG_W, IMG_H);
         paintCtx.clearRect(0, 0, IMG_W, IMG_H);
-        for (const s of G.strokes) renderStrokeTo(paintCtx, s.stroke, IMG_W, IMG_H);
     }
 }
 function resumePhase() {
@@ -3375,11 +3808,23 @@ function resumePhase() {
 // INIT
 // ============================================================
 (function init() {
+    renderSavedRooms();
+    try { document.getElementById('host-name').value = localStorage.getItem('easel-host-name') || ''; } catch (e) {}
+    const params = new URLSearchParams(window.location.search);
+    const code = normalizeRoomCode(params.get('room'));
+    if (params.has('tv')) {
+        switchTab('tv');
+        document.getElementById('tv-room-code-input').value = code;
+        if (code.length >= 4) joinTvDisplay(code);
+        return;
+    }
     const session = getSession();
     if (session && session.roomCode) {
         if (session.isHost) reconnectAsHost(session);
         else {
             isHost = false;
+            hostPlaying = false;
+            isTvDisplay = false;
             myName = session.myName || 'Artist';
             roomCode = session.roomCode;
             setStatus('entry-status', 'Reconnecting...');
@@ -3389,8 +3834,6 @@ function resumePhase() {
         }
         return;
     }
-    const params = new URLSearchParams(window.location.search);
-    const code = (params.get('room') || '').trim().toUpperCase().replace(/[^A-Z0-9]/g, '');
     if (code.length >= 4 && code.length <= 12) {
         switchTab('join');
         document.getElementById('room-code-input').value = code;
