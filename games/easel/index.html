@@ -282,6 +282,18 @@
         box-shadow: 0 2px 10px rgba(0,0,0,0.4);
     }
     .refresh-btn.visible { display: flex; }
+    .leave-room-btn {
+        position: fixed;
+        top: max(10px, env(safe-area-inset-top));
+        left: max(10px, env(safe-area-inset-left));
+        width: 44px; height: 44px;
+        display: none; align-items: center; justify-content: center;
+        background: var(--bg-card); border: 1px solid var(--border);
+        color: var(--text-primary); border-radius: 50%; font-size: 1.45rem;
+        cursor: pointer; z-index: 50; box-shadow: 0 2px 10px rgba(0,0,0,0.4);
+    }
+    .leave-room-btn.visible { display: flex; }
+    .host-toolbar button.danger { border-color: #c0392b; color: #ff8f87; }
     @media (max-width: 700px) {
         body.cast-view .app { max-width: 560px; }
         .lobby-summary { flex-direction: column; }
@@ -292,6 +304,7 @@
 </head>
 <body>
 <button id="refresh-btn" class="refresh-btn" onclick="location.reload()" title="Refresh connection">🔄</button>
+<button id="leave-room-btn" class="leave-room-btn" onclick="confirmLeaveGame()" title="Leave room" aria-label="Leave room">←</button>
 <div class="app">
     <h1>Easel</h1>
     <div class="subtitle">Cast-to-TV painting party &middot; phones are your brushes</div>
@@ -376,6 +389,7 @@
             </div>
         </div>
         <button class="btn go" id="btn-start" onclick="startGame()" disabled>Waiting for artists...</button>
+        <button class="btn secondary" onclick="closeHostedRoom()">Close Room</button>
     </div>
 
     <!-- TV STAGE -->
@@ -384,6 +398,7 @@
             <button id="host-pause" onclick="togglePauseGame()" title="Pause or resume the current timer">Pause</button>
             <button id="host-add-time" onclick="addGameTime(15000)" title="Add fifteen seconds">+15s</button>
             <button id="host-skip" onclick="skipCurrentPhase()" title="Advance the current phase">Skip</button>
+            <button id="host-quit" class="danger" onclick="quitCurrentGame()" title="End this game and return everyone to the lobby">Quit Game</button>
         </div>
         <div class="stage-head">
             <span class="phase-label" id="tv-phase"></span>
@@ -536,7 +551,9 @@ const IMG_W = 1280, IMG_H = 720;
 const SELECT_MS = 45000;
 const MEMORIZE_MS = 8000;
 
-const PLAYER_COLORS = ['#5dade2','#ec7063','#2ecc71','#f39c12','#9b59b6','#1abc9c','#fd79a8','#f5b041'];
+const PLAYER_COLORS = ['#5dade2','#ec7063','#2ecc71','#f39c12','#9b59b6','#1abc9c',
+                       '#fd79a8','#f5b041','#b8e986','#00bcd4','#ff8a65','#c39bd3'];
+function maxPlayersForMode(mode) { return mode === 'telephone' ? 8 : 12; }
 const PALETTE = ['#ffffff','#000000','#7f8c8d','#8d5524','#e74c3c','#e67e22','#f1c40f','#a3e048',
                  '#27ae60','#1abc9c','#87ceeb','#2980b9','#1a2a6c','#9b59b6','#fd79a8','#f5d7b0'];
 const BRUSH_FRAC = { s: 0.035, m: 0.07, l: 0.14 };   // line width as fraction of surface width
@@ -1055,6 +1072,8 @@ document.getElementById('custom-image-input').addEventListener('change', e => {
 const AWAKE_SCREENS = new Set(['screen-paint', 'screen-fs', 'screen-stage', 'screen-select', 'screen-memorize']);
 const REFRESH_SCREENS = new Set(['screen-tlobby', 'screen-stage', 'screen-plobby', 'screen-select',
     'screen-memorize', 'screen-paint', 'screen-fs', 'screen-pwait', 'screen-host-lost']);
+const LEAVE_SCREENS = new Set(['screen-plobby', 'screen-select', 'screen-memorize', 'screen-paint',
+    'screen-fs', 'screen-prompt', 'screen-guess', 'screen-pwait']);
 
 function showScreen(id) {
     document.querySelectorAll('.screen').forEach(s => s.classList.remove('active'));
@@ -1063,6 +1082,8 @@ function showScreen(id) {
     if (AWAKE_SCREENS.has(id)) requestWakeLock(); else releaseWakeLock();
     const btn = document.getElementById('refresh-btn');
     if (btn) btn.classList.toggle('visible', REFRESH_SCREENS.has(id));
+    const leaveBtn = document.getElementById('leave-room-btn');
+    if (leaveBtn) leaveBtn.classList.toggle('visible', !isHost && LEAVE_SCREENS.has(id));
 }
 function setStatus(id, text) {
     const el = document.getElementById(id);
@@ -1335,7 +1356,11 @@ function handleGuestMessage(conn, msg) {
                 return;
             }
             if (G) { conn.send({ type: 'reject', reason: 'A game is underway — join after it ends.' }); return; }
-            if (lobbyPlayers.length >= 8) { conn.send({ type: 'reject', reason: 'Room is full (8 artists max).' }); return; }
+            const playerLimit = maxPlayersForMode(settings.mode);
+            if (lobbyPlayers.length >= playerLimit) {
+                conn.send({ type: 'reject', reason: `Room is full (${playerLimit} artists max for this mode).` });
+                return;
+            }
             lobbyPlayers.push({ id: conn.peer, name, connected: true });
             broadcastLobby();
             autoSaveState();
@@ -1438,6 +1463,10 @@ function handleHostMessage(msg) {
             showScreen('screen-entry');
             try { hostConn.close(); } catch (e) {}
             break;
+        case 'roomClosed':
+            leaveGame();
+            setStatus('entry-status', 'The host closed the room.');
+            break;
         case 'ping': break;
     }
 }
@@ -1468,6 +1497,33 @@ function leaveGame() {
     clearSession();
     setStatus('entry-status', 'Left game');
     showScreen('screen-entry');
+}
+function confirmLeaveGame() {
+    if (window.confirm('Leave this room?')) leaveGame();
+}
+function closeHostedRoom() {
+    if (!isHost || !window.confirm('Close this room for everyone?')) return;
+    clearPhaseTimer();
+    setGalleryCycle(false);
+    stopClock();
+    broadcast({ type: 'roomClosed' });
+    const oldPeer = peer;
+    const oldConnections = Array.from(guestConns.values());
+    peer = null;
+    guestConns.clear();
+    G = null;
+    lobbyPlayers = [];
+    roomCode = '';
+    stopHeartbeat();
+    clearSession();
+    isHost = false;
+    document.body.classList.remove('cast-view');
+    setStatus('entry-status', 'Room closed.');
+    showScreen('screen-entry');
+    setTimeout(() => {
+        oldConnections.forEach(conn => { try { conn.close(); } catch (e) {} });
+        try { if (oldPeer) oldPeer.destroy(); } catch (e) {}
+    }, 100);
 }
 
 // ============================================================
@@ -1535,7 +1591,7 @@ function renderTLobby() {
     } else if (mode === 'freestyle') {
         modeDesc.textContent = 'Take turns adding limited ink to one shared canvas. A creative directive is optional, and each painter can undo their own turn.';
     } else {
-        modeDesc.textContent = 'Three or more artists pass themed prompts through drawings and guesses, then react to each full-chain reveal.';
+        modeDesc.textContent = 'Three to eight artists pass themed prompts through drawings and guesses, then react to each full-chain reveal.';
     }
     const roundsWrap = [document.getElementById('lbl-rounds'), document.getElementById('seg-rounds')];
     roundsWrap.forEach(el => el.style.display = mode === 'telephone' ? 'none' : '');
@@ -1594,11 +1650,14 @@ function renderTLobby() {
         if (document.activeElement !== input) input.value = settings.fsDirective || '';
     }
     const minN = mode === 'telephone' ? 3 : 1;
+    const maxN = maxPlayersForMode(mode);
     const btn = document.getElementById('btn-start');
     const customMissing = mode === 'copycat' && settings.scene === -2 && !settings.customImageData;
-    btn.disabled = n < minN || customMissing;
+    const tooMany = n > maxN;
+    btn.disabled = n < minN || tooMany || customMissing;
     const labels = { copycat: 'Copycat 🖼️', freestyle: 'Freestyle 🎨', telephone: 'Telephone 📞' };
     btn.textContent = customMissing ? 'Choose a custom picture...'
+        : tooMany ? `Telephone supports up to ${maxN} artists — remove ${n - maxN}`
         : n < minN
         ? (mode === 'telephone' ? 'Telephone needs 3+ artists...' : 'Waiting for artists...')
         : `Start ${labels[mode]} with ${n} artist${n>1?'s':''}!`;
@@ -1623,7 +1682,8 @@ function initTvCanvases() {
 function startGame() {
     const roster = lobbyPlayers.filter(p => p.connected);
     if (!roster.length) return;
-    if (settings.mode === 'telephone' && roster.length < 3) return;
+    if (settings.mode === 'telephone' && (roster.length < 3 || roster.length > maxPlayersForMode('telephone'))) return;
+    if (roster.length > maxPlayersForMode(settings.mode)) return;
     initTvCanvases();
     const players = roster.map((p, i) => ({
         id: p.id, name: p.name, color: PLAYER_COLORS[i % PLAYER_COLORS.length],
@@ -1759,10 +1819,26 @@ function skipCurrentPhase() {
 }
 function updateHostToolbar() {
     const timed = !!currentPhaseHandler();
-    document.getElementById('host-toolbar').style.display = timed ? 'flex' : 'none';
+    document.getElementById('host-toolbar').style.display = 'flex';
     document.getElementById('host-pause').textContent = G.paused ? 'Resume' : 'Pause';
+    document.getElementById('host-pause').disabled = !timed;
     document.getElementById('host-add-time').disabled = !timed;
     document.getElementById('host-skip').disabled = !timed;
+}
+function returnRoomToLobby() {
+    if (!isHost) return;
+    clearPhaseTimer();
+    setGalleryCycle(false);
+    stopClock();
+    G = null;
+    lobbyPlayers = lobbyPlayers.filter(p => p.connected);
+    broadcastLobby();
+    showScreen('screen-tlobby');
+    autoSaveState();
+}
+function quitCurrentGame() {
+    if (!G || !window.confirm('Quit this game and return everyone to the lobby?')) return;
+    returnRoomToLobby();
 }
 
 // ============================================================
@@ -2679,14 +2755,7 @@ function addLobbyButton(controls) {
     const btn = document.createElement('button');
     btn.className = 'btn go';
     btn.textContent = '↩️ Back to Lobby';
-    btn.onclick = () => {
-        clearPhaseTimer();
-        G = null;
-        lobbyPlayers = lobbyPlayers.filter(p => p.connected);
-        broadcastLobby();
-        showScreen('screen-tlobby');
-        autoSaveState();
-    };
+    btn.onclick = returnRoomToLobby;
     controls.appendChild(btn);
 }
 
