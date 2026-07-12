@@ -1,0 +1,3332 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+<title>Easel</title>
+<script src="https://unpkg.com/peerjs@1.5.4/dist/peerjs.min.js"></script>
+<style>
+    :root {
+        --bg-primary: #0f0f1a;
+        --bg-secondary: #1a1a2e;
+        --bg-card: #16213e;
+        --accent: #e94560;
+        --accent-hover: #ff6b81;
+        --text-primary: #eee;
+        --text-secondary: #aaa;
+        --border: #2a2a4a;
+    }
+    * { box-sizing: border-box; margin: 0; padding: 0; -webkit-tap-highlight-color: transparent; }
+    html, body {
+        width: 100%;
+        background: var(--bg-primary);
+        color: var(--text-primary);
+        font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+        overscroll-behavior: none;
+        touch-action: manipulation;
+    }
+    body { display: flex; flex-direction: column; min-height: 100vh; min-height: 100dvh; }
+    .app {
+        flex: 1; display: flex; flex-direction: column;
+        padding: 16px;
+        padding-top: max(16px, env(safe-area-inset-top));
+        padding-bottom: max(16px, env(safe-area-inset-bottom));
+        max-width: 560px; margin: 0 auto; width: 100%;
+    }
+    /* TV (host) gets the full width */
+    body.cast-view .app { max-width: 1200px; }
+    h1 { text-align: center; font-size: 2rem; margin-bottom: 4px; color: var(--accent); letter-spacing: 1px; }
+    body.cast-view h1 { font-size: 2.6rem; }
+    .subtitle { text-align: center; color: var(--text-secondary); margin-bottom: 16px; font-size: 0.9rem; }
+    .screen { display: none; flex: 1; flex-direction: column; }
+    .screen.active { display: flex; }
+    .panel {
+        background: var(--bg-card);
+        border: 1px solid var(--border);
+        border-radius: 14px;
+        padding: 16px;
+        margin-bottom: 12px;
+        box-shadow: 0 4px 16px rgba(0,0,0,0.25), inset 0 1px 0 rgba(255,255,255,0.03);
+    }
+    .panel h3 { font-size: 1.05rem; margin-bottom: 8px; letter-spacing: 0.3px; }
+    .panel ul { padding-left: 20px; color: var(--text-secondary); font-size: 0.9rem; }
+    .panel li { margin-bottom: 6px; }
+    .btn {
+        display: block; width: 100%;
+        padding: 16px; min-height: 58px;
+        background: var(--accent); color: white;
+        border: none; border-radius: 12px;
+        font-size: 1.15rem; font-weight: bold; cursor: pointer;
+        margin-top: 10px;
+        transition: background 0.15s, transform 0.05s;
+        box-shadow: 0 4px 14px rgba(233, 69, 96, 0.25);
+    }
+    .btn:active { transform: scale(0.98); }
+    .btn:hover { background: var(--accent-hover); }
+    .btn:disabled { background: #555; cursor: not-allowed; box-shadow: none; opacity: 0.7; }
+    .btn.secondary { background: var(--bg-secondary); border: 1px solid var(--border); box-shadow: none; }
+    .btn.secondary:hover { background: var(--border); }
+    .btn.go { background: #27ae60; box-shadow: 0 4px 14px rgba(39,174,96,0.3); }
+    .btn.go:hover { background: #2ecc71; }
+    input[type="text"] {
+        width: 100%; padding: 14px; min-height: 52px;
+        background: var(--bg-secondary); color: var(--text-primary);
+        border: 1px solid var(--border); border-radius: 10px;
+        font-size: 1.05rem; margin-top: 6px;
+    }
+    label { display: block; margin-top: 12px; color: var(--text-secondary); font-size: 0.9rem; font-weight: 500; }
+    .status { text-align: center; color: var(--text-secondary); min-height: 1.4em; margin-top: 10px; font-size: 0.95rem; }
+    .tabs { display: flex; gap: 8px; margin-bottom: 12px; }
+    .tab {
+        flex: 1; padding: 14px; min-height: 52px;
+        background: var(--bg-secondary); color: var(--text-secondary);
+        border: 1px solid var(--border); border-radius: 10px;
+        font-size: 1.0rem; font-weight: bold; cursor: pointer;
+    }
+    .tab.active { background: var(--bg-card); color: var(--text-primary); border-color: var(--accent); }
+    .room-code {
+        text-align: center; font-size: 2.6rem; font-weight: bold;
+        letter-spacing: 8px; color: #ffd671; margin: 6px 0 10px;
+        font-family: ui-monospace, Menlo, Consolas, monospace;
+    }
+    body.cast-view .room-code { font-size: 4.5rem; }
+    .player-list { list-style: none; }
+    .player-list li {
+        display: flex; align-items: center; gap: 10px;
+        padding: 10px 4px; border-bottom: 1px solid var(--border);
+        font-size: 1.05rem;
+    }
+    .player-list li:last-child { border-bottom: none; }
+    .dot { width: 14px; height: 14px; border-radius: 50%; flex: 0 0 auto; }
+    .tag { margin-left: auto; font-size: 0.8rem; color: var(--text-secondary); }
+    .row { display: flex; gap: 8px; }
+    .row .btn { flex: 1; }
+    .seg { display: flex; gap: 6px; margin-top: 6px; flex-wrap: wrap; }
+    .seg button {
+        flex: 1; min-width: 60px; padding: 12px 8px; min-height: 48px;
+        background: var(--bg-secondary); color: var(--text-secondary);
+        border: 1px solid var(--border); border-radius: 10px;
+        font-size: 0.95rem; font-weight: bold; cursor: pointer;
+    }
+    .seg button.on { background: var(--bg-card); color: var(--text-primary); border-color: var(--accent); }
+    .mode-desc {
+        color: var(--text-secondary); font-size: 0.88rem; line-height: 1.4;
+        margin-top: 8px; min-height: 2.5em;
+    }
+    .directive-note {
+        color: #ffd671; font-weight: bold; text-align: center;
+        margin-bottom: 8px; font-size: 0.95rem;
+    }
+    .telephone-chain {
+        display: flex; flex-wrap: wrap; justify-content: center; align-items: center;
+        gap: 7px; margin-top: 8px; line-height: 1.35;
+    }
+    .telephone-chain .chain-step {
+        display: inline-block; padding: 5px 8px; border-radius: 8px;
+        background: var(--bg-secondary); border: 1px solid var(--border);
+        color: var(--text-primary); font-size: 0.9rem;
+    }
+    .telephone-chain .chain-arrow { color: var(--text-secondary); }
+    .host-toolbar {
+        display: flex; flex-wrap: wrap; justify-content: center; gap: 7px;
+        margin-bottom: 10px;
+    }
+    .host-toolbar button {
+        min-height: 42px; padding: 8px 14px; border-radius: 8px;
+        background: var(--bg-secondary); color: var(--text-primary);
+        border: 1px solid var(--border); font-weight: bold; cursor: pointer;
+    }
+    .host-toolbar button:disabled { opacity: 0.4; cursor: not-allowed; }
+    .icon-btn {
+        margin-left: 4px; width: 34px; height: 34px; min-height: 34px;
+        border-radius: 50%; border: 1px solid var(--border);
+        background: var(--bg-secondary); color: var(--text-secondary);
+        font-size: 1.1rem; cursor: pointer;
+    }
+    .copycat-compare {
+        display: none; grid-template-columns: 1fr 1fr; gap: 12px;
+        margin-top: 12px;
+    }
+    .copycat-compare.visible { display: grid; }
+    .compare-pane { min-width: 0; text-align: center; color: var(--text-secondary); font-weight: bold; }
+    .compare-pane canvas {
+        display: block; width: 100%; margin-top: 6px; background: #fff;
+        border: 2px solid var(--border); border-radius: 8px;
+    }
+    .grid-overlay .gcell .difficulty {
+        position: absolute; right: 3px; bottom: 2px; padding: 1px 4px;
+        border-radius: 5px; background: rgba(15,15,26,0.76);
+        color: #ffd671; font-size: 0.68rem; font-weight: bold;
+    }
+    .mini-map .gcell.unavailable { background: rgba(15,15,26,0.62); }
+    .reaction-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin-top: 10px; }
+    .reaction-grid .btn { margin-top: 0; min-height: 50px; padding: 10px 8px; font-size: 0.92rem; }
+    .reaction-grid .btn.on { border-color: #ffd671; color: #ffd671; }
+    .award-strip { display: flex; flex-wrap: wrap; justify-content: center; gap: 7px; margin-top: 10px; }
+    .award-strip span { padding: 5px 8px; background: var(--bg-secondary); border-radius: 7px; font-size: 0.86rem; }
+
+    /* ---- TV stage ---- */
+    .stage-head {
+        display: flex; justify-content: space-between; align-items: center;
+        margin-bottom: 10px; gap: 12px;
+    }
+    .stage-head .phase-label { font-size: 1.5rem; font-weight: bold; }
+    .stage-head .clock {
+        font-size: 2.2rem; font-weight: bold; color: #ffd671;
+        font-family: ui-monospace, Menlo, Consolas, monospace;
+    }
+    .stage-head .clock.hot { color: var(--accent); }
+    .canvas-wrap {
+        position: relative; width: 100%;
+        aspect-ratio: 16 / 9;
+        border-radius: 12px; overflow: hidden;
+        border: 1px solid var(--border);
+        background: #fff;
+    }
+    .canvas-wrap canvas { position: absolute; inset: 0; width: 100%; height: 100%; }
+    #tv-orig { transition: opacity 1.4s ease; }
+    #tv-orig.hidden-img { opacity: 0; }
+    .grid-overlay { position: absolute; inset: 0; display: grid; }
+    .grid-overlay .gcell { position: relative; border: 1px dashed rgba(0,0,0,0.10); }
+    .grid-overlay.off { display: none; }
+    .grid-overlay .gcell.claimed { border: 3px solid; border-radius: 4px; }
+    .grid-overlay .gcell .who {
+        position: absolute; left: 2px; top: 2px;
+        font-size: 0.72rem; font-weight: bold;
+        padding: 1px 6px; border-radius: 6px; color: #111;
+        max-width: 95%; overflow: hidden; white-space: nowrap; text-overflow: ellipsis;
+    }
+    .scorebar {
+        display: flex; flex-wrap: wrap; gap: 8px; justify-content: center;
+        margin-top: 12px;
+    }
+    .chip {
+        display: flex; align-items: center; gap: 8px;
+        background: var(--bg-card); border: 1px solid var(--border);
+        border-radius: 999px; padding: 8px 14px; font-size: 1rem;
+    }
+    .chip.offline { opacity: 0.45; }
+    .chip .pts { color: #ffd671; font-weight: bold; }
+    .chip .inkmini { width: 44px; height: 7px; border-radius: 4px; background: var(--bg-secondary); overflow: hidden; }
+    .chip .inkmini i { display: block; height: 100%; background: #2ecc71; }
+    .tv-banner {
+        text-align: center; font-size: 1.25rem; margin-top: 12px;
+        color: var(--text-secondary);
+    }
+    .tv-banner b { color: var(--text-primary); }
+    .tv-controls { max-width: 520px; margin: 8px auto 0; width: 100%; }
+
+    /* ---- Phone paint UI ---- */
+    .paint-top { display: flex; align-items: center; gap: 12px; margin-bottom: 8px; }
+    .paint-top .clock {
+        font-size: 1.5rem; font-weight: bold; color: #ffd671;
+        font-family: ui-monospace, Menlo, Consolas, monospace;
+        min-width: 74px;
+    }
+    .paint-top .clock.hot { color: var(--accent); }
+    .inkbar { flex: 1; height: 16px; border-radius: 8px; background: var(--bg-secondary); border: 1px solid var(--border); overflow: hidden; }
+    .inkbar i { display: block; height: 100%; background: linear-gradient(90deg, #27ae60, #2ecc71); transition: width 0.2s; }
+    .inkbar.low i { background: linear-gradient(90deg, #c0392b, #e74c3c); }
+    .paint-canvas-wrap {
+        position: relative; width: 100%;
+        border-radius: 10px; overflow: hidden;
+        border: 2px solid var(--border); background: #fff;
+        touch-action: none;
+    }
+    .paint-canvas-wrap canvas { display: block; width: 100%; height: 100%; touch-action: none; }
+    .paint-canvas-wrap .lock {
+        position: absolute; inset: 0; display: flex; align-items: center; justify-content: center;
+        background: rgba(15,15,26,0.55); color: #fff; font-weight: bold; font-size: 1.05rem;
+        text-align: center; padding: 12px;
+    }
+    .palette { display: grid; grid-template-columns: repeat(8, 1fr); gap: 6px; margin-top: 10px; }
+    .palette .swatch {
+        aspect-ratio: 1; border-radius: 8px; cursor: pointer;
+        border: 2px solid rgba(255,255,255,0.15);
+    }
+    .palette .swatch.sel { border: 3px solid #ffd671; }
+    .toolrow { display: flex; gap: 6px; margin-top: 10px; align-items: stretch; }
+    .toolrow .tool {
+        flex: 1; min-height: 52px;
+        background: var(--bg-secondary); color: var(--text-primary);
+        border: 1px solid var(--border); border-radius: 10px;
+        font-size: 0.9rem; font-weight: bold; cursor: pointer;
+        display: flex; align-items: center; justify-content: center; gap: 4px;
+    }
+    .toolrow .tool.on { border-color: #ffd671; color: #ffd671; }
+    .brush-dot { border-radius: 50%; background: currentColor; display: inline-block; }
+    .memorize-label { text-align: center; font-size: 1.05rem; color: #ffd671; font-weight: bold; margin: 8px 0; }
+    .mini-map { position: relative; width: 100%; border-radius: 10px; overflow: hidden; border: 1px solid var(--border); }
+    .mini-map canvas { display: block; width: 100%; }
+    .mini-map .grid-overlay .gcell { cursor: pointer; border: 1px solid rgba(0,0,0,0.15); }
+    .mini-map .gcell.free:active { background: rgba(46,204,113,0.4); }
+    .mini-map .gcell.taken { background: rgba(0,0,0,0.45); }
+    .mini-map .gcell.mine { border: 3px solid #ffd671; background: rgba(255,214,113,0.25); }
+    .bigscore { text-align: center; font-size: 2.6rem; font-weight: bold; color: #ffd671; margin: 6px 0; }
+    .winner { text-align: center; font-size: 1.7rem; font-weight: bold; margin: 12px 0; }
+    .standings { list-style: none; }
+    .standings li {
+        display: flex; align-items: center; gap: 10px;
+        padding: 10px 6px; border-bottom: 1px solid var(--border); font-size: 1.1rem;
+    }
+    .standings li:last-child { border-bottom: none; }
+    .standings .pts { margin-left: auto; color: #ffd671; font-weight: bold; }
+    .refresh-btn {
+        position: fixed;
+        top: max(10px, env(safe-area-inset-top));
+        right: max(10px, env(safe-area-inset-right));
+        width: 44px; height: 44px;
+        display: none; align-items: center; justify-content: center;
+        background: var(--bg-card); border: 1px solid var(--border);
+        border-radius: 50%; font-size: 1.2rem; cursor: pointer; z-index: 50;
+        box-shadow: 0 2px 10px rgba(0,0,0,0.4);
+    }
+    .refresh-btn.visible { display: flex; }
+    @media (max-width: 700px) {
+        body.cast-view .app { max-width: 560px; }
+        .lobby-summary { flex-direction: column; }
+        .copycat-compare { grid-template-columns: 1fr; }
+        body.cast-view .room-code { font-size: clamp(2.5rem, 14vw, 4rem); }
+    }
+</style>
+</head>
+<body>
+<button id="refresh-btn" class="refresh-btn" onclick="location.reload()" title="Refresh connection">🔄</button>
+<div class="app">
+    <h1>Easel</h1>
+    <div class="subtitle">Cast-to-TV painting party &middot; phones are your brushes</div>
+
+    <!-- ENTRY -->
+    <div id="screen-entry" class="screen active">
+        <div class="tabs">
+            <button class="tab active" id="tab-create" onclick="switchTab('create')">Host (TV screen)</button>
+            <button class="tab" id="tab-join" onclick="switchTab('join')">Join (phone)</button>
+        </div>
+        <div id="panel-create" class="panel">
+            <p style="color:var(--text-secondary);font-size:0.92rem">Open this on the screen everyone can see — a TV, cast tab, or laptop. Players join from their phones.</p>
+            <button class="btn go" onclick="createGame()">Create Room 🎨</button>
+        </div>
+        <div id="panel-join" class="panel" style="display:none">
+            <label>Your name</label>
+            <input type="text" id="guest-name" placeholder="Artist" maxlength="14">
+            <label>Room code</label>
+            <input type="text" id="room-code-input" placeholder="e.g. ABX7QK" maxlength="12" autocapitalize="characters">
+            <button class="btn go" onclick="joinGame()">Join Room</button>
+        </div>
+        <div class="status" id="entry-status"></div>
+        <div class="panel">
+            <h3>How to play</h3>
+            <ul>
+                <li><b>Copycat:</b> choose from a few offered patches, memorize one, then repaint it after the picture vanishes. Harder patches multiply your points, and every result gets a side-by-side reveal.</li>
+                <li><b>Freestyle:</b> optionally choose a creative directive, then take turns adding limited ink to one shared canvas. Each painter can undo or clear their own turn.</li>
+                <li><b>Telephone:</b> choose a prompt pack, pass prompts through alternating drawings and guesses, then react to and save each revealed chain.</li>
+            </ul>
+        </div>
+    </div>
+
+    <!-- TV LOBBY -->
+    <div id="screen-tlobby" class="screen">
+        <div class="row lobby-summary" style="align-items:stretch">
+            <div class="panel" style="flex:1">
+                <h3>Room code</h3>
+                <div class="room-code" id="lobby-room-code"></div>
+                <div class="row">
+                    <button class="btn secondary" onclick="copyRoomCode()">Copy Code</button>
+                    <button class="btn secondary" onclick="copyJoinLink()">Copy Link</button>
+                </div>
+                <div class="status" id="lobby-status"></div>
+            </div>
+            <div class="panel" style="flex:1">
+                <h3>Artists</h3>
+                <ul class="player-list" id="lobby-players"></ul>
+            </div>
+        </div>
+        <div class="panel">
+            <h3>Game setup</h3>
+            <div class="row" style="flex-wrap:wrap">
+                <div style="flex:1;min-width:240px">
+                    <label>Mode</label>
+                    <div class="seg" id="seg-mode"></div>
+                    <div class="mode-desc" id="mode-desc"></div>
+                    <label id="lbl-rounds">Rounds</label>
+                    <div class="seg" id="seg-rounds"></div>
+                </div>
+                <div style="flex:1;min-width:240px">
+                    <label id="lbl-time">Painting time</label>
+                    <div class="seg" id="seg-time"></div>
+                    <label>Ink supply</label>
+                    <div class="seg" id="seg-ink"></div>
+                </div>
+            </div>
+            <label>Picture</label>
+            <div class="seg" id="seg-scene"></div>
+            <div id="custom-image-wrap" style="display:none">
+                <label class="btn secondary" for="custom-image-input" style="text-align:center;cursor:pointer">Choose an image</label>
+                <input type="file" id="custom-image-input" accept="image/*" style="display:none">
+                <div class="status" id="custom-image-status"></div>
+            </div>
+            <div id="tel-pack-wrap" style="display:none">
+                <label>Prompt pack</label>
+                <div class="seg" id="seg-tel-pack"></div>
+            </div>
+            <div id="fs-directive-wrap" style="display:none">
+                <label>Creative directive</label>
+                <div class="seg" id="seg-fs-directive"></div>
+                <input type="text" id="fs-directive-input" placeholder="e.g. a haunted underwater birthday" maxlength="60" style="display:none">
+            </div>
+        </div>
+        <button class="btn go" id="btn-start" onclick="startGame()" disabled>Waiting for artists...</button>
+    </div>
+
+    <!-- TV STAGE -->
+    <div id="screen-stage" class="screen">
+        <div class="host-toolbar" id="host-toolbar">
+            <button id="host-pause" onclick="togglePauseGame()" title="Pause or resume the current timer">Pause</button>
+            <button id="host-add-time" onclick="addGameTime(15000)" title="Add fifteen seconds">+15s</button>
+            <button id="host-skip" onclick="skipCurrentPhase()" title="Advance the current phase">Skip</button>
+        </div>
+        <div class="stage-head">
+            <span class="phase-label" id="tv-phase"></span>
+            <span class="clock" id="tv-clock"></span>
+        </div>
+        <div class="canvas-wrap">
+            <canvas id="tv-orig" width="1280" height="720"></canvas>
+            <canvas id="tv-paint" width="1280" height="720"></canvas>
+            <div class="grid-overlay off" id="tv-grid"></div>
+        </div>
+        <div class="copycat-compare" id="copycat-compare">
+            <div class="compare-pane">Original patch<canvas id="compare-original" width="480" height="270"></canvas></div>
+            <div class="compare-pane">Repainted patch<canvas id="compare-painted" width="480" height="270"></canvas></div>
+        </div>
+        <div class="scorebar" id="tv-scores"></div>
+        <div class="tv-banner" id="tv-banner"></div>
+        <div class="tv-banner" id="tv-gallery-label" style="font-size:0.95rem"></div>
+        <div class="tv-controls" id="tv-controls"></div>
+    </div>
+
+    <!-- PHONE LOBBY -->
+    <div id="screen-plobby" class="screen">
+        <div class="panel">
+            <h3>You're in! 🎨</h3>
+            <p style="color:var(--text-secondary)">Watch the TV — the host starts the game from there.</p>
+        </div>
+        <div class="panel">
+            <h3>Artists</h3>
+            <ul class="player-list" id="plobby-players"></ul>
+        </div>
+    </div>
+
+    <!-- PHONE SELECT -->
+    <div id="screen-select" class="screen">
+        <div class="memorize-label" id="select-label">Pick your patch!</div>
+        <div class="mini-map">
+            <canvas id="select-canvas" width="640" height="360"></canvas>
+            <div class="grid-overlay" id="select-grid"></div>
+        </div>
+        <div class="status" id="select-status"></div>
+    </div>
+
+    <!-- PHONE MEMORIZE -->
+    <div id="screen-memorize" class="screen">
+        <div class="memorize-label">MEMORIZE your patch! <span id="memo-clock"></span></div>
+        <div class="paint-canvas-wrap">
+            <canvas id="memo-canvas"></canvas>
+        </div>
+        <div class="status">The picture is about to vanish...</div>
+    </div>
+
+    <!-- PHONE PAINT (copycat tile / telephone drawing) -->
+    <div id="screen-paint" class="screen">
+        <div class="memorize-label" id="paint-prompt" style="display:none"></div>
+        <div class="paint-top">
+            <span class="clock" id="paint-clock"></span>
+            <div class="inkbar" id="paint-inkbar"><i id="paint-ink" style="width:100%"></i></div>
+        </div>
+        <div class="paint-canvas-wrap" id="paint-wrap">
+            <canvas id="paint-canvas"></canvas>
+        </div>
+        <div class="palette" id="paint-palette"></div>
+        <div class="toolrow" id="paint-tools"></div>
+        <div class="row">
+            <button class="btn secondary" onclick="phoneUndo()">↩️ Undo</button>
+            <button class="btn secondary" onclick="phoneClear()">🗑️ Clear</button>
+            <button class="btn go" onclick="phoneDone()">✔️ Done</button>
+        </div>
+    </div>
+
+    <!-- PHONE FREESTYLE -->
+    <div id="screen-fs" class="screen">
+        <div class="directive-note" id="fs-directive-note" style="display:none"></div>
+        <div class="paint-top">
+            <span class="clock" id="fs-clock"></span>
+            <div class="inkbar" id="fs-inkbar"><i id="fs-ink" style="width:100%"></i></div>
+        </div>
+        <div class="paint-canvas-wrap" id="fs-wrap">
+            <canvas id="fs-canvas"></canvas>
+            <div class="lock" id="fs-lock" style="display:none"></div>
+        </div>
+        <div class="palette" id="fs-palette"></div>
+        <div class="toolrow" id="fs-tools"></div>
+        <div class="row" id="fs-turn-controls">
+            <button class="btn secondary" id="fs-undo" onclick="phoneFsUndo()">↩️ Undo</button>
+            <button class="btn secondary" id="fs-clear" onclick="phoneFsClear()">🗑️ Clear Turn</button>
+            <button class="btn go" id="fs-endturn" onclick="phoneEndTurn()">✔️ End Turn</button>
+        </div>
+    </div>
+
+    <!-- PHONE PROMPT (telephone) -->
+    <div id="screen-prompt" class="screen">
+        <div class="panel" style="margin-top:16px">
+            <h3>✏️ Write a prompt <span class="tag" id="prompt-clock"></span></h3>
+            <p style="color:var(--text-secondary);font-size:0.92rem">Another artist will have to draw this. Keep it drawable... or don't. 😈</p>
+            <input type="text" id="prompt-input" placeholder="e.g. a dancing robot" maxlength="40">
+            <div class="row">
+                <button class="btn secondary" onclick="randomPrompt()">🎲 Random</button>
+                <button class="btn go" onclick="submitPrompt()">Submit</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- PHONE GUESS (telephone) -->
+    <div id="screen-guess" class="screen">
+        <div class="memorize-label">🤔 What is this? <span id="guess-clock"></span></div>
+        <div class="paint-canvas-wrap" id="guess-wrap">
+            <canvas id="guess-canvas"></canvas>
+        </div>
+        <input type="text" id="guess-input" placeholder="Your guess..." maxlength="40">
+        <button class="btn go" onclick="submitGuess()">Submit Guess</button>
+    </div>
+
+    <!-- PHONE WAIT / REVEAL / FINAL -->
+    <div id="screen-pwait" class="screen">
+        <div class="panel" style="margin-top:24px;text-align:center">
+            <h3 id="pwait-title">Hang tight...</h3>
+            <p id="pwait-msg" style="color:var(--text-secondary);margin-top:6px"></p>
+        </div>
+        <div class="bigscore" id="pwait-score" style="display:none"></div>
+        <div class="panel" id="pwait-standings-panel" style="display:none">
+            <h3>Standings</h3>
+            <ul class="standings" id="pwait-standings"></ul>
+        </div>
+        <div id="pwait-extra"></div>
+    </div>
+
+    <!-- HOST DISCONNECTED -->
+    <div id="screen-host-lost" class="screen">
+        <div class="panel" style="margin-top:24px">
+            <h3>📡 Lost contact with the TV</h3>
+            <p style="color:var(--text-secondary);margin-top:6px">The host screen dropped. If it comes back, reconnect below.</p>
+        </div>
+        <button class="btn" onclick="tryReconnectGuest()">Try Reconnect</button>
+        <button class="btn secondary" onclick="leaveGame()">Leave Game</button>
+        <div class="status" id="host-lost-status"></div>
+    </div>
+</div>
+
+<script>
+// ============================================================
+// CONSTANTS
+// ============================================================
+const PEER_PREFIX = 'easel-';
+const HEARTBEAT_INTERVAL_MS = 3000;
+const HEARTBEAT_TIMEOUT_MS = 12000;
+const GRACE_MS = 10000;           // freestyle: disconnected painter's window
+const DEFAULT_GRID_C = 6, DEFAULT_GRID_R = 4;
+const IMG_W = 1280, IMG_H = 720;
+const SELECT_MS = 45000;
+const MEMORIZE_MS = 8000;
+
+const PLAYER_COLORS = ['#5dade2','#ec7063','#2ecc71','#f39c12','#9b59b6','#1abc9c','#fd79a8','#f5b041'];
+const PALETTE = ['#ffffff','#000000','#7f8c8d','#8d5524','#e74c3c','#e67e22','#f1c40f','#a3e048',
+                 '#27ae60','#1abc9c','#87ceeb','#2980b9','#1a2a6c','#9b59b6','#fd79a8','#f5d7b0'];
+const BRUSH_FRAC = { s: 0.035, m: 0.07, l: 0.14 };   // line width as fraction of surface width
+const SIZE_MULT  = { s: 0.5,   m: 1,    l: 2    };   // ink cost multiplier
+const INK_BUDGETS = { low: 4, normal: 6, high: 9, unlimited: 999 };
+
+// ============================================================
+// STROKE ENGINE (pure — shared by phone, TV, and scoring)
+// ============================================================
+function strokeLength(pts) {
+    let len = 0;
+    for (let i = 1; i < pts.length; i++) {
+        const dx = pts[i][0] - pts[i-1][0], dy = pts[i][1] - pts[i-1][1];
+        len += Math.sqrt(dx*dx + dy*dy);
+    }
+    return len;
+}
+function truncateStroke(pts, maxLen) {
+    if (maxLen <= 0) return pts.slice(0, 1);
+    const out = [pts[0]];
+    let used = 0;
+    for (let i = 1; i < pts.length; i++) {
+        const dx = pts[i][0] - pts[i-1][0], dy = pts[i][1] - pts[i-1][1];
+        const seg = Math.sqrt(dx*dx + dy*dy);
+        if (used + seg <= maxLen) {
+            out.push(pts[i]);
+            used += seg;
+        } else {
+            const t = (maxLen - used) / seg;
+            out.push([pts[i-1][0] + dx*t, pts[i-1][1] + dy*t]);
+            break;
+        }
+    }
+    return out;
+}
+function inkCost(stroke) {
+    return (strokeLength(stroke.pts) + 0.01) * (SIZE_MULT[stroke.s] || 1);
+}
+// Truncate a stroke to what the remaining budget allows; null if no ink at all.
+function fitStrokeToInk(stroke, inkLeft) {
+    const mult = SIZE_MULT[stroke.s] || 1;
+    if (inkLeft < 0.011 * mult) return null;
+    const maxLen = inkLeft / mult - 0.01;
+    let pts = stroke.pts;
+    if (strokeLength(pts) > maxLen) pts = truncateStroke(pts, maxLen);
+    const fitted = { c: stroke.c, s: stroke.s, pts };
+    return { stroke: fitted, cost: inkCost(fitted) };
+}
+function renderStrokeTo(ctx, stroke, W, H) {
+    const pts = stroke.pts;
+    if (!pts || !pts.length) return;
+    ctx.strokeStyle = stroke.c;
+    ctx.fillStyle = stroke.c;
+    ctx.lineWidth = (BRUSH_FRAC[stroke.s] || BRUSH_FRAC.m) * W;
+    ctx.lineCap = 'round';
+    ctx.lineJoin = 'round';
+    if (pts.length === 1) {
+        ctx.beginPath();
+        ctx.arc(pts[0][0]*W, pts[0][1]*H, ctx.lineWidth/2, 0, 7);
+        ctx.fill();
+        return;
+    }
+    ctx.beginPath();
+    ctx.moveTo(pts[0][0]*W, pts[0][1]*H);
+    for (let i = 1; i < pts.length; i++) ctx.lineTo(pts[i][0]*W, pts[i][1]*H);
+    ctx.stroke();
+}
+
+// ============================================================
+// SCORING (pure math + canvas sampling)
+// ============================================================
+function meanDist(a, b) {
+    let sum = 0;
+    const n = a.length / 4;
+    for (let i = 0; i < a.length; i += 4) {
+        const dr = a[i]-b[i], dg = a[i+1]-b[i+1], db = a[i+2]-b[i+2];
+        sum += Math.sqrt(dr*dr + dg*dg + db*db);
+    }
+    return sum / n;
+}
+function meanDistAtShift(a, b, W, H, dx, dy) {
+    let sum = 0;
+    for (let y = 0; y < H; y++) {
+        for (let x = 0; x < W; x++) {
+            const ai = (y * W + x) * 4;
+            const bx = x + dx, by = y + dy;
+            const inside = bx >= 0 && by >= 0 && bx < W && by < H;
+            const bi = inside ? (by * W + bx) * 4 : -1;
+            const br = inside ? b[bi] : 255;
+            const bg = inside ? b[bi + 1] : 255;
+            const bb = inside ? b[bi + 2] : 255;
+            const dr = a[ai] - br, dg = a[ai + 1] - bg, db = a[ai + 2] - bb;
+            sum += Math.sqrt(dr * dr + dg * dg + db * db);
+        }
+    }
+    return sum / (W * H);
+}
+function bestShiftedDist(a, b, W, H, maxShift) {
+    let best = Infinity;
+    for (let dy = -maxShift; dy <= maxShift; dy++) {
+        for (let dx = -maxShift; dx <= maxShift; dx++) {
+            best = Math.min(best, meanDistAtShift(a, b, W, H, dx, dy));
+        }
+    }
+    return best;
+}
+function meanColor(data) {
+    const out = [0, 0, 0];
+    const n = data.length / 4;
+    for (let i = 0; i < data.length; i += 4) {
+        out[0] += data[i]; out[1] += data[i + 1]; out[2] += data[i + 2];
+    }
+    return out.map(v => v / n);
+}
+function colorDist(a, b) {
+    return Math.hypot(a[0] - b[0], a[1] - b[1], a[2] - b[2]);
+}
+function imageDetail(data, W, H) {
+    let sum = 0, pairs = 0;
+    const dist = (i, j) => Math.hypot(data[i] - data[j], data[i + 1] - data[j + 1], data[i + 2] - data[j + 2]);
+    for (let y = 0; y < H; y++) {
+        for (let x = 0; x < W; x++) {
+            const i = (y * W + x) * 4;
+            if (x + 1 < W) { sum += dist(i, i + 4); pairs++; }
+            if (y + 1 < H) { sum += dist(i, i + W * 4); pairs++; }
+        }
+    }
+    return Math.max(0, Math.min(1, (sum / Math.max(1, pairs)) / 55));
+}
+// Score = how much of the gap between "blank white" and "perfect copy" you closed.
+// Near-white patches are worth less (denominator floor), so no farming empty sky.
+function scoreFromDists(blankDist, playerDist) {
+    return Math.round(100 * Math.max(0, Math.min(1, (blankDist - playerDist) / Math.max(blankDist, 25))));
+}
+function copycatGridFor(nPlayers, rounds) {
+    const total = Math.max(1, Math.max(1, nPlayers) * Math.max(1, rounds));
+    const targetRatio = IMG_W / IMG_H;
+    let best = { c: total, r: 1, score: Infinity };
+    for (let r = 1; r <= Math.sqrt(total); r++) {
+        if (total % r !== 0) continue;
+        const c = total / r;
+        const ratio = c / r;
+        const score = Math.abs(Math.log(ratio / targetRatio));
+        if (score < best.score) best = { c, r, score };
+    }
+    return { c: best.c, r: best.r, total };
+}
+function gridCols(gameOrView) {
+    return Math.max(1, Number(gameOrView && gameOrView.gridC) || DEFAULT_GRID_C);
+}
+function gridRows(gameOrView) {
+    return Math.max(1, Number(gameOrView && gameOrView.gridR) || DEFAULT_GRID_R);
+}
+function tileRect(c, r, W, H, cols, rows) {
+    cols = Math.max(1, Number(cols) || DEFAULT_GRID_C);
+    rows = Math.max(1, Number(rows) || DEFAULT_GRID_R);
+    const x1 = Math.round(c * W / cols);
+    const y1 = Math.round(r * H / rows);
+    const x2 = Math.round((c + 1) * W / cols);
+    const y2 = Math.round((r + 1) * H / rows);
+    return { x: x1, y: y1, w: x2 - x1, h: y2 - y1 };
+}
+function tileAspect(gameOrView) {
+    return (IMG_W / gridCols(gameOrView)) / (IMG_H / gridRows(gameOrView));
+}
+function difficultyMultiplier(stars) {
+    return stars >= 3 ? 1.3 : stars === 2 ? 1.15 : 1;
+}
+function computePatchDifficulties() {
+    const result = {};
+    const sample = document.createElement('canvas');
+    sample.width = 32; sample.height = 32;
+    const c = sample.getContext('2d', { willReadFrequently: true });
+    for (let r = 0; r < gridRows(G); r++) {
+        for (let col = 0; col < gridCols(G); col++) {
+            const rect = tileRect(col, r, IMG_W, IMG_H, gridCols(G), gridRows(G));
+            c.clearRect(0, 0, 32, 32);
+            c.drawImage(tvOrig, rect.x, rect.y, rect.w, rect.h, 0, 0, 32, 32);
+            const detail = imageDetail(c.getImageData(0, 0, 32, 32).data, 32, 32);
+            const stars = detail >= 0.34 ? 3 : detail >= 0.15 ? 2 : 1;
+            result[paintedKey(col, r)] = { stars, multiplier: difficultyMultiplier(stars), detail };
+        }
+    }
+    return result;
+}
+function shuffled(items) {
+    const out = items.slice();
+    for (let i = out.length - 1; i > 0; i--) {
+        const j = Math.floor(Math.random() * (i + 1));
+        [out[i], out[j]] = [out[j], out[i]];
+    }
+    return out;
+}
+function makePatchOffers() {
+    const painted = paintedMap();
+    const free = [];
+    for (let r = 0; r < gridRows(G); r++) for (let c = 0; c < gridCols(G); c++) {
+        if (!Object.prototype.hasOwnProperty.call(painted, paintedKey(c, r))) free.push({ c, r });
+    }
+    const active = G.players.map((p, i) => p.connected ? i : -1).filter(i => i >= 0);
+    const count = active.length ? Math.max(1, Math.min(3, Math.floor(free.length / active.length))) : 0;
+    const pools = [1, 2, 3].map(star => shuffled(free.filter(t =>
+        (G.patchDifficulty[paintedKey(t.c, t.r)] || {}).stars === star)));
+    const used = new Set();
+    G.offers = G.players.map(() => []);
+    for (let slot = 0; slot < count; slot++) {
+        for (const pIdx of active) {
+            const preferred = 1 + ((pIdx + slot) % 3);
+            let pick = null;
+            for (const star of [preferred, 1, 2, 3]) {
+                const pool = pools[star - 1];
+                while (pool.length && used.has(paintedKey(pool[pool.length - 1].c, pool[pool.length - 1].r))) pool.pop();
+                if (pool.length) { pick = pool.pop(); break; }
+            }
+            if (!pick) pick = free.find(t => !used.has(paintedKey(t.c, t.r)));
+            if (pick) {
+                used.add(paintedKey(pick.c, pick.r));
+                G.offers[pIdx].push(pick);
+            }
+        }
+    }
+}
+// Telephone mode: at step k, player p works on the chain owned by (p - k) mod n.
+// Odd steps are drawings, even steps are guesses; a chain visits every other player once.
+function chainForWorker(p, k, n) { return ((p - k) % n + n) % n; }
+function stepType(k) { return k % 2 === 1 ? 'draw' : 'guess'; }
+function chainSteps(n) { return Math.max(1, n - 1); }
+
+const PROMPTS = ['a dancing robot','grandma on a skateboard','a cat wedding','pirate walking a goldfish',
+'haunted toaster','T-rex making pancakes','alien tourist taking selfies','a snail race finish line',
+'penguin at the beach','wizard stuck in traffic','a very guilty dog','llama in pajamas',
+'ninja grocery shopping','octopus juggling','the world’s worst haircut','a dragon blowing birthday candles',
+'astronaut mowing the moon','banana in a business suit','vampire at the dentist','a sleepy volcano',
+'mermaid doing taxes','knight afraid of a butterfly','giraffe in a phone booth','a sandwich falling in love',
+'bigfoot on a scooter','chicken teaching math','a broken time machine','snowman in a sauna',
+'superhero losing their keys','a whale in a bathtub','cowboy riding a shopping cart','ghost doing yoga'];
+
+const PROMPT_PACKS = {
+    classic: { label: 'Classic', prompts: PROMPTS },
+    mystery: { label: 'Mystery', prompts: [
+        'the detective found a clue in the cake','a suspicious shadow at the museum','the missing trophy returns at midnight',
+        'a secret passage behind the refrigerator','the witness wore two different shoes','a locked room with an open umbrella',
+        'the librarian hides a coded message','a detective interviewing a snowman','the getaway car is a shopping cart',
+        'a magnifying glass points at the wrong suspect','the butler discovers glitter at the scene','a mysterious suitcase begins to sing'
+    ]},
+    movies: { label: 'Movie Night', prompts: [
+        'an action hero afraid of escalators','the final battle happens in a laundromat','a spy whose disguise is much too obvious',
+        'a dramatic chase on office chairs','an alien auditions for a musical','the villain explains the plan with puppets',
+        'a superhero stuck in airport security','a cowboy visits a space station','a time traveler misses the bus',
+        'a monster movie filmed in a dollhouse','a detective enters the wrong movie','the credits roll during the wedding'
+    ]},
+    chaos: { label: 'Chaos', prompts: [
+        'the moon applies for a desk job','a birthday cake escapes through a window','gravity changes its mind halfway through lunch',
+        'every shoe in town starts ringing','a tiny parade inside a vending machine','the worst possible invention wins first prize',
+        'a restaurant serves only invisible food','a traffic jam at the bottom of the ocean','Tuesday is cancelled without explanation',
+        'a castle made entirely of office supplies','the world championship of doing nothing','a family portrait taken during an earthquake'
+    ]}
+};
+
+const TELEPHONE_REACTIONS = [
+    { id: 'best', label: 'Best Drawing' },
+    { id: 'twist', label: 'Biggest Plot Twist' },
+    { id: 'accurate', label: 'Most Accurate' },
+    { id: 'lost', label: 'How Did We Get Here?' },
+];
+
+const FREESTYLE_DIRECTIVES = [
+    'a city where gravity stopped working',
+    'a suspiciously cheerful haunted house',
+    'an underwater birthday party',
+    'the strangest roadside attraction',
+    'a royal portrait gone terribly wrong',
+    'a tiny civilization inside a refrigerator',
+    'a peaceful scene with one alarming detail',
+    'the worst possible theme park',
+    'an ordinary day on another planet',
+    'a creature assembled from household objects'
+];
+
+// ============================================================
+// SCENES — deterministic painters (host & phones render identically)
+// ============================================================
+function px(v, size) { return v * size; }
+const SCENES = [
+{ name: 'Sunset Sail', paint(g, W, H) {
+    const grad = g.createLinearGradient(0, 0, 0, H*0.68);
+    grad.addColorStop(0, '#2c3e70'); grad.addColorStop(0.55, '#e96443'); grad.addColorStop(1, '#f9d423');
+    g.fillStyle = grad; g.fillRect(0, 0, W, H*0.68);
+    g.fillStyle = '#f1c40f';
+    g.beginPath(); g.arc(W*0.5, H*0.66, W*0.07, 0, 7); g.fill();
+    g.fillStyle = '#16537e'; g.fillRect(0, H*0.65, W, H*0.35);
+    g.fillStyle = '#f9d423'; g.globalAlpha = 0.5;
+    g.fillRect(W*0.46, H*0.68, W*0.08, H*0.02);
+    g.fillRect(W*0.44, H*0.74, W*0.12, H*0.018);
+    g.globalAlpha = 1;
+    g.fillStyle = '#5b3a1a';
+    g.beginPath(); g.moveTo(W*0.38, H*0.78); g.lineTo(W*0.62, H*0.78);
+    g.lineTo(W*0.57, H*0.85); g.lineTo(W*0.43, H*0.85); g.closePath(); g.fill();
+    g.strokeStyle = '#3d2812'; g.lineWidth = W*0.008;
+    g.beginPath(); g.moveTo(W*0.5, H*0.78); g.lineTo(W*0.5, H*0.52); g.stroke();
+    g.fillStyle = '#fdfefe';
+    g.beginPath(); g.moveTo(W*0.505, H*0.53); g.lineTo(W*0.505, H*0.76); g.lineTo(W*0.63, H*0.76); g.closePath(); g.fill();
+    g.beginPath(); g.moveTo(W*0.495, H*0.55); g.lineTo(W*0.495, H*0.76); g.lineTo(W*0.40, H*0.76); g.closePath(); g.fill();
+}},
+{ name: 'Cozy Cottage', paint(g, W, H) {
+    g.fillStyle = '#87ceeb'; g.fillRect(0, 0, W, H);
+    g.fillStyle = '#f6d743';
+    g.beginPath(); g.arc(W*0.12, H*0.15, W*0.055, 0, 7); g.fill();
+    g.fillStyle = '#ffffff';
+    for (const [cx, cy, s] of [[0.35, 0.14, 1], [0.72, 0.22, 1.3]]) {
+        g.beginPath();
+        g.ellipse(W*cx, H*cy, W*0.07*s, H*0.045*s, 0, 0, 7);
+        g.ellipse(W*(cx+0.05), H*(cy+0.02), W*0.055*s, H*0.04*s, 0, 0, 7);
+        g.fill();
+    }
+    g.fillStyle = '#58b368'; g.fillRect(0, H*0.62, W, H*0.38);
+    g.fillStyle = '#3f8f4f';
+    g.beginPath(); g.ellipse(W*0.85, H*0.62, W*0.3, H*0.09, 0, 0, 7); g.fill();
+    g.fillStyle = '#f5deb3'; g.fillRect(W*0.32, H*0.42, W*0.26, H*0.28);
+    g.fillStyle = '#c0392b';
+    g.beginPath(); g.moveTo(W*0.29, H*0.42); g.lineTo(W*0.45, H*0.26); g.lineTo(W*0.61, H*0.42); g.closePath(); g.fill();
+    g.fillStyle = '#7b4a12'; g.fillRect(W*0.42, H*0.55, W*0.06, H*0.15);
+    g.fillStyle = '#ffe97f';
+    g.fillRect(W*0.345, H*0.47, W*0.05, H*0.07);
+    g.fillRect(W*0.505, H*0.47, W*0.05, H*0.07);
+    g.fillStyle = '#8d5524'; g.fillRect(W*0.75, H*0.42, W*0.035, H*0.24);
+    g.fillStyle = '#2e8b57';
+    g.beginPath();
+    g.arc(W*0.768, H*0.36, W*0.075, 0, 7);
+    g.arc(W*0.71, H*0.42, W*0.055, 0, 7);
+    g.arc(W*0.825, H*0.42, W*0.055, 0, 7);
+    g.fill();
+    g.fillStyle = '#d9c8a0';
+    g.beginPath(); g.moveTo(W*0.43, H*0.70); g.lineTo(W*0.47, H*0.70);
+    g.lineTo(W*0.55, H); g.lineTo(W*0.33, H); g.closePath(); g.fill();
+}},
+{ name: 'Balloon Ride', paint(g, W, H) {
+    const grad = g.createLinearGradient(0, 0, 0, H);
+    grad.addColorStop(0, '#6dd5fa'); grad.addColorStop(1, '#fffde4');
+    g.fillStyle = grad; g.fillRect(0, 0, W, H);
+    g.fillStyle = '#ffffff';
+    g.beginPath(); g.ellipse(W*0.2, H*0.6, W*0.09, H*0.05, 0, 0, 7); g.fill();
+    g.beginPath(); g.ellipse(W*0.85, H*0.5, W*0.08, H*0.045, 0, 0, 7); g.fill();
+    g.fillStyle = '#7cbf6b';
+    g.beginPath(); g.ellipse(W*0.25, H*1.05, W*0.55, H*0.22, 0, 0, 7); g.fill();
+    g.fillStyle = '#5ea952';
+    g.beginPath(); g.ellipse(W*0.85, H*1.08, W*0.5, H*0.25, 0, 0, 7); g.fill();
+    function balloon(cx, cy, r, c1, c2) {
+        g.fillStyle = c1;
+        g.beginPath(); g.ellipse(W*cx, H*cy, W*r, W*r*1.15, 0, 0, 7); g.fill();
+        g.fillStyle = c2;
+        g.beginPath(); g.ellipse(W*cx, H*cy, W*r*0.45, W*r*1.15, 0, 0, 7); g.fill();
+        g.strokeStyle = '#6b4a2b'; g.lineWidth = W*0.004;
+        g.beginPath();
+        g.moveTo(W*(cx-r*0.6), H*cy + W*r*0.9); g.lineTo(W*(cx-r*0.25), H*cy + W*r*1.55);
+        g.moveTo(W*(cx+r*0.6), H*cy + W*r*0.9); g.lineTo(W*(cx+r*0.25), H*cy + W*r*1.55);
+        g.stroke();
+        g.fillStyle = '#8d5524';
+        g.fillRect(W*(cx-r*0.28), H*cy + W*r*1.5, W*r*0.56, W*r*0.42);
+    }
+    balloon(0.5, 0.38, 0.11, '#e74c3c', '#f6d743');
+    balloon(0.18, 0.25, 0.055, '#2980b9', '#ffffff');
+    balloon(0.8, 0.2, 0.045, '#9b59b6', '#fd79a8');
+}},
+{ name: 'Under the Sea', paint(g, W, H) {
+    const grad = g.createLinearGradient(0, 0, 0, H);
+    grad.addColorStop(0, '#2eb5c9'); grad.addColorStop(1, '#0f4c81');
+    g.fillStyle = grad; g.fillRect(0, 0, W, H);
+    g.fillStyle = '#e0c068'; g.fillRect(0, H*0.85, W, H*0.15);
+    g.strokeStyle = '#2e8b57'; g.lineWidth = W*0.012; g.lineCap = 'round';
+    for (const bx of [0.12, 0.2, 0.88]) {
+        g.beginPath(); g.moveTo(W*bx, H*0.88);
+        g.bezierCurveTo(W*(bx-0.04), H*0.7, W*(bx+0.04), H*0.6, W*bx, H*0.45);
+        g.stroke();
+    }
+    g.fillStyle = '#e67e22';
+    g.beginPath(); g.ellipse(W*0.5, H*0.45, W*0.13, H*0.14, 0, 0, 7); g.fill();
+    g.beginPath(); g.moveTo(W*0.62, H*0.45); g.lineTo(W*0.72, H*0.35); g.lineTo(W*0.72, H*0.55); g.closePath(); g.fill();
+    g.fillStyle = '#f5f5f5';
+    g.beginPath(); g.arc(W*0.44, H*0.42, W*0.022, 0, 7); g.fill();
+    g.fillStyle = '#111';
+    g.beginPath(); g.arc(W*0.437, H*0.42, W*0.011, 0, 7); g.fill();
+    g.strokeStyle = '#c9660f'; g.lineWidth = W*0.008;
+    g.beginPath(); g.moveTo(W*0.5, H*0.33); g.lineTo(W*0.5, H*0.57); g.stroke();
+    g.fillStyle = '#f6d743';
+    for (const [fx, fy] of [[0.22, 0.7], [0.3, 0.76]]) {
+        g.beginPath(); g.ellipse(W*fx, H*fy, W*0.035, H*0.04, 0, 0, 7); g.fill();
+        g.beginPath(); g.moveTo(W*(fx+0.032), H*fy); g.lineTo(W*(fx+0.06), H*(fy-0.03)); g.lineTo(W*(fx+0.06), H*(fy+0.03)); g.closePath(); g.fill();
+    }
+    g.strokeStyle = 'rgba(255,255,255,0.8)'; g.lineWidth = W*0.004;
+    for (const [bx, by, br] of [[0.66,0.28,0.012],[0.69,0.2,0.016],[0.64,0.13,0.01],[0.15,0.3,0.013],[0.12,0.22,0.01]]) {
+        g.beginPath(); g.arc(W*bx, H*by, W*br, 0, 7); g.stroke();
+    }
+}},
+{ name: 'City Nights', paint(g, W, H) {
+    g.fillStyle = '#0b1a3a'; g.fillRect(0, 0, W, H);
+    g.fillStyle = '#f0ead6';
+    g.beginPath(); g.arc(W*0.82, H*0.18, W*0.05, 0, 7); g.fill();
+    g.fillStyle = '#d8d0b8';
+    g.beginPath(); g.arc(W*0.80, H*0.165, W*0.012, 0, 7); g.arc(W*0.84, H*0.2, W*0.008, 0, 7); g.fill();
+    g.fillStyle = '#ffffff';
+    for (const [sx, sy] of [[0.08,0.1],[0.2,0.22],[0.3,0.08],[0.42,0.16],[0.55,0.07],[0.63,0.2],[0.72,0.1],[0.9,0.32],[0.15,0.35],[0.5,0.28],[0.35,0.3],[0.95,0.12]]) {
+        g.fillRect(W*sx, H*sy, W*0.006, W*0.006);
+    }
+    const builds = [[0.02,0.45,0.14],[0.18,0.3,0.16],[0.36,0.5,0.12],[0.5,0.24,0.17],[0.69,0.42,0.13],[0.84,0.34,0.15]];
+    builds.forEach(([bx, by, bw], i) => {
+        g.fillStyle = i % 2 ? '#27395e' : '#1f2d4d';
+        g.fillRect(W*bx, H*by, W*bw, H*(1-by));
+        g.fillStyle = '#ffd671';
+        for (let wy = by + 0.06; wy < 0.92; wy += 0.09) {
+            for (let wx = bx + 0.02; wx < bx + bw - 0.03; wx += 0.045) {
+                if ((Math.round(wx*100) + Math.round(wy*100)) % 3 !== 0) {
+                    g.fillRect(W*wx, H*wy, W*0.018, H*0.035);
+                }
+            }
+        }
+    });
+    g.fillStyle = '#0a1228'; g.fillRect(0, H*0.95, W, H*0.05);
+}},
+{ name: 'Fruit Bowl', paint(g, W, H) {
+    g.fillStyle = '#fdf6e3'; g.fillRect(0, 0, W, H);
+    g.fillStyle = '#8d5524'; g.fillRect(0, H*0.62, W, H*0.38);
+    g.fillStyle = '#6e401c'; g.fillRect(0, H*0.62, W, H*0.03);
+    g.fillStyle = '#9b59b6';
+    for (const [gx, gy] of [[0.6,0.42],[0.645,0.4],[0.69,0.42],[0.62,0.46],[0.665,0.455],[0.64,0.5]]) {
+        g.beginPath(); g.arc(W*gx, H*gy, W*0.023, 0, 7); g.fill();
+    }
+    g.fillStyle = '#e74c3c';
+    g.beginPath(); g.arc(W*0.38, H*0.47, W*0.06, 0, 7); g.fill();
+    g.strokeStyle = '#5b3a1a'; g.lineWidth = W*0.006;
+    g.beginPath(); g.moveTo(W*0.38, H*0.37); g.lineTo(W*0.39, H*0.31); g.stroke();
+    g.fillStyle = '#e67e22';
+    g.beginPath(); g.arc(W*0.5, H*0.5, W*0.052, 0, 7); g.fill();
+    g.strokeStyle = '#f6d743'; g.lineWidth = W*0.024; g.lineCap = 'round';
+    g.beginPath(); g.moveTo(W*0.3, H*0.44);
+    g.quadraticCurveTo(W*0.24, H*0.32, W*0.36, H*0.28); g.stroke();
+    g.fillStyle = '#2980b9';
+    g.beginPath(); g.ellipse(W*0.5, H*0.55, W*0.26, H*0.16, 0, 0, Math.PI); g.fill();
+    g.fillStyle = '#1a5a8a';
+    g.beginPath(); g.ellipse(W*0.5, H*0.55, W*0.26, H*0.03, 0, 0, 7); g.fill();
+    g.fillStyle = 'rgba(0,0,0,0.15)';
+    g.beginPath(); g.ellipse(W*0.5, H*0.73, W*0.3, H*0.035, 0, 0, 7); g.fill();
+}},
+];
+let customSceneImage = null;
+function drawScene(ctx, W, H, id, imageData) {
+    ctx.save();
+    ctx.fillStyle = '#fff';
+    ctx.fillRect(0, 0, W, H);
+    if (id === -2 && (customSceneImage || imageData)) {
+        const drawCustom = img => {
+            const scale = Math.max(W / img.naturalWidth, H / img.naturalHeight);
+            const sw = W / scale, sh = H / scale;
+            const sx = (img.naturalWidth - sw) / 2, sy = (img.naturalHeight - sh) / 2;
+            ctx.drawImage(img, sx, sy, sw, sh, 0, 0, W, H);
+        };
+        if (customSceneImage && customSceneImage.complete) drawCustom(customSceneImage);
+        else if (imageData) {
+            const img = new Image();
+            img.onload = () => drawCustom(img);
+            img.src = imageData;
+        }
+    } else {
+        SCENES[((id % SCENES.length) + SCENES.length) % SCENES.length].paint(ctx, W, H);
+    }
+    ctx.restore();
+}
+
+// ============================================================
+// SHARED STATE
+// ============================================================
+let isHost = false;
+let peer = null;
+let roomCode = '';
+let myName = '';
+let hostConn = null;
+const guestConns = new Map();
+
+let lobbyPlayers = [];   // host: [{id, name, connected}] — guests only, host is the TV
+let G = null;            // host: active game
+let phaseTimer = null;
+let graceTimer = null;
+
+let V = null;            // guest: latest view
+let clockInterval = null;
+let clockDeadline = 0;
+
+// Phone paint state
+let myStrokes = [];      // copycat: strokes for my tile this round
+let fsStrokes = [];      // freestyle: all strokes [{pIdx, stroke}]
+let activeImageData = '';
+let activePhoneTaskKey = '';
+let inkLeft = 0;
+let curColor = '#000000';
+let curBrush = 'm';
+let drawing = false;
+let curPts = [];
+
+// Lobby settings (host)
+let settings = { mode: 'copycat', rounds: 3, paintSec: 120, ink: 'normal',
+                 cycles: 3, turnSec: 60, turnInk: 3, scene: -1,   // scene -1 = random
+                 drawSec: 60, fsDirectiveMode: 'none', fsDirective: '',
+                 promptPack: 'classic', customImageData: '', customImageName: '' };
+document.getElementById('fs-directive-input').addEventListener('input', e => {
+    settings.fsDirective = e.target.value.slice(0, 60);
+    autoSaveState();
+});
+document.getElementById('custom-image-input').addEventListener('change', e => {
+    const file = e.target.files && e.target.files[0];
+    if (file) loadCustomImage(file);
+});
+
+// ============================================================
+// UI HELPERS
+// ============================================================
+const AWAKE_SCREENS = new Set(['screen-paint', 'screen-fs', 'screen-stage', 'screen-select', 'screen-memorize']);
+const REFRESH_SCREENS = new Set(['screen-tlobby', 'screen-stage', 'screen-plobby', 'screen-select',
+    'screen-memorize', 'screen-paint', 'screen-fs', 'screen-pwait', 'screen-host-lost']);
+
+function showScreen(id) {
+    document.querySelectorAll('.screen').forEach(s => s.classList.remove('active'));
+    document.getElementById(id).classList.add('active');
+    window.scrollTo(0, 0);
+    if (AWAKE_SCREENS.has(id)) requestWakeLock(); else releaseWakeLock();
+    const btn = document.getElementById('refresh-btn');
+    if (btn) btn.classList.toggle('visible', REFRESH_SCREENS.has(id));
+}
+function setStatus(id, text) {
+    const el = document.getElementById(id);
+    if (el) el.textContent = text;
+}
+function escapeHtml(value) {
+    return String(value == null ? '' : value)
+        .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
+        .replace(/"/g, '&quot;').replace(/'/g, '&#039;');
+}
+function loadCustomImage(file) {
+    if (!file || !file.type.startsWith('image/')) return;
+    setStatus('custom-image-status', 'Preparing image...');
+    const reader = new FileReader();
+    reader.onload = () => {
+        const img = new Image();
+        img.onload = () => {
+            const cv = document.createElement('canvas');
+            cv.width = IMG_W; cv.height = IMG_H;
+            const c = cv.getContext('2d');
+            const scale = Math.max(IMG_W / img.naturalWidth, IMG_H / img.naturalHeight);
+            const sw = IMG_W / scale, sh = IMG_H / scale;
+            c.drawImage(img, (img.naturalWidth - sw) / 2, (img.naturalHeight - sh) / 2,
+                sw, sh, 0, 0, IMG_W, IMG_H);
+            settings.customImageData = cv.toDataURL('image/jpeg', 0.84);
+            settings.customImageName = file.name.slice(0, 60);
+            settings.scene = -2;
+            customSceneImage = new Image();
+            customSceneImage.onload = () => {
+                setStatus('custom-image-status', settings.customImageName + ' is ready');
+                renderTLobby();
+                autoSaveState();
+            };
+            customSceneImage.src = settings.customImageData;
+        };
+        img.onerror = () => setStatus('custom-image-status', 'That image could not be opened.');
+        img.src = reader.result;
+    };
+    reader.onerror = () => setStatus('custom-image-status', 'That image could not be read.');
+    reader.readAsDataURL(file);
+}
+function switchTab(which) {
+    document.getElementById('tab-create').classList.toggle('active', which === 'create');
+    document.getElementById('tab-join').classList.toggle('active', which === 'join');
+    document.getElementById('panel-create').style.display = which === 'create' ? '' : 'none';
+    document.getElementById('panel-join').style.display = which === 'join' ? '' : 'none';
+}
+function genRoomCode() {
+    const chars = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
+    let s = '';
+    for (let i = 0; i < 6; i++) s += chars[Math.floor(Math.random() * chars.length)];
+    return s;
+}
+function copyRoomCode() {
+    if (!roomCode) return;
+    try { navigator.clipboard.writeText(roomCode); setStatus('lobby-status', 'Code copied!'); }
+    catch (e) { setStatus('lobby-status', roomCode); }
+}
+function copyJoinLink() {
+    if (!roomCode) return;
+    const url = window.location.origin + window.location.pathname + '?room=' + roomCode;
+    try { navigator.clipboard.writeText(url); setStatus('lobby-status', 'Join link copied!'); }
+    catch (e) { setStatus('lobby-status', 'Code: ' + roomCode); }
+}
+function fmtClock(ms) {
+    const s = Math.max(0, Math.ceil(ms / 1000));
+    return Math.floor(s / 60) + ':' + String(s % 60).padStart(2, '0');
+}
+function formatDurationChoice(seconds) {
+    if (seconds < 60) return seconds + 's';
+    const minutes = Math.floor(seconds / 60);
+    const remainder = seconds % 60;
+    return minutes + 'm' + (remainder ? remainder + 's' : '');
+}
+let audioCueContext = null;
+let activeCueKey = '';
+const warnedCueKeys = new Set();
+function ensureAudioCues() {
+    try {
+        if (!audioCueContext) audioCueContext = new (window.AudioContext || window.webkitAudioContext)();
+        if (audioCueContext.state === 'suspended') audioCueContext.resume();
+    } catch (e) {}
+}
+function notifyCue(kind) {
+    if (isHost) return;
+    try { navigator.vibrate(kind === 'warning' ? [60, 50, 60] : 90); } catch (e) {}
+    try {
+        ensureAudioCues();
+        if (!audioCueContext) return;
+        const osc = audioCueContext.createOscillator();
+        const gain = audioCueContext.createGain();
+        osc.frequency.value = kind === 'warning' ? 520 : 740;
+        gain.gain.setValueAtTime(0.0001, audioCueContext.currentTime);
+        gain.gain.exponentialRampToValueAtTime(0.09, audioCueContext.currentTime + 0.015);
+        gain.gain.exponentialRampToValueAtTime(0.0001, audioCueContext.currentTime + 0.16);
+        osc.connect(gain); gain.connect(audioCueContext.destination);
+        osc.start(); osc.stop(audioCueContext.currentTime + 0.18);
+    } catch (e) {}
+}
+function maybeCueForView(view) {
+    const key = [view.mode, view.phase, view.round || 0, view.step || 0, view.painterIdx ?? -1].join(':');
+    const actionable = !view.paused && !view.submitted && (
+        view.mode === 'telephone' && ['prompt','draw','guess'].includes(view.phase) ||
+        view.mode === 'copycat' && ['select','memorize','paint'].includes(view.phase) ||
+        view.mode === 'freestyle' && view.phase === 'paint' && view.painterIdx === view.youIdx
+    );
+    if (actionable && key !== activeCueKey) notifyCue('turn');
+    activeCueKey = key;
+}
+function startClock(elId, msLeft, hotAtMs, frozen) {
+    stopClock();
+    clockDeadline = Date.now() + msLeft;
+    const el = () => document.getElementById(elId);
+    const tick = () => {
+        const left = clockDeadline - Date.now();
+        const e = el();
+        if (!e) return;
+        e.textContent = fmtClock(left);
+        e.classList.toggle('hot', left < (hotAtMs || 15000));
+        if (!isHost && !frozen && left > 0 && left <= 10000 && activeCueKey && !warnedCueKeys.has(activeCueKey)) {
+            warnedCueKeys.add(activeCueKey);
+            notifyCue('warning');
+        }
+    };
+    tick();
+    if (!frozen) clockInterval = setInterval(tick, 250);
+}
+function stopClock() {
+    if (clockInterval) { clearInterval(clockInterval); clockInterval = null; }
+}
+
+// ---- Wake lock ----
+let wakeLock = null;
+async function requestWakeLock() {
+    try {
+        if ('wakeLock' in navigator && !wakeLock) {
+            wakeLock = await navigator.wakeLock.request('screen');
+            wakeLock.addEventListener('release', () => { wakeLock = null; });
+        }
+    } catch (e) {}
+}
+function releaseWakeLock() {
+    if (wakeLock) { try { wakeLock.release(); } catch (e) {} wakeLock = null; }
+}
+document.addEventListener('visibilitychange', () => {
+    if (document.visibilityState === 'visible' && !wakeLock) {
+        const active = document.querySelector('.screen.active');
+        if (active && AWAKE_SCREENS.has(active.id)) requestWakeLock();
+    }
+});
+
+// ============================================================
+// SESSION + HEARTBEAT
+// ============================================================
+const SESSION_KEY = 'easel-session';
+const AUTOSAVE_KEY = 'easel-autosave';
+function saveSession() {
+    try { sessionStorage.setItem(SESSION_KEY, JSON.stringify({ isHost, roomCode, myName })); } catch (e) {}
+}
+function clearSession() {
+    try { sessionStorage.removeItem(SESSION_KEY); sessionStorage.removeItem(AUTOSAVE_KEY); } catch (e) {}
+}
+function getSession() {
+    try { const raw = sessionStorage.getItem(SESSION_KEY); return raw ? JSON.parse(raw) : null; } catch (e) { return null; }
+}
+function autoSaveState() {
+    if (!isHost) return;
+    try { sessionStorage.setItem(AUTOSAVE_KEY, JSON.stringify({ roomCode, lobbyPlayers, G, settings })); } catch (e) {}
+}
+
+let heartbeatInterval = null;
+let lastHeartbeat = 0;
+let heartbeatWatchdog = null;
+function startHostHeartbeat() {
+    stopHeartbeat();
+    heartbeatInterval = setInterval(() => {
+        for (const conn of guestConns.values()) {
+            try { conn.send({ type: 'ping' }); } catch (e) {}
+        }
+    }, HEARTBEAT_INTERVAL_MS);
+}
+function startGuestWatchdog() {
+    stopHeartbeat();
+    lastHeartbeat = Date.now();
+    heartbeatWatchdog = setInterval(() => {
+        if (isHost) return;
+        if (Date.now() - lastHeartbeat > HEARTBEAT_TIMEOUT_MS) {
+            stopHeartbeat();
+            handleHostDisconnect();
+        }
+    }, 2000);
+}
+function stopHeartbeat() {
+    if (heartbeatInterval) { clearInterval(heartbeatInterval); heartbeatInterval = null; }
+    if (heartbeatWatchdog) { clearInterval(heartbeatWatchdog); heartbeatWatchdog = null; }
+}
+
+// ============================================================
+// PEERJS - HOST (TV)
+// ============================================================
+function initHostPeer(onOpen, onError) {
+    peer = new Peer(PEER_PREFIX + roomCode, { debug: 1 });
+    peer.on('open', onOpen);
+    peer.on('connection', conn => {
+        conn.on('open', () => guestConns.set(conn.peer, conn));
+        conn.on('data', data => handleGuestMessage(conn, data));
+        conn.on('close', () => { guestConns.delete(conn.peer); onGuestLost(conn.peer); });
+        conn.on('error', e => console.warn('conn error', e));
+    });
+    peer.on('error', onError);
+}
+function createGame() {
+    isHost = true;
+    myName = 'TV';
+    document.body.classList.add('cast-view');
+    roomCode = genRoomCode();
+    setStatus('entry-status', 'Creating room...');
+    initHostPeer(() => {
+        lobbyPlayers = [];
+        saveSession();
+        startHostHeartbeat();
+        renderTLobby();
+        showScreen('screen-tlobby');
+        autoSaveState();
+    }, err => {
+        console.error(err);
+        if (err.type === 'unavailable-id') {
+            setTimeout(() => { try { peer.destroy(); } catch (e) {} createGame(); }, 400);
+        } else {
+            setStatus('entry-status', 'Error: ' + err.type);
+        }
+    });
+}
+function sendTo(playerId, msg) {
+    const conn = guestConns.get(playerId);
+    if (conn) { try { conn.send(msg); } catch (e) {} }
+}
+function broadcast(msg) {
+    for (const conn of guestConns.values()) {
+        try { conn.send(msg); } catch (e) {}
+    }
+}
+function playerIdx(peerId) {
+    return G ? G.players.findIndex(p => p.id === peerId) : -1;
+}
+
+function handleGuestMessage(conn, msg) {
+    if (!isHost) return;
+    switch (msg.type) {
+        case 'join': {
+            const name = (msg.name || 'Artist').trim().slice(0, 14) || 'Artist';
+            const existing = lobbyPlayers.find(p => p.name.toLowerCase() === name.toLowerCase());
+            if (existing) {
+                if (existing.id !== conn.peer) {
+                    const old = guestConns.get(existing.id);
+                    if (old) { try { old.close(); } catch (e) {} }
+                    guestConns.delete(existing.id);
+                }
+                existing.id = conn.peer;
+                existing.connected = true;
+                if (G) {
+                    const gp = G.players.find(p => p.name.toLowerCase() === name.toLowerCase());
+                    if (gp) { gp.id = conn.peer; gp.connected = true; }
+                    sendGameEntry(conn.peer);
+                    renderStage();
+                } else {
+                    broadcastLobby();
+                }
+                autoSaveState();
+                return;
+            }
+            if (G) { conn.send({ type: 'reject', reason: 'A game is underway — join after it ends.' }); return; }
+            if (lobbyPlayers.length >= 8) { conn.send({ type: 'reject', reason: 'Room is full (8 artists max).' }); return; }
+            lobbyPlayers.push({ id: conn.peer, name, connected: true });
+            broadcastLobby();
+            autoSaveState();
+            break;
+        }
+        case 'claim':   hostClaim(playerIdx(conn.peer), msg.c, msg.r); break;
+        case 'stroke':  hostStroke(playerIdx(conn.peer), msg.stroke); break;
+        case 'undo':    hostUndo(playerIdx(conn.peer)); break;
+        case 'clearTile': hostClearTile(playerIdx(conn.peer)); break;
+        case 'done':    hostPlayerDone(playerIdx(conn.peer)); break;
+        case 'fstroke': hostFsStroke(playerIdx(conn.peer), msg.stroke); break;
+        case 'fsUndo':  hostFsUndo(playerIdx(conn.peer)); break;
+        case 'fsClear': hostFsClear(playerIdx(conn.peer)); break;
+        case 'endTurn': hostEndTurn(playerIdx(conn.peer)); break;
+        case 'prompt':      hostPrompt(playerIdx(conn.peer), msg.text); break;
+        case 'submitDraw':  hostSubmitDraw(playerIdx(conn.peer), msg.strokes); break;
+        case 'submitGuess': hostSubmitGuess(playerIdx(conn.peer), msg.text); break;
+        case 'fav':         hostFav(playerIdx(conn.peer), msg.chain, msg.step); break;
+        case 'reaction':    hostTelephoneReaction(playerIdx(conn.peer), msg.chain, msg.category); break;
+    }
+}
+function onGuestLost(peerId) {
+    const lp = lobbyPlayers.find(p => p.id === peerId);
+    if (lp) lp.connected = false;
+    if (G) {
+        const idx = playerIdx(peerId);
+        if (idx >= 0 && G.players[idx].connected) {
+            G.players[idx].connected = false;
+            if (G.mode === 'freestyle' && G.phase === 'paint' && G.painterIdx === idx) {
+                armFsGrace();
+            }
+            if (G.mode === 'copycat' && G.phase === 'paint') checkAllDone();
+            renderStage();
+        }
+    } else if (lp) {
+        lobbyPlayers = lobbyPlayers.filter(p => p !== lp);
+        broadcastLobby();
+    }
+    autoSaveState();
+}
+function broadcastLobby() {
+    const view = {
+        type: 'view', phase: 'lobby',
+        players: lobbyPlayers.map(p => ({ name: p.name, connected: p.connected })),
+    };
+    lobbyPlayers.forEach((p, i) => {
+        if (p.connected) sendTo(p.id, Object.assign({ youIdx: i }, view));
+    });
+    if (isHost) renderTLobby();
+}
+
+// ============================================================
+// PEERJS - GUEST (phone)
+// ============================================================
+function connectToHost(onSuccess, onFail) {
+    peer = new Peer({ debug: 1 });
+    peer.on('open', () => {
+        hostConn = peer.connect(PEER_PREFIX + roomCode, { reliable: true });
+        hostConn.on('open', () => {
+            hostConn.send({ type: 'join', name: myName });
+            saveSession();
+            startGuestWatchdog();
+            onSuccess();
+        });
+        hostConn.on('data', data => handleHostMessage(data));
+        hostConn.on('close', () => { stopHeartbeat(); handleHostDisconnect(); });
+        hostConn.on('error', () => onFail('Connection error'));
+    });
+    peer.on('error', err => {
+        console.error(err);
+        onFail(err.type === 'peer-unavailable' ? 'Room not found — check the code.' : 'Error: ' + err.type);
+    });
+}
+function joinGame() {
+    ensureAudioCues();
+    const code = (document.getElementById('room-code-input').value || '')
+        .trim().toUpperCase().replace(/[^A-Z0-9]/g, '');
+    if (code.length < 4 || code.length > 12) { setStatus('entry-status', 'Enter a valid room code'); return; }
+    myName = (document.getElementById('guest-name').value || 'Artist').trim().slice(0, 14) || 'Artist';
+    isHost = false;
+    roomCode = code;
+    setStatus('entry-status', 'Connecting...');
+    connectToHost(() => setStatus('entry-status', 'Connected!'), m => setStatus('entry-status', m));
+}
+function sendHost(msg) {
+    if (hostConn) { try { hostConn.send(msg); } catch (e) {} }
+}
+function handleHostMessage(msg) {
+    lastHeartbeat = Date.now();
+    switch (msg.type) {
+        case 'view':    phoneView(msg); break;
+        case 'ink':     phoneInk(msg.left); break;
+        case 'fstroke':
+            fsStrokes.push({ pIdx: msg.pIdx, stroke: msg.stroke });
+            if (msg.pIdx !== (V && V.youIdx)) phoneFsDrawStroke(msg.stroke);
+            break;
+        case 'reject':
+            clearSession();
+            setStatus('entry-status', msg.reason);
+            showScreen('screen-entry');
+            try { hostConn.close(); } catch (e) {}
+            break;
+        case 'ping': break;
+    }
+}
+function handleHostDisconnect() {
+    if (isHost) return;
+    setStatus('host-lost-status', '');
+    showScreen('screen-host-lost');
+}
+function tryReconnectGuest() {
+    const session = getSession();
+    if (!session || !session.roomCode) { leaveGame(); return; }
+    isHost = false;
+    myName = session.myName || 'Artist';
+    roomCode = session.roomCode;
+    setStatus('host-lost-status', 'Reconnecting...');
+    try { if (hostConn) hostConn.close(); } catch (e) {}
+    try { if (peer) peer.destroy(); } catch (e) {}
+    hostConn = null; peer = null;
+    connectToHost(
+        () => setStatus('host-lost-status', 'Reconnected!'),
+        m => setStatus('host-lost-status', m));
+}
+function leaveGame() {
+    stopHeartbeat();
+    try { if (hostConn) hostConn.close(); } catch (e) {}
+    try { if (peer) peer.destroy(); } catch (e) {}
+    hostConn = null; peer = null;
+    clearSession();
+    setStatus('entry-status', 'Left game');
+    showScreen('screen-entry');
+}
+
+// ============================================================
+// HOST - LOBBY & SETTINGS
+// ============================================================
+function seg(containerId, options, current, onPick) {
+    const el = document.getElementById(containerId);
+    el.innerHTML = '';
+    for (const opt of options) {
+        const b = document.createElement('button');
+        b.textContent = opt.label;
+        if (opt.value === current) b.classList.add('on');
+        b.onclick = () => { onPick(opt.value); renderTLobby(); };
+        el.appendChild(b);
+    }
+}
+function removeLobbyPlayer(index) {
+    if (G || index < 0 || index >= lobbyPlayers.length) return;
+    const player = lobbyPlayers[index];
+    const conn = guestConns.get(player.id);
+    lobbyPlayers.splice(index, 1);
+    guestConns.delete(player.id);
+    if (conn) { try { conn.close(); } catch (e) {} }
+    broadcastLobby();
+    autoSaveState();
+}
+function renderTLobby() {
+    document.getElementById('lobby-room-code').textContent = roomCode;
+    const list = document.getElementById('lobby-players');
+    list.innerHTML = '';
+    if (!lobbyPlayers.length) list.innerHTML = '<li style="color:var(--text-secondary)">Join from your phones!</li>';
+    lobbyPlayers.forEach((p, i) => {
+        const li = document.createElement('li');
+        const dot = document.createElement('span');
+        dot.className = 'dot';
+        dot.style.background = PLAYER_COLORS[i % PLAYER_COLORS.length];
+        li.appendChild(dot);
+        li.appendChild(document.createTextNode(p.name));
+        const tag = document.createElement('span');
+        tag.className = 'tag';
+        tag.textContent = p.connected ? 'ready' : 'offline';
+        li.appendChild(tag);
+        const remove = document.createElement('button');
+        remove.className = 'icon-btn';
+        remove.textContent = '×';
+        remove.title = 'Remove ' + p.name;
+        remove.setAttribute('aria-label', 'Remove ' + p.name);
+        remove.onclick = () => removeLobbyPlayer(i);
+        li.appendChild(remove);
+        list.appendChild(li);
+    });
+    seg('seg-mode', [
+        { label: '🖼️ Copycat', value: 'copycat' },
+        { label: '🎨 Freestyle', value: 'freestyle' },
+        { label: '📞 Telephone', value: 'telephone' },
+    ], settings.mode, v => settings.mode = v);
+    const mode = settings.mode;
+    const n = lobbyPlayers.filter(p => p.connected).length;
+    const modeDesc = document.getElementById('mode-desc');
+    if (mode === 'copycat') {
+        const grid = n > 0 ? copycatGridFor(n, settings.rounds) : null;
+        modeDesc.textContent = grid
+            ? `Each artist paints one patch per round. The ${grid.c}×${grid.r} grid has ${grid.total} patches, so the final picture will be complete.`
+            : 'Choose from offered patches, weigh their difficulty multipliers, then repaint one from memory. The grid adapts so the final picture fills completely.';
+    } else if (mode === 'freestyle') {
+        modeDesc.textContent = 'Take turns adding limited ink to one shared canvas. A creative directive is optional, and each painter can undo their own turn.';
+    } else {
+        modeDesc.textContent = 'Three or more artists pass themed prompts through drawings and guesses, then react to each full-chain reveal.';
+    }
+    const roundsWrap = [document.getElementById('lbl-rounds'), document.getElementById('seg-rounds')];
+    roundsWrap.forEach(el => el.style.display = mode === 'telephone' ? 'none' : '');
+    if (mode === 'copycat') {
+        document.getElementById('lbl-rounds').textContent = 'Rounds';
+        seg('seg-rounds', [2,3,4,5].map(n => ({ label: String(n), value: n })), settings.rounds, v => settings.rounds = v);
+        document.getElementById('lbl-time').textContent = 'Painting time';
+        seg('seg-time', [60,90,120,180].map(n => ({ label: formatDurationChoice(n), value: n })), settings.paintSec, v => settings.paintSec = v);
+        seg('seg-ink', [
+            { label: 'Low', value: 'low' }, { label: 'Normal', value: 'normal' },
+            { label: 'High', value: 'high' }, { label: '∞', value: 'unlimited' },
+        ], settings.ink, v => settings.ink = v);
+    } else if (mode === 'freestyle') {
+        document.getElementById('lbl-rounds').textContent = 'Turns each';
+        seg('seg-rounds', [2,3,4].map(n => ({ label: String(n), value: n })), settings.cycles, v => settings.cycles = v);
+        document.getElementById('lbl-time').textContent = 'Seconds per turn';
+        seg('seg-time', [30,60,90].map(n => ({ label: n+'s', value: n })), settings.turnSec, v => settings.turnSec = v);
+        seg('seg-ink', [
+            { label: 'Low', value: 2 }, { label: 'Normal', value: 3 }, { label: 'High', value: 5 },
+        ], settings.turnInk, v => settings.turnInk = v);
+    } else {
+        document.getElementById('lbl-time').textContent = 'Drawing time';
+        seg('seg-time', [45,60,90].map(n => ({ label: n+'s', value: n })), settings.drawSec, v => settings.drawSec = v);
+        seg('seg-ink', [
+            { label: 'Low', value: 'low' }, { label: 'Normal', value: 'normal' },
+            { label: 'High', value: 'high' }, { label: '∞', value: 'unlimited' },
+        ], settings.ink, v => settings.ink = v);
+    }
+    const sceneWrap = document.getElementById('seg-scene');
+    sceneWrap.style.display = mode === 'copycat' ? '' : 'none';
+    sceneWrap.previousElementSibling.style.display = mode === 'copycat' ? '' : 'none';
+    if (mode === 'copycat') {
+        const sceneOpts = [{ label: '🎲 Random', value: -1 }, { label: '📷 Custom', value: -2 }]
+            .concat(SCENES.map((s, i) => ({ label: s.name, value: i })));
+        seg('seg-scene', sceneOpts, settings.scene, v => settings.scene = v);
+    }
+    const customWrap = document.getElementById('custom-image-wrap');
+    customWrap.style.display = mode === 'copycat' && settings.scene === -2 ? '' : 'none';
+    if (settings.customImageName) setStatus('custom-image-status', settings.customImageName + ' is ready');
+    const telPackWrap = document.getElementById('tel-pack-wrap');
+    telPackWrap.style.display = mode === 'telephone' ? '' : 'none';
+    if (mode === 'telephone') {
+        seg('seg-tel-pack', Object.entries(PROMPT_PACKS).map(([value, pack]) => ({ label: pack.label, value })),
+            settings.promptPack || 'classic', v => settings.promptPack = v);
+    }
+    const fsDirectiveWrap = document.getElementById('fs-directive-wrap');
+    fsDirectiveWrap.style.display = mode === 'freestyle' ? '' : 'none';
+    if (mode === 'freestyle') {
+        seg('seg-fs-directive', [
+            { label: 'None', value: 'none' },
+            { label: 'Random', value: 'random' },
+            { label: 'Custom', value: 'custom' },
+        ], settings.fsDirectiveMode || 'none', v => settings.fsDirectiveMode = v);
+        const input = document.getElementById('fs-directive-input');
+        input.style.display = settings.fsDirectiveMode === 'custom' ? '' : 'none';
+        if (document.activeElement !== input) input.value = settings.fsDirective || '';
+    }
+    const minN = mode === 'telephone' ? 3 : 1;
+    const btn = document.getElementById('btn-start');
+    const customMissing = mode === 'copycat' && settings.scene === -2 && !settings.customImageData;
+    btn.disabled = n < minN || customMissing;
+    const labels = { copycat: 'Copycat 🖼️', freestyle: 'Freestyle 🎨', telephone: 'Telephone 📞' };
+    btn.textContent = customMissing ? 'Choose a custom picture...'
+        : n < minN
+        ? (mode === 'telephone' ? 'Telephone needs 3+ artists...' : 'Waiting for artists...')
+        : `Start ${labels[mode]} with ${n} artist${n>1?'s':''}!`;
+}
+
+// ============================================================
+// HOST - GAME START
+// ============================================================
+function selectedFreestyleDirective() {
+    const mode = settings.fsDirectiveMode || 'none';
+    if (mode === 'random') return FREESTYLE_DIRECTIVES[Math.floor(Math.random() * FREESTYLE_DIRECTIVES.length)];
+    if (mode === 'custom') return (settings.fsDirective || '').trim().slice(0, 60);
+    return '';
+}
+let tvOrig, tvPaint, origCtx, paintCtx;
+function initTvCanvases() {
+    tvOrig = document.getElementById('tv-orig');
+    tvPaint = document.getElementById('tv-paint');
+    origCtx = tvOrig.getContext('2d');
+    paintCtx = tvPaint.getContext('2d');
+}
+function startGame() {
+    const roster = lobbyPlayers.filter(p => p.connected);
+    if (!roster.length) return;
+    if (settings.mode === 'telephone' && roster.length < 3) return;
+    initTvCanvases();
+    const players = roster.map((p, i) => ({
+        id: p.id, name: p.name, color: PLAYER_COLORS[i % PLAYER_COLORS.length],
+        connected: true, score: 0,
+        tile: null, strokes: [], inkSpent: 0, done: false,
+    }));
+    const imageId = settings.scene === -2 ? -2
+        : settings.scene >= 0 ? settings.scene : Math.floor(Math.random() * SCENES.length);
+    if (settings.mode === 'copycat') {
+        const grid = copycatGridFor(players.length, settings.rounds);
+        G = {
+            mode: 'copycat', phase: 'select', imageId,
+            round: 1, rounds: settings.rounds, gridC: grid.c, gridR: grid.r,
+            imageData: imageId === -2 ? settings.customImageData : '',
+            paintMs: settings.paintSec * 1000,
+            inkBudget: INK_BUDGETS[settings.ink],
+            players, painted: [], phaseEndsAt: Date.now() + SELECT_MS,
+            patchDifficulty: {}, offers: [], revealPtr: 0,
+        };
+        drawScene(origCtx, IMG_W, IMG_H, imageId, G.imageData);
+        G.patchDifficulty = computePatchDifficulties();
+        makePatchOffers();
+        paintCtx.clearRect(0, 0, IMG_W, IMG_H);
+        setPhaseTimer(SELECT_MS, endSelect);
+        broadcastSelect();
+    } else if (settings.mode === 'telephone') {
+        G = {
+            mode: 'telephone', phase: 'prompt', round: 1,
+            drawMs: settings.drawSec * 1000,
+            inkBudget: INK_BUDGETS[settings.ink],
+            players, chains: [], step: 0,
+            S: chainSteps(players.length),
+            submitted: players.map(() => false),
+            gallery: [], galleryPtr: 0, revealPtr: 0,
+            reactions: {}, promptPool: (PROMPT_PACKS[settings.promptPack] || PROMPT_PACKS.classic).prompts,
+            phaseEndsAt: Date.now() + 45000,
+        };
+        origCtx.clearRect(0, 0, IMG_W, IMG_H);
+        paintCtx.clearRect(0, 0, IMG_W, IMG_H);
+        setPhaseTimer(45000, endPromptPhase);
+        broadcastTelephone();
+    } else {
+        G = {
+            mode: 'freestyle', phase: 'paint',
+            cycles: settings.cycles, cycle: 1,
+            turnMs: settings.turnSec * 1000, turnInk: settings.turnInk,
+            directive: selectedFreestyleDirective(),
+            players, strokes: [], painterIdx: 0, turnStrokeStart: 0,
+            phaseEndsAt: Date.now() + settings.turnSec * 1000,
+        };
+        origCtx.clearRect(0, 0, IMG_W, IMG_H);
+        paintCtx.clearRect(0, 0, IMG_W, IMG_H);
+        G.players[0].inkSpent = 0;
+        setPhaseTimer(G.turnMs, () => hostEndTurn(G.painterIdx, true));
+        broadcastFs(true);
+    }
+    showScreen('screen-stage');
+    renderStage();
+    autoSaveState();
+}
+function setPhaseTimer(ms, fn) {
+    clearPhaseTimer();
+    G.paused = false;
+    G.pausedMsLeft = 0;
+    G.phaseEndsAt = Date.now() + ms;
+    phaseTimer = setTimeout(fn, ms);
+}
+function clearPhaseTimer() {
+    if (phaseTimer) { clearTimeout(phaseTimer); phaseTimer = null; }
+    if (graceTimer) { clearTimeout(graceTimer); graceTimer = null; }
+}
+function phaseRemaining() {
+    return G && G.paused ? Math.max(0, G.pausedMsLeft || 0)
+        : Math.max(0, G && G.phaseEndsAt ? G.phaseEndsAt - Date.now() : 0);
+}
+function currentPhaseHandler() {
+    if (!G) return null;
+    if (G.mode === 'copycat') {
+        if (G.phase === 'select') return endSelect;
+        if (G.phase === 'memorize') return startPaintPhase;
+        if (G.phase === 'paint') return endPaintPhase;
+    } else if (G.mode === 'telephone') {
+        if (G.phase === 'prompt') return endPromptPhase;
+        if (G.phase === 'draw' || G.phase === 'guess') return () => endTelephoneStep(G.step);
+    } else if (G.mode === 'freestyle' && G.phase === 'paint') {
+        return () => hostEndTurn(G.painterIdx, true);
+    }
+    return null;
+}
+function armCurrentPhaseTimer(ms) {
+    clearPhaseTimer();
+    const handler = currentPhaseHandler();
+    G.phaseEndsAt = Date.now() + ms;
+    if (handler) {
+        const grace = G.mode === 'telephone' && (G.phase === 'draw' || G.phase === 'guess') ? 4000 : 0;
+        phaseTimer = setTimeout(handler, ms + grace);
+    }
+}
+function broadcastCurrentGame() {
+    if (!G) return;
+    G.players.forEach((p, i) => { if (p.connected) sendTo(p.id, phaseViewFor(i)); });
+    renderStage();
+    autoSaveState();
+}
+function togglePauseGame() {
+    if (!G || !currentPhaseHandler()) return;
+    if (G.paused) {
+        const remaining = Math.max(500, G.pausedMsLeft || 0);
+        G.paused = false;
+        G.pausedMsLeft = 0;
+        armCurrentPhaseTimer(remaining);
+    } else {
+        G.pausedMsLeft = phaseRemaining();
+        G.paused = true;
+        clearPhaseTimer();
+    }
+    broadcastCurrentGame();
+}
+function addGameTime(ms) {
+    if (!G || !currentPhaseHandler()) return;
+    if (G.paused) G.pausedMsLeft = phaseRemaining() + ms;
+    else armCurrentPhaseTimer(phaseRemaining() + ms);
+    broadcastCurrentGame();
+}
+function skipCurrentPhase() {
+    if (!G) return;
+    const handler = currentPhaseHandler();
+    if (!handler) return;
+    G.paused = false;
+    G.pausedMsLeft = 0;
+    clearPhaseTimer();
+    handler();
+}
+function updateHostToolbar() {
+    const timed = !!currentPhaseHandler();
+    document.getElementById('host-toolbar').style.display = timed ? 'flex' : 'none';
+    document.getElementById('host-pause').textContent = G.paused ? 'Resume' : 'Pause';
+    document.getElementById('host-add-time').disabled = !timed;
+    document.getElementById('host-skip').disabled = !timed;
+}
+
+// ============================================================
+// HOST - COPYCAT FLOW
+// ============================================================
+function paintedKey(c, r) { return c + ',' + r; }
+function paintedMap() {
+    const m = {};
+    for (const t of G.painted) m[paintedKey(t.c, t.r)] = t.pIdx;
+    return m;
+}
+function takenMap() {
+    const m = {};
+    G.players.forEach((p, i) => { if (p.tile) m[paintedKey(p.tile.c, p.tile.r)] = i; });
+    return m;
+}
+function tileFree(c, r) {
+    return !paintedMap()[paintedKey(c, r)] && paintedMap()[paintedKey(c, r)] !== 0 &&
+           !Object.prototype.hasOwnProperty.call(takenMap(), paintedKey(c, r));
+}
+function hostClaim(idx, c, r) {
+    if (!G || G.paused || G.mode !== 'copycat' || G.phase !== 'select' || idx < 0) return;
+    if (c < 0 || r < 0 || c >= gridCols(G) || r >= gridRows(G)) return;
+    const offered = (G.offers && G.offers[idx]) || [];
+    if (offered.length && !offered.some(t => t.c === c && t.r === r)) return;
+    if (!tileFree(c, r)) return;
+    G.players[idx].tile = { c, r };
+    broadcastSelect();
+    renderStage();
+    autoSaveState();
+    if (G.players.filter(p => p.connected).every(p => p.tile)) endSelect();
+}
+function endSelect() {
+    if (!G || G.phase !== 'select') return;
+    clearPhaseTimer();
+    // Auto-assign tiles to anyone who didn't pick
+    const free = [];
+    for (let r = 0; r < gridRows(G); r++) for (let c = 0; c < gridCols(G); c++) if (tileFree(c, r)) free.push({ c, r });
+    for (const p of G.players) {
+        if (!p.tile && p.connected && free.length) {
+            const pIdx = G.players.indexOf(p);
+            const choices = ((G.offers && G.offers[pIdx]) || [])
+                .filter(t => free.some(f => f.c === t.c && f.r === t.r));
+            const pick = choices.length ? choices[Math.floor(Math.random() * choices.length)]
+                : free[Math.floor(Math.random() * free.length)];
+            p.tile = pick;
+            free.splice(free.findIndex(f => f.c === pick.c && f.r === pick.r), 1);
+        }
+    }
+    G.phase = 'memorize';
+    setPhaseTimer(MEMORIZE_MS, startPaintPhase);
+    G.players.forEach((p, i) => {
+        if (p.connected) sendTo(p.id, phaseViewFor(i));
+    });
+    renderStage();
+    autoSaveState();
+}
+function startPaintPhase() {
+    if (!G || G.phase !== 'memorize') return;
+    G.phase = 'paint';
+    G.players.forEach(p => { p.strokes = []; p.inkSpent = 0; p.done = !p.tile; });
+    setPhaseTimer(G.paintMs, endPaintPhase);
+    G.players.forEach((p, i) => { if (p.connected) sendTo(p.id, phaseViewFor(i)); });
+    renderStage();
+    autoSaveState();
+}
+function hostStroke(idx, stroke) {
+    if (!G || G.paused || G.mode !== 'copycat' || G.phase !== 'paint' || idx < 0) return;
+    const p = G.players[idx];
+    if (!p.tile || p.done) return;
+    if (!stroke || !Array.isArray(stroke.pts) || !stroke.pts.length || stroke.pts.length > 800) return;
+    const fit = fitStrokeToInk(stroke, G.inkBudget - p.inkSpent);
+    if (!fit) { sendTo(p.id, { type: 'ink', left: 0 }); return; }
+    p.strokes.push(fit.stroke);
+    p.inkSpent += fit.cost;
+    sendTo(p.id, { type: 'ink', left: Math.max(0, G.inkBudget - p.inkSpent) });
+    drawTileStroke(p.tile, fit.stroke);
+    renderStage();
+}
+function hostUndo(idx) {
+    if (!G || G.paused || G.mode !== 'copycat' || G.phase !== 'paint' || idx < 0) return;
+    const p = G.players[idx];
+    if (!p.tile || !p.strokes.length) return;
+    const s = p.strokes.pop();
+    p.inkSpent = Math.max(0, p.inkSpent - inkCost(s));
+    p.done = false;
+    sendTo(p.id, { type: 'ink', left: Math.max(0, G.inkBudget - p.inkSpent) });
+    redrawTile(p.tile, p.strokes);
+    renderStage();
+}
+function hostClearTile(idx) {
+    if (!G || G.paused || G.mode !== 'copycat' || G.phase !== 'paint' || idx < 0) return;
+    const p = G.players[idx];
+    if (!p.tile) return;
+    p.strokes = [];
+    p.inkSpent = 0;
+    p.done = false;
+    sendTo(p.id, { type: 'ink', left: G.inkBudget });
+    redrawTile(p.tile, []);
+    renderStage();
+}
+function hostPlayerDone(idx) {
+    if (!G || G.paused || G.mode !== 'copycat' || G.phase !== 'paint' || idx < 0) return;
+    G.players[idx].done = true;
+    renderStage();
+    checkAllDone();
+}
+function checkAllDone() {
+    if (G.players.filter(p => p.connected).every(p => p.done)) endPaintPhase();
+}
+function drawTileStroke(tile, stroke) {
+    const rect = tileRect(tile.c, tile.r, IMG_W, IMG_H, gridCols(G), gridRows(G));
+    paintCtx.save();
+    paintCtx.beginPath();
+    paintCtx.rect(rect.x, rect.y, rect.w, rect.h);
+    paintCtx.clip();
+    paintCtx.translate(rect.x, rect.y);
+    renderStrokeTo(paintCtx, stroke, rect.w, rect.h);
+    paintCtx.restore();
+}
+function redrawTile(tile, strokes) {
+    const rect = tileRect(tile.c, tile.r, IMG_W, IMG_H, gridCols(G), gridRows(G));
+    paintCtx.clearRect(rect.x, rect.y, rect.w, rect.h);
+    for (const s of strokes) drawTileStroke(tile, s);
+}
+function endPaintPhase() {
+    if (!G || G.phase !== 'paint') return;
+    clearPhaseTimer();
+    G.phase = 'reveal';
+    // Score each player's tile
+    G.lastScores = [];
+    for (const [i, p] of G.players.entries()) {
+        if (!p.tile) { G.lastScores.push({ pIdx: i, score: 0, points: 0, accuracy: 0, shape: 0, color: 0, difficulty: 1, multiplier: 1 }); continue; }
+        const rect = tileRect(p.tile.c, p.tile.r, IMG_W, IMG_H, gridCols(G), gridRows(G));
+        const result = scoreTileArea(rect, p.tile);
+        p.score += result.points;
+        G.lastScores.push(Object.assign({ pIdx: i, c: p.tile.c, r: p.tile.r, score: result.points }, result));
+        G.painted.push({ c: p.tile.c, r: p.tile.r, pIdx: i, round: G.round, strokes: p.strokes, score: result.points });
+    }
+    G.revealPtr = 0;
+    G.players.forEach(p => { p.tile = null; p.strokes = []; });
+    G.players.forEach((p, i) => { if (p.connected) sendTo(p.id, phaseViewFor(i)); });
+    renderStage();
+    autoSaveState();
+}
+function scoreTileArea(rect, tile) {
+    const sample = (src, size) => {
+        const cv = document.createElement('canvas');
+        cv.width = size; cv.height = size;
+        const c = cv.getContext('2d');
+        c.fillStyle = '#fff';
+        c.fillRect(0, 0, size, size);
+        if (src) c.drawImage(src, rect.x, rect.y, rect.w, rect.h, 0, 0, size, size);
+        return c.getImageData(0, 0, size, size).data;
+    };
+    const scoreAt = (size, shift) => {
+        const orig = sample(tvOrig, size);
+        const paint = sample(tvPaint, size);
+        const white = sample(null, size);
+        return scoreFromDists(meanDist(orig, white), bestShiftedDist(orig, paint, size, size, shift));
+    };
+    const fineSize = 48;
+    const origFine = sample(tvOrig, fineSize);
+    const paintFine = sample(tvPaint, fineSize);
+    const white = [255, 255, 255];
+    const colorScore = scoreFromDists(
+        colorDist(meanColor(origFine), white),
+        colorDist(meanColor(origFine), meanColor(paintFine))
+    );
+    const shapeScore = Math.round(scoreAt(24, 1) * 0.39 + scoreAt(fineSize, 2) * 0.61);
+    const accuracy = Math.round(Math.max(0, Math.min(100, shapeScore * 0.82 + colorScore * 0.18)));
+    const info = G.patchDifficulty[paintedKey(tile.c, tile.r)] || { stars: 1, multiplier: 1 };
+    const points = Math.round(accuracy * info.multiplier);
+    return { points, accuracy, shape: shapeScore, color: Math.round(colorScore),
+        difficulty: info.stars, multiplier: info.multiplier };
+}
+function advanceCopycatReveal() {
+    if (!G || G.mode !== 'copycat' || G.phase !== 'reveal') return;
+    G.revealPtr = Math.min(G.lastScores.length, (G.revealPtr || 0) + 1);
+    G.players.forEach((p, i) => { if (p.connected) sendTo(p.id, phaseViewFor(i)); });
+    renderStage();
+    autoSaveState();
+}
+function nextRound() {
+    if (!G || G.phase !== 'reveal') return;
+    const freeCount = gridCols(G) * gridRows(G) - G.painted.length;
+    const nConn = G.players.filter(p => p.connected).length;
+    if (freeCount <= 0 || nConn <= 0) { finishCopycat(); return; }
+    if (G.round >= G.rounds) G.rounds++;
+    G.round++;
+    G.phase = 'select';
+    G.players.forEach(p => { p.tile = null; p.done = false; });
+    makePatchOffers();
+    setPhaseTimer(SELECT_MS, endSelect);
+    broadcastSelect();
+    renderStage();
+    autoSaveState();
+}
+function finishCopycat() {
+    clearPhaseTimer();
+    G.phase = 'final';
+    G.players.forEach((p, i) => { if (p.connected) sendTo(p.id, phaseViewFor(i)); });
+    renderStage();
+    autoSaveState();
+}
+function broadcastSelect() {
+    G.players.forEach((p, i) => { if (p.connected) sendTo(p.id, phaseViewFor(i)); });
+}
+
+// One view message tailored per player, covering every copycat phase
+function phaseViewFor(i) {
+    const p = G.players[i];
+    const base = {
+        type: 'view', mode: G.mode, phase: G.phase, youIdx: i,
+        gridC: G.gridC, gridR: G.gridR,
+        paused: !!G.paused,
+        players: G.players.map(q => ({ name: q.name, color: q.color, score: q.score, connected: q.connected })),
+    };
+    if (G.mode === 'freestyle') {
+        return Object.assign(base, {
+            painterIdx: G.painterIdx, cycle: G.cycle, cycles: G.cycles,
+            msLeft: phaseRemaining(),
+            inkLeft: i === G.painterIdx ? Math.max(0, G.turnInk - G.players[i].inkSpent) : 0,
+            turnInk: G.turnInk,
+            directive: G.directive || '',
+            fsStrokes: G.strokes,
+        });
+    }
+    if (G.mode === 'telephone') {
+        Object.assign(base, { round: G.round, step: G.step, msLeft: phaseRemaining() });
+        if (G.phase === 'prompt') {
+            return Object.assign(base, { submitted: !!G.submitted[i], promptPool: G.promptPool });
+        }
+        if (G.phase === 'draw' || G.phase === 'guess') {
+            if (G.submitted[i]) return Object.assign(base, { submitted: true });
+            const task = telephoneTask(i);
+            return G.phase === 'draw'
+                ? Object.assign(base, { drawText: task.text, inkBudget: G.inkBudget })
+                : Object.assign(base, { guessStrokes: task.strokes });
+        }
+        if (G.phase === 'reveal') {
+            const done = G.revealPtr >= G.chains.length;
+            const chain = done ? null : G.chains[G.revealPtr];
+            return Object.assign(base, {
+                revealDone: done,
+                revealChain: done ? null : {
+                    chain: G.revealPtr,
+                    yourReaction: telephoneReactionFor(i, G.revealPtr),
+                    reactionCounts: telephoneReactionCounts(G.revealPtr),
+                    drawings: chain.steps.map((s, step) => s.type === 'draw' ? {
+                        step, artist: G.players[s.pIdx].name,
+                    } : null).filter(Boolean),
+                }
+            });
+        }
+        return base;
+    }
+    switch (G.phase) {
+        case 'select':
+            return Object.assign(base, {
+                round: G.round, rounds: G.rounds, imageId: G.imageId,
+                imageData: G.imageId === -2 ? G.imageData : '',
+                taken: takenMap(), painted: G.painted.map(t => ({ c: t.c, r: t.r, pIdx: t.pIdx })),
+                offers: (G.offers && G.offers[i]) || [], patchDifficulty: G.patchDifficulty,
+                yourTile: p.tile, msLeft: phaseRemaining(),
+            });
+        case 'memorize':
+            return Object.assign(base, {
+                imageId: G.imageId, imageData: G.imageId === -2 ? G.imageData : '', yourTile: p.tile,
+                patchDifficulty: G.patchDifficulty, msLeft: phaseRemaining(),
+            });
+        case 'paint':
+            return Object.assign(base, {
+                yourTile: p.tile, msLeft: phaseRemaining(),
+                inkLeft: Math.max(0, G.inkBudget - p.inkSpent), inkBudget: G.inkBudget,
+                myStrokes: p.strokes,
+            });
+        case 'reveal':
+            return Object.assign(base, {
+                round: G.round, rounds: G.rounds,
+                roundScores: G.lastScores, revealPtr: G.revealPtr,
+            });
+        case 'final':
+            return base;
+    }
+    return base;
+}
+function sendGameEntry(peerId) {
+    const i = playerIdx(peerId);
+    if (i >= 0) sendTo(peerId, phaseViewFor(i));
+}
+
+// ============================================================
+// HOST - FREESTYLE FLOW
+// ============================================================
+function hostFsStroke(idx, stroke) {
+    if (!G || G.paused || G.mode !== 'freestyle' || G.phase !== 'paint' || idx !== G.painterIdx) return;
+    if (!stroke || !Array.isArray(stroke.pts) || !stroke.pts.length || stroke.pts.length > 800) return;
+    const p = G.players[idx];
+    const fit = fitStrokeToInk(stroke, G.turnInk - p.inkSpent);
+    if (!fit) { sendTo(p.id, { type: 'ink', left: 0 }); return; }
+    G.strokes.push({ pIdx: idx, stroke: fit.stroke });
+    p.inkSpent += fit.cost;
+    renderStrokeTo(paintCtx, fit.stroke, IMG_W, IMG_H);
+    const left = Math.max(0, G.turnInk - p.inkSpent);
+    sendTo(p.id, { type: 'ink', left });
+    broadcast({ type: 'fstroke', pIdx: idx, stroke: fit.stroke });
+    renderStage();
+    autoSaveState();
+    if (left < 0.05) hostEndTurn(idx, true);
+}
+function redrawFreestyleHost() {
+    paintCtx.clearRect(0, 0, IMG_W, IMG_H);
+    paintCtx.fillStyle = '#fff';
+    paintCtx.fillRect(0, 0, IMG_W, IMG_H);
+    for (const entry of G.strokes) renderStrokeTo(paintCtx, entry.stroke, IMG_W, IMG_H);
+}
+function hostFsUndo(idx) {
+    if (!G || G.paused || G.mode !== 'freestyle' || G.phase !== 'paint' || idx !== G.painterIdx) return;
+    if (G.strokes.length <= (G.turnStrokeStart || 0)) return;
+    const entry = G.strokes.pop();
+    G.players[idx].inkSpent = Math.max(0, G.players[idx].inkSpent - inkCost(entry.stroke));
+    redrawFreestyleHost();
+    broadcastFs(true);
+    renderStage();
+    autoSaveState();
+}
+function hostFsClear(idx) {
+    if (!G || G.paused || G.mode !== 'freestyle' || G.phase !== 'paint' || idx !== G.painterIdx) return;
+    if (G.strokes.length <= (G.turnStrokeStart || 0)) return;
+    G.strokes.splice(G.turnStrokeStart || 0);
+    G.players[idx].inkSpent = 0;
+    redrawFreestyleHost();
+    broadcastFs(true);
+    renderStage();
+    autoSaveState();
+}
+function hostEndTurn(idx, force) {
+    if (!G || G.paused || G.mode !== 'freestyle' || G.phase !== 'paint') return;
+    if (!force && idx !== G.painterIdx) return;
+    if (force && idx !== G.painterIdx) return;
+    clearPhaseTimer();
+    // Find next painter; wrap = next cycle
+    const n = G.players.length;
+    let next = -1, wrapped = false;
+    for (let s = 1; s <= n; s++) {
+        const j = (G.painterIdx + s) % n;
+        if (G.painterIdx + s >= n) wrapped = true;
+        if (G.players[j].connected) { next = j; break; }
+    }
+    if (next < 0) next = (G.painterIdx + 1) % n;
+    if (wrapped) {
+        G.cycle++;
+        if (G.cycle > G.cycles) { finishFreestyle(); return; }
+    }
+    G.painterIdx = next;
+    G.players[next].inkSpent = 0;
+    G.turnStrokeStart = G.strokes.length;
+    setPhaseTimer(G.turnMs, () => hostEndTurn(G.painterIdx, true));
+    if (!G.players[next].connected) armFsGrace();
+    broadcastFs(false);
+    renderStage();
+    autoSaveState();
+}
+function armFsGrace() {
+    if (graceTimer) clearTimeout(graceTimer);
+    graceTimer = setTimeout(() => {
+        graceTimer = null;
+        if (G && G.mode === 'freestyle' && G.phase === 'paint' && !G.players[G.painterIdx].connected) {
+            hostEndTurn(G.painterIdx, true);
+        }
+    }, GRACE_MS);
+}
+function finishFreestyle() {
+    clearPhaseTimer();
+    G.phase = 'final';
+    broadcastFs(false);
+    renderStage();
+    autoSaveState();
+}
+function broadcastFs(includeStrokes) {
+    G.players.forEach((p, i) => {
+        if (!p.connected) return;
+        const v = phaseViewFor(i);
+        if (!includeStrokes && G.phase === 'paint') delete v.fsStrokes;
+        sendTo(p.id, v);
+    });
+}
+
+// ============================================================
+// HOST - TELEPHONE FLOW
+// ============================================================
+function sanitizeText(t, fallback) {
+    const s = (t || '').trim().slice(0, 40);
+    return s || fallback;
+}
+function hostPrompt(idx, text) {
+    if (!G || G.paused || G.mode !== 'telephone' || G.phase !== 'prompt' || idx < 0 || G.submitted[idx]) return;
+    const pool = G.promptPool || PROMPTS;
+    G.chains[idx] = { owner: idx, prompt: sanitizeText(text, pool[Math.floor(Math.random()*pool.length)]), steps: [] };
+    G.submitted[idx] = true;
+    renderStage();
+    if (G.players.every((p, i) => G.submitted[i] || !p.connected)) endPromptPhase();
+}
+function endPromptPhase() {
+    if (!G || G.phase !== 'prompt') return;
+    clearPhaseTimer();
+    const pool = G.promptPool || PROMPTS;
+    G.players.forEach((p, i) => {
+        if (!G.chains[i]) G.chains[i] = { owner: i,
+            prompt: pool[Math.floor(Math.random()*pool.length)], steps: [] };
+    });
+    startTelephoneStep(1);
+}
+function startTelephoneStep(k) {
+    if (k > G.S) { startTelephoneReveal(); return; }
+    G.step = k;
+    G.phase = stepType(k);
+    G.submitted = G.players.map(() => false);
+    const ms = G.phase === 'draw' ? G.drawMs : 45000;
+    setPhaseTimer(ms + 4000, () => endTelephoneStep(k)); // +4s: phones auto-submit at their own deadline
+    G.phaseEndsAt = Date.now() + ms;
+    broadcastTelephone();
+    renderStage();
+    autoSaveState();
+}
+// What player p works with at the current step
+function telephoneTask(p) {
+    const c = chainForWorker(p, G.step, G.players.length);
+    const chain = G.chains[c];
+    if (G.phase === 'draw') {
+        return { chain: c, text: G.step === 1 ? chain.prompt : chain.steps[G.step - 2].text };
+    }
+    return { chain: c, strokes: chain.steps[G.step - 2].strokes };
+}
+function hostSubmitDraw(idx, strokes) {
+    if (!G || G.paused || G.mode !== 'telephone' || G.phase !== 'draw' || idx < 0 || G.submitted[idx]) return;
+    if (!Array.isArray(strokes) || strokes.length > 500) strokes = [];
+    // Re-validate ink: keep strokes in order until the budget runs out
+    const clean = [];
+    let spent = 0;
+    for (const s of strokes) {
+        if (!s || !Array.isArray(s.pts) || !s.pts.length || s.pts.length > 800) continue;
+        const fit = fitStrokeToInk(s, G.inkBudget - spent);
+        if (!fit) break;
+        clean.push(fit.stroke);
+        spent += fit.cost;
+    }
+    const c = chainForWorker(idx, G.step, G.players.length);
+    G.chains[c].steps[G.step - 1] = { type: 'draw', pIdx: idx, strokes: clean };
+    G.submitted[idx] = true;
+    renderStage();
+    if (G.players.every((p, i) => G.submitted[i] || !p.connected)) endTelephoneStep(G.step);
+}
+function hostSubmitGuess(idx, text) {
+    if (!G || G.paused || G.mode !== 'telephone' || G.phase !== 'guess' || idx < 0 || G.submitted[idx]) return;
+    const c = chainForWorker(idx, G.step, G.players.length);
+    G.chains[c].steps[G.step - 1] = { type: 'guess', pIdx: idx, text: sanitizeText(text, '(no guess)') };
+    G.submitted[idx] = true;
+    renderStage();
+    if (G.players.every((p, i) => G.submitted[i] || !p.connected)) endTelephoneStep(G.step);
+}
+function endTelephoneStep(k) {
+    if (!G || G.step !== k || (G.phase !== 'draw' && G.phase !== 'guess')) return;
+    clearPhaseTimer();
+    // Fill in anything missing (timeouts, disconnects)
+    G.players.forEach((p, i) => {
+        const c = chainForWorker(i, k, G.players.length);
+        if (!G.chains[c].steps[k - 1]) {
+            G.chains[c].steps[k - 1] = G.phase === 'draw'
+                ? { type: 'draw', pIdx: i, strokes: [] }
+                : { type: 'guess', pIdx: i, text: '(no guess)' };
+        }
+    });
+    startTelephoneStep(k + 1);
+}
+function startTelephoneReveal() {
+    clearPhaseTimer();
+    G.phase = 'reveal';
+    G.revealPtr = 0;
+    G.reactions = {};
+    broadcastTelephone();
+    renderStage();
+    autoSaveState();
+}
+function revealNext() {
+    if (!G || G.phase !== 'reveal') return;
+    G.revealPtr++;
+    broadcastTelephone();
+    renderStage();
+    autoSaveState();
+}
+function revealPrevious() {
+    if (!G || G.phase !== 'reveal' || G.revealPtr <= 0) return;
+    G.revealPtr--;
+    broadcastTelephone();
+    renderStage();
+    autoSaveState();
+}
+function telephoneNewRound() {
+    if (!G || G.mode !== 'telephone') return;
+    G.round++;
+    G.phase = 'prompt';
+    G.chains = [];
+    G.step = 0;
+    G.revealPtr = 0;
+    G.submitted = G.players.map(() => false);
+    setPhaseTimer(45000, endPromptPhase);
+    broadcastTelephone();
+    renderStage();
+    autoSaveState();
+}
+function hostFav(idx, chain, step) {
+    if (!G || G.mode !== 'telephone' || idx < 0) return;
+    const ch = G.chains[chain];
+    if (!ch || !ch.steps[step] || ch.steps[step].type !== 'draw') return;
+    const key = G.round + '-' + chain + '-' + step;
+    if (G.gallery.some(g => g.key === key)) return;
+    const label = step === 0 ? ch.prompt : (ch.steps[step - 1].text || ch.prompt);
+    G.gallery.push({
+        key, strokes: ch.steps[step].strokes,
+        label, artist: G.players[ch.steps[step].pIdx].name,
+    });
+    autoSaveState();
+}
+function telephoneReactionFor(pIdx, chain) {
+    const votes = (G.reactions && G.reactions[chain]) || {};
+    for (const reaction of TELEPHONE_REACTIONS) {
+        if ((votes[reaction.id] || []).includes(pIdx)) return reaction.id;
+    }
+    return '';
+}
+function telephoneReactionCounts(chain) {
+    const votes = (G.reactions && G.reactions[chain]) || {};
+    const out = {};
+    TELEPHONE_REACTIONS.forEach(reaction => out[reaction.id] = (votes[reaction.id] || []).length);
+    return out;
+}
+function hostTelephoneReaction(idx, chain, category) {
+    if (!G || G.mode !== 'telephone' || G.phase !== 'reveal' || idx < 0 || chain !== G.revealPtr) return;
+    if (!TELEPHONE_REACTIONS.some(r => r.id === category)) return;
+    if (!G.reactions[chain]) G.reactions[chain] = {};
+    const votes = G.reactions[chain];
+    TELEPHONE_REACTIONS.forEach(reaction => {
+        votes[reaction.id] = (votes[reaction.id] || []).filter(pIdx => pIdx !== idx);
+    });
+    votes[category].push(idx);
+    broadcastTelephone();
+    renderStage();
+    autoSaveState();
+}
+function telephoneReactionStrip(chain) {
+    const counts = telephoneReactionCounts(chain);
+    const bits = TELEPHONE_REACTIONS.filter(r => counts[r.id] > 0)
+        .map(r => `<span>${escapeHtml(r.label)} <b>${counts[r.id]}</b></span>`);
+    return bits.length ? '<div class="award-strip">' + bits.join('') + '</div>' : '';
+}
+function telephoneAwardsHtml() {
+    const awards = [];
+    for (const reaction of TELEPHONE_REACTIONS) {
+        let bestChain = -1, bestCount = 0;
+        G.chains.forEach((chain, index) => {
+            const count = telephoneReactionCounts(index)[reaction.id] || 0;
+            if (count > bestCount) { bestCount = count; bestChain = index; }
+        });
+        if (bestChain >= 0) awards.push(`<span><b>${escapeHtml(reaction.label)}:</b> Chain ${bestChain + 1}</span>`);
+    }
+    return awards.length ? '<div class="award-strip">' + awards.join('') + '</div>' : 'No awards were cast this round.';
+}
+function broadcastTelephone() {
+    G.players.forEach((p, i) => { if (p.connected) sendTo(p.id, phaseViewFor(i)); });
+}
+
+// ---- TV gallery cycle (shown while everyone draws on their phones) ----
+let galleryInterval = null;
+function setGalleryCycle(on) {
+    if (galleryInterval) { clearInterval(galleryInterval); galleryInterval = null; }
+    const label = document.getElementById('tv-gallery-label');
+    if (!on) { if (label) label.textContent = ''; return; }
+    const show = () => {
+        if (!G || !G.gallery.length) {
+            paintCtx.clearRect(0, 0, IMG_W, IMG_H);
+            if (label) label.textContent = '';
+            return;
+        }
+        const item = G.gallery[G.galleryPtr % G.gallery.length];
+        G.galleryPtr++;
+        paintCtx.clearRect(0, 0, IMG_W, IMG_H);
+        paintCtx.fillStyle = '#fff';
+        paintCtx.fillRect(0, 0, IMG_W, IMG_H);
+        for (const s of item.strokes) renderStrokeTo(paintCtx, s, IMG_W, IMG_H);
+        if (label) label.textContent = `⭐ Gallery: “${item.label}” by ${item.artist}`;
+    };
+    show();
+    galleryInterval = setInterval(show, 6000);
+}
+
+function renderTelephoneChainMontage(chain) {
+    paintCtx.clearRect(0, 0, IMG_W, IMG_H);
+    paintCtx.fillStyle = '#fff';
+    paintCtx.fillRect(0, 0, IMG_W, IMG_H);
+    const drawings = chain.steps
+        .map((step, index) => step.type === 'draw' ? { step, index } : null)
+        .filter(Boolean);
+    if (!drawings.length) return;
+    const cols = Math.min(3, drawings.length);
+    const rows = Math.ceil(drawings.length / cols);
+    const gap = 22, margin = 28, labelH = 34;
+    const cellW = (IMG_W - margin * 2 - gap * (cols - 1)) / cols;
+    const cellH = (IMG_H - margin * 2 - gap * (rows - 1)) / rows;
+    drawings.forEach((entry, idx) => {
+        const col = idx % cols, row = Math.floor(idx / cols);
+        const x = margin + col * (cellW + gap), y = margin + row * (cellH + gap);
+        paintCtx.fillStyle = '#f8f8f8';
+        paintCtx.fillRect(x, y, cellW, cellH);
+        paintCtx.strokeStyle = '#d0d0d0'; paintCtx.lineWidth = 2;
+        paintCtx.strokeRect(x, y, cellW, cellH);
+        paintCtx.save();
+        paintCtx.beginPath();
+        paintCtx.rect(x, y + labelH, cellW, cellH - labelH);
+        paintCtx.clip();
+        paintCtx.translate(x, y + labelH);
+        for (const stroke of entry.step.strokes) renderStrokeTo(paintCtx, stroke, cellW, cellH - labelH);
+        paintCtx.restore();
+        const artist = G.players[entry.step.pIdx];
+        paintCtx.fillStyle = artist ? artist.color : '#333';
+        paintCtx.font = 'bold 20px sans-serif';
+        paintCtx.fillText((artist ? artist.name : 'Artist') + ' drew', x + 10, y + 24);
+    });
+}
+function telephoneChainHtml(chain) {
+    const parts = [
+        '<span class="chain-step"><b>Prompt:</b> “' + escapeHtml(chain.prompt) + '”</span>'
+    ];
+    chain.steps.forEach(step => {
+        const artist = G.players[step.pIdx];
+        const name = escapeHtml(artist ? artist.name : 'Artist');
+        parts.push(step.type === 'draw'
+            ? '<span class="chain-step"><b>' + name + '</b> drew it</span>'
+            : '<span class="chain-step"><b>' + name + ':</b> “' + escapeHtml(step.text) + '”</span>');
+    });
+    return '<div class="telephone-chain">' + parts.join('<span class="chain-arrow">→</span>') + '</div>';
+}
+
+// ============================================================
+// TV RENDERING
+// ============================================================
+function renderStage() {
+    if (!isHost || !G) return;
+    const phaseEl = document.getElementById('tv-phase');
+    const banner = document.getElementById('tv-banner');
+    const controls = document.getElementById('tv-controls');
+    const grid = document.getElementById('tv-grid');
+    const compare = document.getElementById('copycat-compare');
+    controls.innerHTML = '';
+    compare.classList.remove('visible');
+    const msLeft = phaseRemaining();
+    updateHostToolbar();
+
+    if (G.mode !== 'telephone') setGalleryCycle(false);
+
+    if (G.mode === 'telephone') {
+        renderTelephoneStage(phaseEl, banner, controls, grid, msLeft);
+    } else if (G.mode === 'copycat') {
+        const roundLabel = `Round ${G.round}/${G.rounds}`;
+        tvOrig.classList.toggle('hidden-img', G.phase === 'paint' || G.phase === 'reveal');
+        if (G.phase === 'select') {
+            phaseEl.textContent = `🖼️ ${roundLabel} — Claim your patch!`;
+            banner.innerHTML = 'Pick a patch on your phone, then <b>memorize it</b> before the picture disappears!';
+            startClock('tv-clock', msLeft, 15000, G.paused);
+            renderTvGrid(grid, true);
+        } else if (G.phase === 'memorize') {
+            phaseEl.textContent = `👀 ${roundLabel} — MEMORIZE!`;
+            banner.innerHTML = 'Stare hard. The picture vanishes in seconds...';
+            startClock('tv-clock', msLeft, 4000, G.paused);
+            renderTvGrid(grid, true);
+        } else if (G.phase === 'paint') {
+            phaseEl.textContent = `🖌️ ${roundLabel} — Paint from memory!`;
+            banner.innerHTML = 'The picture is gone — repaint your patch on your phone!';
+            startClock('tv-clock', msLeft, 15000, G.paused);
+            renderTvGrid(grid, true);
+        } else if (G.phase === 'reveal') {
+            stopClock(); document.getElementById('tv-clock').textContent = '';
+            grid.classList.add('off');
+            const current = G.lastScores[G.revealPtr || 0];
+            if (current) {
+                const player = G.players[current.pIdx];
+                phaseEl.textContent = `✨ ${player.name}'s patch — ${current.points} points`;
+                renderCopycatComparison(current);
+                compare.classList.add('visible');
+                banner.innerHTML = `<b style="color:${player.color}">${escapeHtml(player.name)}</b> closed ${current.accuracy}% of the gap ` +
+                    `&middot; Shape ${current.shape}% &middot; Color ${current.color}% &middot; ` +
+                    `${'★'.repeat(current.difficulty)} difficulty ×${current.multiplier}`;
+                const next = document.createElement('button');
+                next.className = 'btn go';
+                next.textContent = G.revealPtr === G.lastScores.length - 1 ? 'See Whole Painting ▶' : 'Next Patch ▶';
+                next.onclick = advanceCopycatReveal;
+                controls.appendChild(next);
+            } else {
+                phaseEl.textContent = `✨ ${roundLabel} — Complete reconstruction`;
+                const bits = G.lastScores
+                    .map(s => `<b style="color:${G.players[s.pIdx].color}">${escapeHtml(G.players[s.pIdx].name)}</b> ${s.points} pts`)
+                    .join(' &middot; ');
+                banner.innerHTML = 'Round scores: ' + (bits || '—');
+                const btn = document.createElement('button');
+                btn.className = 'btn go';
+                const freeCount = gridCols(G) * gridRows(G) - G.painted.length;
+                btn.textContent = freeCount <= 0 ? 'Final Results 🏆' : 'Next Round ▶';
+                btn.onclick = nextRound;
+                controls.appendChild(btn);
+            }
+        } else if (G.phase === 'final') {
+            renderTvFinal(phaseEl, banner, controls, grid);
+        }
+    } else {
+        tvOrig.classList.add('hidden-img');
+        if (G.phase === 'paint') {
+            const p = G.players[G.painterIdx];
+            phaseEl.textContent = `🎨 Freestyle — Turn ${G.cycle}/${G.cycles}`;
+            const directive = G.directive ? `<div class="directive-note">Directive: ${escapeHtml(G.directive)}</div>` : '';
+            banner.innerHTML = directive + (p.connected
+                ? `<b style="color:${p.color}">${p.name}</b> is painting...`
+                : `<b style="color:${p.color}">${p.name}</b> lost contact — their turn passes shortly...`);
+            startClock('tv-clock', msLeft, 15000, G.paused);
+            grid.classList.add('off');
+        } else {
+            phaseEl.textContent = '🎨 The masterpiece is complete!';
+            stopClock(); document.getElementById('tv-clock').textContent = '';
+            banner.innerHTML = (G.directive ? `<div class="directive-note">Directive: ${escapeHtml(G.directive)}</div>` : '') +
+                'A collaboration by ' + G.players.map(p => `<b style="color:${p.color}">${p.name}</b>`).join(', ');
+            grid.classList.add('off');
+            addDownloadButton(controls, false);
+            addLobbyButton(controls);
+        }
+    }
+    renderTvScores();
+}
+function renderCopycatComparison(result) {
+    const hasPatch = Number.isFinite(result.c) && Number.isFinite(result.r);
+    const rect = hasPatch ? tileRect(result.c, result.r, IMG_W, IMG_H, gridCols(G), gridRows(G)) : null;
+    for (const [id, source] of [['compare-original', tvOrig], ['compare-painted', tvPaint]]) {
+        const canvas = document.getElementById(id);
+        canvas.width = 480;
+        canvas.height = Math.max(180, Math.round(480 / tileAspect(G)));
+        const ctx = canvas.getContext('2d');
+        ctx.fillStyle = '#fff'; ctx.fillRect(0, 0, canvas.width, canvas.height);
+        if (rect) ctx.drawImage(source, rect.x, rect.y, rect.w, rect.h, 0, 0, canvas.width, canvas.height);
+    }
+}
+function renderTelephoneStage(phaseEl, banner, controls, grid, msLeft) {
+    grid.classList.add('off');
+    tvOrig.classList.add('hidden-img');
+    const waitingNames = () => G.players
+        .filter((p, i) => p.connected && !G.submitted[i])
+        .map(p => `<b style="color:${p.color}">${p.name}</b>`).join(', ');
+    if (G.phase === 'prompt') {
+        phaseEl.textContent = `📞 Round ${G.round} — Writing prompts...`;
+        banner.innerHTML = 'Waiting on: ' + (waitingNames() || 'everyone is in!');
+        startClock('tv-clock', msLeft, 15000, G.paused);
+        setGalleryCycle(true);
+    } else if (G.phase === 'draw') {
+        phaseEl.textContent = `🖌️ Round ${G.round} — Artists at work (${G.step}/${G.S})`;
+        banner.innerHTML = 'Drawing in secret... waiting on: ' + (waitingNames() || 'nobody!');
+        startClock('tv-clock', msLeft, 15000, G.paused);
+        setGalleryCycle(true);
+    } else if (G.phase === 'guess') {
+        phaseEl.textContent = `🤔 Round ${G.round} — What IS that? (${G.step}/${G.S})`;
+        banner.innerHTML = 'Guessing... waiting on: ' + (waitingNames() || 'nobody!');
+        startClock('tv-clock', msLeft, 15000, G.paused);
+        setGalleryCycle(true);
+    } else if (G.phase === 'reveal') {
+        setGalleryCycle(false);
+        stopClock(); document.getElementById('tv-clock').textContent = '';
+        const done = G.revealPtr >= G.chains.length;
+        if (done) {
+            phaseEl.textContent = '📞 Round complete!';
+            banner.innerHTML = 'Round awards' + telephoneAwardsHtml();
+            paintCtx.clearRect(0, 0, IMG_W, IMG_H);
+            const again = document.createElement('button');
+            again.className = 'btn go';
+            again.textContent = '✏️ New Round';
+            again.onclick = telephoneNewRound;
+            controls.appendChild(again);
+            addLobbyButton(controls);
+        } else {
+            const chain = G.chains[G.revealPtr];
+            phaseEl.textContent = `✨ The reveal — chain ${G.revealPtr + 1}/${G.chains.length}`;
+            renderTelephoneChainMontage(chain);
+            banner.innerHTML = telephoneChainHtml(chain) + telephoneReactionStrip(G.revealPtr);
+            if (G.revealPtr > 0) {
+                const back = document.createElement('button');
+                back.className = 'btn secondary';
+                back.textContent = '◀ Previous Chain';
+                back.onclick = revealPrevious;
+                controls.appendChild(back);
+            }
+            const next = document.createElement('button');
+            next.className = 'btn go';
+            next.textContent = G.revealPtr === G.chains.length - 1 ? 'Finish Reveal ▶' : 'Next Chain ▶';
+            next.onclick = revealNext;
+            controls.appendChild(next);
+        }
+    }
+}
+function renderTvGrid(grid, show) {
+    if (!show) { grid.classList.add('off'); return; }
+    grid.classList.remove('off');
+    grid.style.gridTemplateColumns = `repeat(${gridCols(G)}, 1fr)`;
+    grid.style.gridTemplateRows = `repeat(${gridRows(G)}, 1fr)`;
+    grid.innerHTML = '';
+    const taken = takenMap();
+    for (let r = 0; r < gridRows(G); r++) {
+        for (let c = 0; c < gridCols(G); c++) {
+            const cell = document.createElement('div');
+            cell.className = 'gcell';
+            const idx = taken[paintedKey(c, r)];
+            if (idx !== undefined) {
+                const p = G.players[idx];
+                cell.classList.add('claimed');
+                cell.style.borderColor = p.color;
+                const who = document.createElement('span');
+                who.className = 'who';
+                who.style.background = p.color;
+                who.textContent = p.name;
+                cell.appendChild(who);
+            }
+            const info = G.patchDifficulty && G.patchDifficulty[paintedKey(c, r)];
+            if (info && G.phase === 'select') {
+                const difficulty = document.createElement('span');
+                difficulty.className = 'difficulty';
+                difficulty.textContent = '★'.repeat(info.stars);
+                cell.appendChild(difficulty);
+            }
+            grid.appendChild(cell);
+        }
+    }
+}
+function renderTvScores() {
+    const bar = document.getElementById('tv-scores');
+    bar.innerHTML = '';
+    G.players.forEach((p, i) => {
+        const chip = document.createElement('div');
+        chip.className = 'chip' + (p.connected ? '' : ' offline');
+        const dot = document.createElement('span');
+        dot.className = 'dot';
+        dot.style.background = p.color;
+        chip.appendChild(dot);
+        chip.appendChild(document.createTextNode(p.name));
+        if (G.mode === 'telephone') {
+            if ((G.phase === 'prompt' || G.phase === 'draw' || G.phase === 'guess') && G.submitted[i]) {
+                chip.appendChild(document.createTextNode(' ✔'));
+            }
+        } else if (G.mode === 'copycat') {
+            const pts = document.createElement('span');
+            pts.className = 'pts';
+            pts.textContent = p.score;
+            chip.appendChild(pts);
+            if (G.phase === 'paint' && p.tile) {
+                const bar2 = document.createElement('span');
+                bar2.className = 'inkmini';
+                const fill = document.createElement('i');
+                fill.style.width = Math.max(0, 100 * (1 - p.inkSpent / G.inkBudget)) + '%';
+                bar2.appendChild(fill);
+                chip.appendChild(bar2);
+                if (p.done) chip.appendChild(document.createTextNode('✔'));
+            }
+        } else if (G.phase === 'paint' && i === G.painterIdx) {
+            const bar2 = document.createElement('span');
+            bar2.className = 'inkmini';
+            const fill = document.createElement('i');
+            fill.style.width = Math.max(0, 100 * (1 - p.inkSpent / G.turnInk)) + '%';
+            bar2.appendChild(fill);
+            chip.appendChild(bar2);
+        }
+        bar.appendChild(chip);
+    });
+}
+function renderTvFinal(phaseEl, banner, controls, grid) {
+    stopClock(); document.getElementById('tv-clock').textContent = '';
+    grid.classList.add('off');
+    tvOrig.classList.remove('hidden-img');
+    const ranked = G.players.map((p, i) => ({ p, i })).sort((a, b) => b.p.score - a.p.score);
+    const top = ranked[0];
+    phaseEl.textContent = '🏆 Final Results';
+    banner.innerHTML = ranked
+        .map((e, rank) => `${rank === 0 ? '🏆' : (rank + 1) + '.'} <b style="color:${e.p.color}">${e.p.name}</b> ${e.p.score} pts`)
+        .join(' &middot; ');
+    const toggle = document.createElement('button');
+    toggle.className = 'btn secondary';
+    toggle.textContent = '👁️ Toggle original / painting';
+    toggle.onclick = () => tvOrig.classList.toggle('hidden-img');
+    controls.appendChild(toggle);
+    addDownloadButton(controls, false);
+    addLobbyButton(controls);
+}
+function addDownloadButton(controls, includeOriginal) {
+    const btn = document.createElement('button');
+    btn.className = 'btn secondary';
+    btn.textContent = '💾 Download painting';
+    btn.onclick = () => {
+        const out = document.createElement('canvas');
+        out.width = IMG_W; out.height = IMG_H;
+        const c = out.getContext('2d');
+        c.fillStyle = '#fff'; c.fillRect(0, 0, IMG_W, IMG_H);
+        c.drawImage(tvPaint, 0, 0);
+        const a = document.createElement('a');
+        a.download = 'easel-painting.png';
+        a.href = out.toDataURL('image/png');
+        a.click();
+    };
+    controls.appendChild(btn);
+}
+function addLobbyButton(controls) {
+    const btn = document.createElement('button');
+    btn.className = 'btn go';
+    btn.textContent = '↩️ Back to Lobby';
+    btn.onclick = () => {
+        clearPhaseTimer();
+        G = null;
+        lobbyPlayers = lobbyPlayers.filter(p => p.connected);
+        broadcastLobby();
+        showScreen('screen-tlobby');
+        autoSaveState();
+    };
+    controls.appendChild(btn);
+}
+
+// ============================================================
+// PHONE - VIEWS
+// ============================================================
+let phoneAutoTimer = null;
+function clearPhoneAutoTimer() {
+    if (phoneAutoTimer) { clearTimeout(phoneAutoTimer); phoneAutoTimer = null; }
+}
+function phoneView(view) {
+    if (view.imageData && view.imageData !== activeImageData) {
+        activeImageData = view.imageData;
+        customSceneImage = new Image();
+        customSceneImage.onload = () => { if (V === view) phoneView(view); };
+        customSceneImage.src = activeImageData;
+    }
+    maybeCueForView(view);
+    V = view;
+    clearPhoneAutoTimer();
+    if (view.phase === 'lobby') { renderPLobby(view); showScreen('screen-plobby'); return; }
+    if (view.mode === 'freestyle') { renderPhoneFs(view); return; }
+    if (view.mode === 'telephone') { renderPhoneTelephone(view); return; }
+    switch (view.phase) {
+        case 'select':   renderPhoneSelect(view); break;
+        case 'memorize': renderPhoneMemorize(view); break;
+        case 'paint':    renderPhonePaint(view); break;
+        case 'reveal':   renderPhoneReveal(view); break;
+        case 'final':    renderPhoneFinal(view); break;
+    }
+}
+
+// ---- Telephone on the phone ----
+function renderPhoneTelephone(view) {
+    if (view.submitted) {
+        phoneWaitScreen('Sent! 📨', 'Waiting for the other artists — watch the TV gallery!');
+        return;
+    }
+    const taskKey = `telephone:${view.round}:${view.step || 0}:${view.phase}`;
+    const newTask = taskKey !== activePhoneTaskKey;
+    activePhoneTaskKey = taskKey;
+    if (view.phase === 'prompt') {
+        if (newTask) document.getElementById('prompt-input').value = '';
+        startClock('prompt-clock', view.msLeft, 15000, view.paused);
+        if (!view.paused) phoneAutoTimer = setTimeout(submitPrompt, view.msLeft);
+        showScreen('screen-prompt');
+    } else if (view.phase === 'draw') {
+        if (newTask) {
+            myStrokes = [];
+            inkLeft = view.inkBudget;
+        }
+        const promptEl = document.getElementById('paint-prompt');
+        promptEl.style.display = '';
+        promptEl.textContent = `Draw: “${view.drawText}”`;
+        buildPalette('paint-palette');
+        buildTools('paint-tools');
+        const canvas = document.getElementById('paint-canvas');
+        const wrap = document.getElementById('paint-wrap');
+        wrap.style.aspectRatio = '16 / 9';
+        sizePhoneCanvas(canvas, wrap);
+        redrawPhoneCanvas(canvas);
+        updateInkBar('paint-ink', 'paint-inkbar', inkLeft, view.inkBudget);
+        startClock('paint-clock', view.msLeft, 15000, view.paused);
+        if (!view.paused) phoneAutoTimer = setTimeout(phoneDone, view.msLeft);
+        bindPaintCanvas(canvas, false);
+        showScreen('screen-paint');
+    } else if (view.phase === 'guess') {
+        const canvas = document.getElementById('guess-canvas');
+        const wrap = document.getElementById('guess-wrap');
+        wrap.style.aspectRatio = '16 / 9';
+        sizePhoneCanvas(canvas, wrap);
+        const ctx = canvas.getContext('2d');
+        ctx.fillStyle = '#fff';
+        ctx.fillRect(0, 0, canvas.width, canvas.height);
+        for (const s of (view.guessStrokes || [])) renderStrokeTo(ctx, s, canvas.width, canvas.height);
+        if (newTask) document.getElementById('guess-input').value = '';
+        startClock('guess-clock', view.msLeft, 15000, view.paused);
+        if (!view.paused) phoneAutoTimer = setTimeout(submitGuess, view.msLeft);
+        showScreen('screen-guess');
+    } else if (view.phase === 'reveal') {
+        stopClock();
+        if (view.revealDone) {
+            phoneWaitScreen('Round complete! 🎉', 'The host can start a new round from the TV.');
+        } else {
+            phoneWaitScreen('Watch the TV! 📺', 'The chains are being revealed...');
+            if (view.revealChain && view.revealChain.drawings) {
+                const extra = document.getElementById('pwait-extra');
+                const reactions = document.createElement('div');
+                reactions.className = 'reaction-grid';
+                TELEPHONE_REACTIONS.forEach(reaction => {
+                    const btn = document.createElement('button');
+                    btn.className = 'btn secondary' + (view.revealChain.yourReaction === reaction.id ? ' on' : '');
+                    const count = (view.revealChain.reactionCounts || {})[reaction.id] || 0;
+                    btn.textContent = reaction.label + (count ? ` · ${count}` : '');
+                    btn.onclick = () => sendHost({ type: 'reaction', chain: view.revealChain.chain, category: reaction.id });
+                    reactions.appendChild(btn);
+                });
+                extra.appendChild(reactions);
+                view.revealChain.drawings.forEach(drawing => {
+                    const btn = document.createElement('button');
+                    btn.className = 'btn secondary';
+                    btn.textContent = '⭐ Save ' + drawing.artist + '’s drawing';
+                    btn.onclick = () => {
+                        sendHost({ type: 'fav', chain: view.revealChain.chain, step: drawing.step });
+                        btn.textContent = '⭐ Saved!';
+                        btn.disabled = true;
+                    };
+                    extra.appendChild(btn);
+                });
+            }
+        }
+    }
+}
+function phoneWaitScreen(title, msg) {
+    stopClock();
+    document.getElementById('pwait-title').textContent = title;
+    document.getElementById('pwait-msg').textContent = msg;
+    document.getElementById('pwait-score').style.display = 'none';
+    document.getElementById('pwait-standings-panel').style.display = 'none';
+    document.getElementById('pwait-extra').innerHTML = '';
+    showScreen('screen-pwait');
+}
+function randomPrompt() {
+    const pool = (V && V.promptPool && V.promptPool.length) ? V.promptPool : PROMPTS;
+    document.getElementById('prompt-input').value = pool[Math.floor(Math.random() * pool.length)];
+}
+function submitPrompt() {
+    if (!V || V.paused) return;
+    clearPhoneAutoTimer();
+    if (!V || V.mode !== 'telephone' || V.phase !== 'prompt') return;
+    const text = document.getElementById('prompt-input').value.trim();
+    const pool = (V.promptPool && V.promptPool.length) ? V.promptPool : PROMPTS;
+    sendHost({ type: 'prompt', text: text || pool[Math.floor(Math.random() * pool.length)] });
+    phoneWaitScreen('Prompt locked in! ✏️', 'Waiting for the other artists...');
+}
+function submitGuess() {
+    if (!V || V.paused) return;
+    clearPhoneAutoTimer();
+    if (!V || V.mode !== 'telephone' || V.phase !== 'guess') return;
+    sendHost({ type: 'submitGuess', text: document.getElementById('guess-input').value });
+    phoneWaitScreen('Guess sent! 🤞', 'Waiting for the other artists...');
+}
+function renderPLobby(view) {
+    const list = document.getElementById('plobby-players');
+    list.innerHTML = '';
+    view.players.forEach((p, i) => {
+        const li = document.createElement('li');
+        const dot = document.createElement('span');
+        dot.className = 'dot';
+        dot.style.background = PLAYER_COLORS[i % PLAYER_COLORS.length];
+        li.appendChild(dot);
+        li.appendChild(document.createTextNode(p.name + (i === view.youIdx ? ' (you)' : '')));
+        const tag = document.createElement('span');
+        tag.className = 'tag';
+        tag.textContent = p.connected ? 'ready' : 'offline';
+        li.appendChild(tag);
+        list.appendChild(li);
+    });
+}
+function renderPhoneSelect(view) {
+    const canvas = document.getElementById('select-canvas');
+    const ctx = canvas.getContext('2d');
+    drawScene(ctx, canvas.width, canvas.height, view.imageId, view.imageData || activeImageData);
+    document.getElementById('select-label').textContent =
+        `Round ${view.round}/${view.rounds} — pick your patch!`;
+    const grid = document.getElementById('select-grid');
+    grid.style.gridTemplateColumns = `repeat(${gridCols(view)}, 1fr)`;
+    grid.style.gridTemplateRows = `repeat(${gridRows(view)}, 1fr)`;
+    grid.innerHTML = '';
+    const paintedSet = new Set((view.painted || []).map(t => t.c + ',' + t.r));
+    const offeredSet = new Set((view.offers || []).map(t => t.c + ',' + t.r));
+    for (let r = 0; r < gridRows(view); r++) {
+        for (let c = 0; c < gridCols(view); c++) {
+            const cell = document.createElement('div');
+            cell.className = 'gcell';
+            const key = c + ',' + r;
+            const takenBy = view.taken ? view.taken[key] : undefined;
+            const mine = view.yourTile && view.yourTile.c === c && view.yourTile.r === r;
+            if (mine) cell.classList.add('mine');
+            else if (paintedSet.has(key) || takenBy !== undefined) cell.classList.add('taken');
+            else if (offeredSet.has(key)) {
+                cell.classList.add('free');
+                cell.addEventListener('click', () => sendHost({ type: 'claim', c, r }));
+            } else {
+                cell.classList.add('unavailable');
+            }
+            if (offeredSet.has(key) && view.patchDifficulty && view.patchDifficulty[key]) {
+                const difficulty = document.createElement('span');
+                difficulty.className = 'difficulty';
+                const info = view.patchDifficulty[key];
+                difficulty.textContent = '★'.repeat(info.stars) + (info.multiplier > 1 ? ` ×${info.multiplier}` : '');
+                cell.appendChild(difficulty);
+            }
+            grid.appendChild(cell);
+        }
+    }
+    setStatus('select-status', view.yourTile
+        ? 'Patch claimed! You can switch between your offered patches until selection ends.'
+        : 'Choose one of your highlighted patches. More stars earn a larger point multiplier.');
+    showScreen('screen-select');
+}
+function renderPhoneMemorize(view) {
+    const canvas = document.getElementById('memo-canvas');
+    sizePhoneCanvas(canvas, document.querySelector('#screen-memorize .paint-canvas-wrap'), tileAspect(view));
+    const ctx = canvas.getContext('2d');
+    if (view.yourTile) {
+        // Render the full scene offscreen, blow up just our tile
+        const off = document.createElement('canvas');
+        off.width = IMG_W; off.height = IMG_H;
+        drawScene(off.getContext('2d'), IMG_W, IMG_H, view.imageId, view.imageData || activeImageData);
+        const rect = tileRect(view.yourTile.c, view.yourTile.r, IMG_W, IMG_H, gridCols(view), gridRows(view));
+        ctx.drawImage(off, rect.x, rect.y, rect.w, rect.h, 0, 0, canvas.width, canvas.height);
+    } else {
+        ctx.fillStyle = '#fff'; ctx.fillRect(0, 0, canvas.width, canvas.height);
+    }
+    startClock('memo-clock', view.msLeft, 4000, view.paused);
+    showScreen('screen-memorize');
+}
+function renderPhonePaint(view) {
+    myStrokes = (view.myStrokes || []).slice();
+    inkLeft = view.inkLeft;
+    document.getElementById('paint-prompt').style.display = 'none';
+    buildPalette('paint-palette');
+    buildTools('paint-tools');
+    const canvas = document.getElementById('paint-canvas');
+    sizePhoneCanvas(canvas, document.getElementById('paint-wrap'), tileAspect(view));
+    redrawPhoneCanvas(canvas);
+    updateInkBar('paint-ink', 'paint-inkbar', inkLeft, view.inkBudget);
+    startClock('paint-clock', view.msLeft, 15000, view.paused);
+    bindPaintCanvas(canvas, false);
+    showScreen('screen-paint');
+}
+function renderPhoneReveal(view) {
+    stopClock();
+    const mine = (view.roundScores || []).find(s => s.pIdx === view.youIdx);
+    document.getElementById('pwait-title').textContent = `Round ${view.round} reveal — look at the TV! ✨`;
+    document.getElementById('pwait-msg').textContent = 'Your patch scored:';
+    const scoreEl = document.getElementById('pwait-score');
+    scoreEl.style.display = '';
+    scoreEl.textContent = (mine ? mine.points : 0) + ' pts';
+    document.getElementById('pwait-msg').textContent = mine
+        ? `${mine.accuracy}% accuracy · ${'★'.repeat(mine.difficulty)} ×${mine.multiplier}`
+        : 'No patch score this round.';
+    renderStandings(view, false);
+    document.getElementById('pwait-extra').innerHTML = '';
+    showScreen('screen-pwait');
+}
+function renderPhoneFinal(view) {
+    stopClock();
+    const ranked = view.players.map((p, i) => ({ p, i })).sort((a, b) => b.p.score - a.p.score);
+    const myRank = ranked.findIndex(e => e.i === view.youIdx);
+    document.getElementById('pwait-title').textContent =
+        myRank === 0 ? '🏆 You are the master copycat!' : `Final: you placed #${myRank + 1}`;
+    document.getElementById('pwait-msg').textContent = 'Full results on the TV.';
+    document.getElementById('pwait-score').style.display = 'none';
+    renderStandings(view, true);
+    document.getElementById('pwait-extra').innerHTML = '';
+    showScreen('screen-pwait');
+}
+function renderStandings(view, show) {
+    const panel = document.getElementById('pwait-standings-panel');
+    panel.style.display = '';
+    const list = document.getElementById('pwait-standings');
+    list.innerHTML = '';
+    const ranked = view.players.map((p, i) => ({ p, i })).sort((a, b) => b.p.score - a.p.score);
+    for (const e of ranked) {
+        const li = document.createElement('li');
+        const dot = document.createElement('span');
+        dot.className = 'dot';
+        dot.style.background = e.p.color;
+        li.appendChild(dot);
+        li.appendChild(document.createTextNode(e.p.name + (e.i === view.youIdx ? ' (you)' : '')));
+        const pts = document.createElement('span');
+        pts.className = 'pts';
+        pts.textContent = e.p.score;
+        li.appendChild(pts);
+        list.appendChild(li);
+    }
+}
+
+// ============================================================
+// PHONE - FREESTYLE
+// ============================================================
+let fsCanvasSized = false;
+function renderPhoneFs(view) {
+    if (view.fsStrokes) fsStrokes = view.fsStrokes.slice();
+    const directiveEl = document.getElementById('fs-directive-note');
+    directiveEl.style.display = view.directive ? '' : 'none';
+    directiveEl.textContent = view.directive ? 'Directive: ' + view.directive : '';
+    const canvas = document.getElementById('fs-canvas');
+    const wrap = document.getElementById('fs-wrap');
+    wrap.style.aspectRatio = '16 / 9';
+    sizePhoneCanvas(canvas, wrap);
+    redrawFsCanvas(canvas);
+    buildPalette('fs-palette');
+    buildTools('fs-tools');
+    const painting = !view.paused && view.phase === 'paint' && view.painterIdx === view.youIdx;
+    const lock = document.getElementById('fs-lock');
+    const endBtn = document.getElementById('fs-endturn');
+    const turnControls = document.getElementById('fs-turn-controls');
+    if (view.phase === 'final') {
+        lock.style.display = 'flex';
+        lock.textContent = '🎨 Masterpiece complete! Check the TV.';
+        turnControls.style.display = 'none';
+        stopClock(); document.getElementById('fs-clock').textContent = '';
+        addPhoneDownload();
+    } else if (painting) {
+        lock.style.display = 'none';
+        turnControls.style.display = 'flex';
+        inkLeft = view.inkLeft;
+        updateInkBar('fs-ink', 'fs-inkbar', inkLeft, view.turnInk);
+        startClock('fs-clock', view.msLeft, 15000, view.paused);
+        document.getElementById('pwait-extra').innerHTML = '';
+    } else {
+        lock.style.display = 'flex';
+        const p = view.players[view.painterIdx];
+        lock.textContent = view.paused ? 'Game paused by the host'
+            : `🖌️ ${p ? p.name : '...'} is painting — turn ${view.cycle}/${view.cycles}`;
+        turnControls.style.display = 'none';
+        startClock('fs-clock', view.msLeft, 15000, view.paused);
+        updateInkBar('fs-ink', 'fs-inkbar', 0, 1);
+    }
+    bindPaintCanvas(canvas, true);
+    showScreen('screen-fs');
+}
+function redrawFsCanvas(canvas) {
+    const ctx = canvas.getContext('2d');
+    ctx.fillStyle = '#fff';
+    ctx.fillRect(0, 0, canvas.width, canvas.height);
+    for (const s of fsStrokes) renderStrokeTo(ctx, s.stroke, canvas.width, canvas.height);
+}
+function phoneFsDrawStroke(stroke) {
+    const canvas = document.getElementById('fs-canvas');
+    if (canvas.width) renderStrokeTo(canvas.getContext('2d'), stroke, canvas.width, canvas.height);
+}
+function addPhoneDownload() {
+    const extra = document.getElementById('pwait-extra');
+    const btn = document.createElement('button');
+    btn.className = 'btn secondary';
+    btn.textContent = '💾 Save the masterpiece';
+    btn.onclick = () => {
+        const out = document.createElement('canvas');
+        out.width = IMG_W; out.height = IMG_H;
+        const c = out.getContext('2d');
+        c.fillStyle = '#fff'; c.fillRect(0, 0, IMG_W, IMG_H);
+        for (const s of fsStrokes) renderStrokeTo(c, s.stroke, IMG_W, IMG_H);
+        const a = document.createElement('a');
+        a.download = 'easel-masterpiece.png';
+        a.href = out.toDataURL('image/png');
+        a.click();
+    };
+    const parent = document.getElementById('screen-fs');
+    let holder = document.getElementById('fs-download');
+    if (!holder) {
+        holder = document.createElement('div');
+        holder.id = 'fs-download';
+        parent.appendChild(holder);
+    }
+    holder.innerHTML = '';
+    holder.appendChild(btn);
+}
+
+// ============================================================
+// PHONE - PAINT TOOLS & INPUT
+// ============================================================
+function sizePhoneCanvas(canvas, wrap, aspect) {
+    aspect = aspect || 16 / 9;
+    wrap.style.aspectRatio = String(aspect);
+    const w = wrap.clientWidth || Math.min(window.innerWidth - 32, 520);
+    const cssH = w / aspect;
+    const scale = Math.min(2, window.devicePixelRatio || 1);
+    canvas.width = Math.round(w * scale);
+    canvas.height = Math.round(cssH * scale);
+}
+function buildPalette(id) {
+    const el = document.getElementById(id);
+    el.innerHTML = '';
+    for (const c of PALETTE) {
+        const sw = document.createElement('div');
+        sw.className = 'swatch' + (c === curColor ? ' sel' : '');
+        sw.style.background = c;
+        sw.onclick = () => { curColor = c; buildPalette(id); };
+        el.appendChild(sw);
+    }
+}
+function buildTools(id) {
+    const el = document.getElementById(id);
+    el.innerHTML = '';
+    for (const [key, label, dotPx] of [['s', 'Fine', 8], ['m', 'Brush', 14], ['l', 'Broad', 22]]) {
+        const b = document.createElement('button');
+        b.className = 'tool' + (curBrush === key ? ' on' : '');
+        const dot = document.createElement('span');
+        dot.className = 'brush-dot';
+        dot.style.width = dotPx + 'px';
+        dot.style.height = dotPx + 'px';
+        b.appendChild(dot);
+        b.appendChild(document.createTextNode(' ' + label));
+        b.onclick = () => { curBrush = key; buildTools(id); };
+        el.appendChild(b);
+    }
+}
+function updateInkBar(fillId, barId, left, budget) {
+    const fill = document.getElementById(fillId);
+    const bar = document.getElementById(barId);
+    const frac = budget > 0 ? Math.max(0, Math.min(1, left / budget)) : 0;
+    fill.style.width = (frac * 100) + '%';
+    bar.classList.toggle('low', frac < 0.25);
+}
+function phoneInk(left) {
+    inkLeft = left;
+    if (!V) return;
+    if (V.mode === 'freestyle') updateInkBar('fs-ink', 'fs-inkbar', left, V.turnInk);
+    else updateInkBar('paint-ink', 'paint-inkbar', left, V.inkBudget);
+}
+function canPaintNow() {
+    if (!V) return false;
+    if (V.paused) return false;
+    if (V.mode === 'freestyle') return V.phase === 'paint' && V.painterIdx === V.youIdx && inkLeft > 0.01;
+    if (V.mode === 'telephone') return V.phase === 'draw' && !V.submitted && inkLeft > 0.01;
+    return V.phase === 'paint' && !!V.yourTile && inkLeft > 0.01;
+}
+const boundCanvases = new WeakSet();
+function bindPaintCanvas(canvas, isFs) {
+    if (boundCanvases.has(canvas)) return;
+    boundCanvases.add(canvas);
+    const norm = e => {
+        const r = canvas.getBoundingClientRect();
+        return [
+            Math.max(0, Math.min(1, (e.clientX - r.left) / r.width)),
+            Math.max(0, Math.min(1, (e.clientY - r.top) / r.height)),
+        ];
+    };
+    canvas.addEventListener('pointerdown', e => {
+        if (!canPaintNow()) return;
+        e.preventDefault();
+        drawing = true;
+        try { canvas.setPointerCapture(e.pointerId); } catch (err) {}
+        curPts = [norm(e)];
+    });
+    canvas.addEventListener('pointermove', e => {
+        if (!drawing) return;
+        e.preventDefault();
+        const p = norm(e);
+        const last = curPts[curPts.length - 1];
+        const dx = p[0] - last[0], dy = p[1] - last[1];
+        if (Math.sqrt(dx*dx + dy*dy) < 0.006) return;
+        curPts.push(p);
+        // live segment preview
+        const ctx = canvas.getContext('2d');
+        renderStrokeTo(ctx, { c: curColor, s: curBrush, pts: [last, p] }, canvas.width, canvas.height);
+    });
+    const finish = e => {
+        if (!drawing) return;
+        drawing = false;
+        const raw = { c: curColor, s: curBrush,
+            pts: curPts.map(p => [+p[0].toFixed(4), +p[1].toFixed(4)]) };
+        curPts = [];
+        const fit = fitStrokeToInk(raw, inkLeft);
+        if (!fit) { redrawCurrent(canvas, isFs); return; }
+        inkLeft = Math.max(0, inkLeft - fit.cost);
+        if (isFs) {
+            fsStrokes.push({ pIdx: V.youIdx, stroke: fit.stroke });
+            sendHost({ type: 'fstroke', stroke: fit.stroke });
+            updateInkBar('fs-ink', 'fs-inkbar', inkLeft, V.turnInk);
+        } else {
+            myStrokes.push(fit.stroke);
+            // Telephone drawings stay secret until submitted; copycat streams live to TV
+            if (V.mode !== 'telephone') sendHost({ type: 'stroke', stroke: fit.stroke });
+            updateInkBar('paint-ink', 'paint-inkbar', inkLeft, V.inkBudget);
+        }
+        redrawCurrent(canvas, isFs);
+    };
+    canvas.addEventListener('pointerup', finish);
+    canvas.addEventListener('pointercancel', finish);
+}
+function redrawCurrent(canvas, isFs) {
+    if (isFs) redrawFsCanvas(canvas);
+    else redrawPhoneCanvas(canvas);
+}
+function redrawPhoneCanvas(canvas) {
+    const ctx = canvas.getContext('2d');
+    ctx.fillStyle = '#fff';
+    ctx.fillRect(0, 0, canvas.width, canvas.height);
+    for (const s of myStrokes) renderStrokeTo(ctx, s, canvas.width, canvas.height);
+}
+function phoneUndo() {
+    if (!V || V.paused || !myStrokes.length) return;
+    if (V.mode !== 'copycat' && V.mode !== 'telephone') return;
+    const s = myStrokes.pop();
+    inkLeft = Math.min(V.inkBudget, inkLeft + inkCost(s));
+    if (V.mode === 'copycat') sendHost({ type: 'undo' });
+    redrawPhoneCanvas(document.getElementById('paint-canvas'));
+    updateInkBar('paint-ink', 'paint-inkbar', inkLeft, V.inkBudget);
+}
+function phoneClear() {
+    if (!V || V.paused || (V.mode !== 'copycat' && V.mode !== 'telephone')) return;
+    myStrokes = [];
+    inkLeft = V.inkBudget;
+    if (V.mode === 'copycat') sendHost({ type: 'clearTile' });
+    redrawPhoneCanvas(document.getElementById('paint-canvas'));
+    updateInkBar('paint-ink', 'paint-inkbar', inkLeft, V.inkBudget);
+}
+function phoneDone() {
+    if (!V || V.paused) return;
+    clearPhoneAutoTimer();
+    if (V && V.mode === 'telephone') {
+        if (V.phase !== 'draw' || V.submitted) return;
+        sendHost({ type: 'submitDraw', strokes: myStrokes });
+        phoneWaitScreen('Masterpiece delivered! 🖼️', 'Waiting for the other artists...');
+        return;
+    }
+    sendHost({ type: 'done' });
+    phoneWaitScreen('Brushes down! 🖌️', 'Waiting for the other artists...');
+}
+function phoneEndTurn() {
+    if (!V || V.paused) return;
+    sendHost({ type: 'endTurn' });
+}
+function phoneFsUndo() {
+    if (!V || V.paused || V.mode !== 'freestyle' || V.painterIdx !== V.youIdx) return;
+    sendHost({ type: 'fsUndo' });
+}
+function phoneFsClear() {
+    if (!V || V.paused || V.mode !== 'freestyle' || V.painterIdx !== V.youIdx) return;
+    sendHost({ type: 'fsClear' });
+}
+
+// ============================================================
+// HOST RESTORE (TV refresh mid-game)
+// ============================================================
+function reconnectAsHost(session) {
+    isHost = true;
+    myName = 'TV';
+    document.body.classList.add('cast-view');
+    roomCode = session.roomCode;
+    let saved = null;
+    try {
+        const raw = sessionStorage.getItem(AUTOSAVE_KEY);
+        saved = raw ? JSON.parse(raw) : null;
+    } catch (e) { saved = null; }
+    if (!saved) { clearSession(); return; }
+    lobbyPlayers = saved.lobbyPlayers || [];
+    settings = Object.assign({}, settings, saved.settings || {});
+    G = saved.G || null;
+    if (settings.customImageData) {
+        customSceneImage = new Image();
+        customSceneImage.src = settings.customImageData;
+    }
+    if (G) {
+        G.reactions = G.reactions || {};
+        G.promptPool = G.promptPool || PROMPTS;
+        G.patchDifficulty = G.patchDifficulty || {};
+        G.offers = G.offers || [];
+        G.revealPtr = G.revealPtr || 0;
+        G.turnStrokeStart = Number.isFinite(G.turnStrokeStart) ? G.turnStrokeStart : (G.strokes || []).length;
+    }
+    lobbyPlayers.forEach(p => p.connected = false);
+    if (G) G.players.forEach(p => p.connected = false);
+    setStatus('entry-status', 'Reclaiming room...');
+    const timeout = setTimeout(() => {
+        setStatus('entry-status', 'Reconnection failed — start a new room.');
+        clearSession();
+        try { if (peer) peer.destroy(); } catch (e) {}
+        showScreen('screen-entry');
+    }, 12000);
+    initHostPeer(() => {
+        clearTimeout(timeout);
+        saveSession();
+        startHostHeartbeat();
+        if (G) {
+            initTvCanvases();
+            restoreTvCanvases();
+            resumePhase();
+            showScreen('screen-stage');
+            renderStage();
+        } else {
+            renderTLobby();
+            showScreen('screen-tlobby');
+        }
+    }, err => {
+        clearTimeout(timeout);
+        setStatus('entry-status', 'Reconnection failed: ' + err.type);
+        clearSession();
+        showScreen('screen-entry');
+    });
+}
+function restoreTvCanvases() {
+    if (G.mode === 'copycat') {
+        drawScene(origCtx, IMG_W, IMG_H, G.imageId, G.imageData || settings.customImageData);
+        paintCtx.clearRect(0, 0, IMG_W, IMG_H);
+        for (const t of G.painted) {
+            for (const s of t.strokes) drawTileStroke({ c: t.c, r: t.r }, s);
+        }
+        for (const p of G.players) {
+            if (p.tile) for (const s of p.strokes) drawTileStroke(p.tile, s);
+        }
+    } else {
+        origCtx.clearRect(0, 0, IMG_W, IMG_H);
+        paintCtx.clearRect(0, 0, IMG_W, IMG_H);
+        for (const s of G.strokes) renderStrokeTo(paintCtx, s.stroke, IMG_W, IMG_H);
+    }
+}
+function resumePhase() {
+    if (!currentPhaseHandler()) return;
+    const remaining = G.paused ? Math.max(0, G.pausedMsLeft || 0)
+        : Math.max(0, (G.phaseEndsAt || 0) - Date.now());
+    if (G.paused) {
+        G.pausedMsLeft = remaining;
+        clearPhaseTimer();
+        return;
+    }
+    armCurrentPhaseTimer(Math.max(remaining, G.mode === 'copycat' && G.phase === 'memorize' ? 2000 : 5000));
+    if (G.mode === 'freestyle' && !G.players[G.painterIdx].connected) armFsGrace();
+}
+
+// ============================================================
+// INIT
+// ============================================================
+(function init() {
+    const session = getSession();
+    if (session && session.roomCode) {
+        if (session.isHost) reconnectAsHost(session);
+        else {
+            isHost = false;
+            myName = session.myName || 'Artist';
+            roomCode = session.roomCode;
+            setStatus('entry-status', 'Reconnecting...');
+            connectToHost(
+                () => setStatus('entry-status', 'Reconnected!'),
+                m => { setStatus('entry-status', m); clearSession(); showScreen('screen-entry'); });
+        }
+        return;
+    }
+    const params = new URLSearchParams(window.location.search);
+    const code = (params.get('room') || '').trim().toUpperCase().replace(/[^A-Z0-9]/g, '');
+    if (code.length >= 4 && code.length <= 12) {
+        switchTab('join');
+        document.getElementById('room-code-input').value = code;
+    }
+})();
+</script>
+</body>
+</html>
