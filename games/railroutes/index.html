@@ -1,0 +1,2773 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+<title>Rail Routes</title>
+<script src="https://unpkg.com/peerjs@1.5.4/dist/peerjs.min.js"></script>
+<style>
+    :root {
+        --bg-primary: #0f0f1a;
+        --bg-secondary: #1a1a2e;
+        --bg-card: #16213e;
+        --accent: #e94560;
+        --accent-hover: #ff6b81;
+        --text-primary: #eee;
+        --text-secondary: #aaa;
+        --border: #2a2a4a;
+        --sea: #2b5a78;
+        --land: #e4d6b0;
+        --ticket: #f3e9cf;
+    }
+    * { box-sizing: border-box; margin: 0; padding: 0; -webkit-tap-highlight-color: transparent; }
+    html, body {
+        width: 100%;
+        background: var(--bg-primary);
+        color: var(--text-primary);
+        font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+        overscroll-behavior: none;
+        touch-action: manipulation;
+    }
+    body { display: flex; flex-direction: column; min-height: 100vh; min-height: 100dvh; }
+    body.fullbleed .app { display: none; }
+    .app {
+        flex: 1; display: flex; flex-direction: column;
+        padding: 16px;
+        padding-top: max(16px, env(safe-area-inset-top));
+        padding-bottom: max(16px, env(safe-area-inset-bottom));
+        max-width: 560px; margin: 0 auto; width: 100%;
+    }
+    .back-link { color: var(--accent); text-decoration: none; font-weight: 500; font-size: 0.95rem; }
+    h1 { text-align: center; font-size: 2rem; margin: 6px 0 4px; color: var(--accent); letter-spacing: 1px; }
+    .subtitle { text-align: center; color: var(--text-secondary); margin-bottom: 16px; font-size: 0.9rem; }
+    .screen { display: none; flex: 1; flex-direction: column; }
+    .screen.active { display: flex; }
+    .panel {
+        background: var(--bg-card);
+        border: 1px solid var(--border);
+        border-radius: 14px;
+        padding: 16px;
+        margin-bottom: 12px;
+        box-shadow: 0 4px 16px rgba(0,0,0,0.25), inset 0 1px 0 rgba(255,255,255,0.03);
+    }
+    .panel h3 { font-size: 1.05rem; margin-bottom: 8px; letter-spacing: 0.3px; }
+    .panel ul { padding-left: 20px; color: var(--text-secondary); font-size: 0.9rem; }
+    .panel li { margin-bottom: 6px; }
+    .panel p { color: var(--text-secondary); font-size: 0.95rem; }
+    .btn {
+        display: block; width: 100%;
+        padding: 16px; min-height: 58px;
+        background: var(--accent); color: white;
+        border: none; border-radius: 12px;
+        font-size: 1.15rem; font-weight: bold; cursor: pointer;
+        margin-top: 10px;
+        transition: background 0.15s, transform 0.05s;
+        box-shadow: 0 4px 14px rgba(233, 69, 96, 0.25);
+        font-family: inherit;
+    }
+    .btn:active { transform: scale(0.98); }
+    .btn:hover { background: var(--accent-hover); }
+    .btn:disabled { background: #555; cursor: not-allowed; box-shadow: none; opacity: 0.7; }
+    .btn.secondary { background: var(--bg-secondary); border: 1px solid var(--border); box-shadow: none; }
+    .btn.secondary:hover { background: var(--border); }
+    .btn.action { background: #1f6feb; box-shadow: 0 4px 14px rgba(31,111,235,0.25); }
+    .btn.action:hover { background: #388bfd; }
+    .btn.go { background: #27ae60; box-shadow: 0 4px 14px rgba(39,174,96,0.3); }
+    .btn.go:hover { background: #2ecc71; }
+    .btn.small { padding: 10px; min-height: 44px; font-size: 0.98rem; }
+    input[type="text"] {
+        width: 100%; padding: 14px; min-height: 52px;
+        background: var(--bg-secondary); color: var(--text-primary);
+        border: 1px solid var(--border); border-radius: 10px;
+        font-size: 1.05rem; margin-top: 6px;
+    }
+    label { display: block; margin-top: 12px; color: var(--text-secondary); font-size: 0.9rem; font-weight: 500; }
+    .status { text-align: center; color: var(--text-secondary); min-height: 1.4em; margin-top: 10px; font-size: 0.95rem; }
+
+    .refresh-btn {
+        position: fixed;
+        top: max(10px, env(safe-area-inset-top));
+        right: max(10px, env(safe-area-inset-right));
+        width: 44px; height: 44px;
+        display: none;
+        align-items: center; justify-content: center;
+        background: var(--bg-card);
+        border: 1px solid var(--border);
+        border-radius: 50%;
+        font-size: 1.2rem;
+        cursor: pointer;
+        z-index: 50;
+        box-shadow: 0 2px 10px rgba(0,0,0,0.4);
+    }
+    .refresh-btn.visible { display: flex; }
+
+    .tabs { display: flex; gap: 8px; margin-bottom: 12px; }
+    .tab {
+        flex: 1; padding: 12px 6px; min-height: 50px;
+        background: var(--bg-secondary); color: var(--text-secondary);
+        border: 1px solid var(--border); border-radius: 10px;
+        font-size: 1rem; font-weight: bold; cursor: pointer; font-family: inherit;
+    }
+    .tab.active { background: var(--bg-card); color: var(--text-primary); border-color: var(--accent); }
+
+    .room-code {
+        text-align: center; font-size: 2.4rem; font-weight: bold;
+        letter-spacing: 6px; color: #ffd671; margin: 6px 0 10px;
+        font-family: ui-monospace, Menlo, Consolas, monospace;
+    }
+    .player-list { list-style: none; }
+    .player-list li {
+        display: flex; align-items: center; gap: 10px;
+        padding: 10px 4px; border-bottom: 1px solid var(--border);
+        font-size: 1.05rem;
+    }
+    .player-list li:last-child { border-bottom: none; }
+    .dot { width: 14px; height: 14px; border-radius: 50%; flex: 0 0 auto; box-shadow: 0 0 0 2px rgba(0,0,0,0.35); }
+    .tag { margin-left: auto; font-size: 0.8rem; color: var(--text-secondary); }
+    .row { display: flex; gap: 8px; }
+    .row .btn { flex: 1; }
+    .seg { display: flex; gap: 6px; flex-wrap: wrap; margin-top: 8px; }
+    .seg button {
+        flex: 1; min-width: 52px; padding: 10px 6px; border-radius: 10px;
+        background: var(--bg-secondary); color: var(--text-secondary);
+        border: 1px solid var(--border); font-weight: bold; font-size: 0.95rem; cursor: pointer; font-family: inherit;
+    }
+    .seg button.on { color: var(--text-primary); border-color: var(--accent); background: var(--bg-card); }
+    .seg button:disabled { cursor: default; }
+    .hint { color: var(--text-secondary); font-size: 0.88rem; margin-top: 6px; }
+
+    /* ---------- Game layout ---------- */
+    .fs { display: none; }
+    .fs.active { display: flex; }
+    #screen-game { flex-direction: column; min-height: 100vh; min-height: 100dvh; }
+    .topbar {
+        display: flex; align-items: center; gap: 10px;
+        padding: 8px 10px; padding-top: max(8px, env(safe-area-inset-top));
+        background: var(--bg-secondary); border-bottom: 1px solid var(--border);
+        position: sticky; top: 0; z-index: 30;
+    }
+    .turn-dot { width: 16px; height: 16px; border-radius: 50%; flex: 0 0 auto; box-shadow: 0 0 0 2px rgba(255,255,255,0.25); }
+    .turn-text { flex: 1; min-width: 0; }
+    .turn-title { font-weight: bold; font-size: 1.05rem; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+    .turn-sub { color: var(--text-secondary); font-size: 0.8rem; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+    .me-stats { font-size: 0.92rem; font-weight: bold; white-space: nowrap; text-align: right; line-height: 1.25; }
+    .icon-btn {
+        width: 40px; height: 40px; border-radius: 10px; flex: 0 0 auto;
+        background: var(--bg-card); border: 1px solid var(--border); color: var(--text-primary);
+        font-size: 1.15rem; cursor: pointer;
+    }
+    .banner {
+        padding: 7px 12px; font-size: 0.9rem; font-weight: bold; text-align: center;
+        background: #3d2f12; color: #ffd671; border-bottom: 1px solid #8a6d1a;
+    }
+    .banner.paused { background: #2b2b44; color: #cfd3ff; border-color: #44447a; }
+    .game-body { display: flex; flex-direction: column; flex: 1; min-height: 0; }
+    .map-wrap {
+        position: relative; height: 54vh; height: 54dvh; flex: 0 0 auto;
+        background: #0b1622; overflow: hidden;
+        touch-action: none; user-select: none; -webkit-user-select: none;
+    }
+    .map-svg { width: 100%; height: 100%; display: block; cursor: grab; }
+    .map-ctrls { position: absolute; right: 8px; bottom: 8px; display: flex; flex-direction: column; gap: 6px; z-index: 5; }
+    .map-ctrls button {
+        width: 40px; height: 40px; border-radius: 10px; font-size: 1.25rem; font-weight: bold;
+        background: rgba(22,33,62,0.92); color: #fff; border: 1px solid var(--border); cursor: pointer;
+    }
+    .side { padding: 10px 12px 28px; }
+    .section-label {
+        display: flex; justify-content: space-between; align-items: baseline;
+        color: var(--text-secondary); font-size: 0.78rem; font-weight: bold;
+        text-transform: uppercase; letter-spacing: 0.8px; margin: 10px 2px 6px;
+    }
+    .section-label span { text-transform: none; letter-spacing: 0; font-weight: normal; }
+    @media (orientation: landscape) and (min-width: 640px) {
+        #screen-game { height: 100vh; height: 100dvh; }
+        .game-body { flex-direction: row; }
+        .game-body .map-wrap { flex: 1; height: auto; }
+        .side { width: 360px; flex: 0 0 360px; overflow-y: auto; border-left: 1px solid var(--border); }
+    }
+    @media (orientation: landscape) and (max-height: 500px) {
+        .side { width: 300px; flex-basis: 300px; }
+    }
+
+    /* Cards */
+    .market { display: grid; grid-template-columns: repeat(6, 1fr); gap: 6px; }
+    .card {
+        position: relative; aspect-ratio: 5 / 7; border-radius: 8px;
+        border: 2px solid rgba(0,0,0,0.35);
+        display: flex; flex-direction: column; align-items: center; justify-content: flex-end;
+        padding: 0 0 5px; font-size: 0.66rem; font-weight: 800; color: rgba(0,0,0,0.72);
+        box-shadow: 0 2px 6px rgba(0,0,0,0.35); font-family: inherit; overflow: hidden;
+    }
+    .card::before {
+        content: ''; position: absolute; left: 5px; right: 5px; top: 5px; height: 42%;
+        border-radius: 4px; background: rgba(255,255,255,0.22);
+    }
+    button.card { cursor: default; }
+    button.card.can { cursor: pointer; box-shadow: 0 0 0 3px #2ecc71, 0 2px 6px rgba(0,0,0,0.35); }
+    button.card.can:active { transform: scale(0.96); }
+    button.card:disabled { opacity: 0.6; }
+    .card.empty { background: transparent; border: 2px dashed var(--border); box-shadow: none; }
+    .card.empty::before { display: none; }
+    .card.deck {
+        background: repeating-linear-gradient(135deg, #2c3e66 0 6px, #24335a 6px 12px);
+        color: #fff; border-color: #4b5f8f; justify-content: center; gap: 2px;
+    }
+    .card.deck::before { display: none; }
+    .card.deck b { font-size: 1rem; }
+    .c-red { background: #d63a3a; } .c-orange { background: #ef8a22; } .c-yellow { background: #f2d02c; }
+    .c-green { background: #3faa4a; } .c-blue { background: #2f6fd6; color: rgba(255,255,255,0.9) !important; }
+    .c-purple { background: #b05cc7; } .c-white { background: #f4f4f0; } .c-gray { background: #9aa0a6; }
+    .c-black { background: #2a2a2a; color: #eee !important; border-color: #666 !important; }
+    .c-loco { background: linear-gradient(135deg, #d63a3a, #ef8a22 20%, #f2d02c 38%, #3faa4a 56%, #2f6fd6 74%, #b05cc7); color: #fff !important; text-shadow: 0 1px 2px rgba(0,0,0,0.6); }
+    .card .ico { position: absolute; top: 22%; font-size: 1.15rem; }
+    .hand { display: grid; grid-template-columns: repeat(9, 1fr); gap: 5px; }
+    .hchip {
+        position: relative; aspect-ratio: 5 / 7; border-radius: 7px; border: 2px solid rgba(0,0,0,0.35);
+        display: flex; align-items: center; justify-content: center; cursor: pointer;
+        font-weight: 900; font-size: 1.15rem; color: rgba(0,0,0,0.78); font-family: inherit; padding: 0;
+    }
+    .hchip.zero { opacity: 0.28; }
+    .hchip.filter { box-shadow: 0 0 0 3px #ffd671; }
+    .hchip.bump { animation: bump 0.6s ease; }
+    @keyframes bump { 0% { transform: scale(1); } 35% { transform: scale(1.25); } 100% { transform: scale(1); } }
+    .mini { display: inline-block; width: 14px; height: 19px; border-radius: 3px; vertical-align: middle; border: 1px solid rgba(0,0,0,0.4); }
+
+    .action-box { margin-top: 10px; }
+    .note {
+        background: var(--bg-card); border: 1px solid var(--border); border-radius: 10px;
+        padding: 10px 12px; font-size: 0.93rem; color: var(--text-secondary); text-align: center;
+    }
+    .note b { color: #ffd671; }
+    .note.mine { border-color: #2ecc71; color: var(--text-primary); }
+
+    /* Side tabs */
+    .tabs.small { margin: 14px 0 8px; }
+    .tabs.small .tab { min-height: 40px; padding: 8px 4px; font-size: 0.9rem; }
+    .ticket {
+        display: flex; align-items: center; gap: 8px; width: 100%;
+        padding: 10px 12px; border-radius: 10px; margin-bottom: 6px;
+        background: var(--ticket); color: #2b2b2b; border: 2px solid transparent;
+        font-size: 0.95rem; font-weight: 600; text-align: left; cursor: pointer; font-family: inherit;
+    }
+    .ticket.long { background: #ead290; }
+    .ticket .pts {
+        margin-left: auto; font-weight: 800; background: #2b2b2b; color: var(--ticket);
+        border-radius: 999px; min-width: 36px; text-align: center; padding: 2px 8px; flex: 0 0 auto;
+    }
+    .ticket .chk {
+        width: 20px; height: 20px; border-radius: 5px; border: 2px solid #8b8371; flex: 0 0 auto;
+        display: inline-flex; align-items: center; justify-content: center;
+        font-size: 0.8rem; font-weight: 900; color: #fff;
+    }
+    .ticket:not(.selectable):not(.done):not(.failed) .chk { border-style: dashed; opacity: 0.55; }
+    .ticket.sel .chk { background: #1f6feb; border-color: #1f6feb; }
+    .ticket.done .chk { background: #27ae60; border-color: #27ae60; }
+    .ticket.failed .chk { background: #c0392b; border-color: #c0392b; }
+    .ticket.done { border-color: #27ae60; }
+    .ticket.done .pts { background: #27ae60; color: #fff; }
+    .ticket.focus { box-shadow: 0 0 0 3px #ffd200; }
+    .ticket.sel { border-color: #1f6feb; box-shadow: inset 0 0 0 2px #1f6feb; }
+    .ticket.failed { opacity: 0.7; text-decoration: line-through; }
+    .tsum { color: var(--text-secondary); font-size: 0.85rem; margin: 2px 2px 8px; }
+    .plist { list-style: none; }
+    .plist li {
+        display: flex; align-items: center; gap: 8px; padding: 9px 4px;
+        border-bottom: 1px solid var(--border); font-size: 0.95rem;
+    }
+    .plist li.turn { background: rgba(255,214,113,0.08); border-radius: 8px; }
+    .plist .nm { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+    .plist .st { color: var(--text-secondary); font-size: 0.82rem; white-space: nowrap; }
+    .plist .sc { font-weight: bold; min-width: 34px; text-align: right; }
+    .log { list-style: none; }
+    .log li { padding: 7px 4px; border-bottom: 1px solid var(--border); font-size: 0.88rem; color: var(--text-secondary); }
+    .log li:first-child { color: var(--text-primary); }
+
+    /* Bottom sheets */
+    .sheet {
+        position: fixed; left: 0; right: 0; bottom: 0; z-index: 60;
+        max-height: 46vh; max-height: 46dvh; overflow-y: auto;
+        background: var(--bg-card); border-top: 1px solid var(--border);
+        border-top-left-radius: 16px; border-top-right-radius: 16px;
+        padding: 14px 14px max(14px, env(safe-area-inset-bottom));
+        box-shadow: 0 -10px 30px rgba(0,0,0,0.55);
+        display: none; max-width: 560px; margin: 0 auto;
+    }
+    .sheet.open { display: block; }
+    .sheet h3 { font-size: 1.1rem; margin-bottom: 2px; padding-right: 40px; }
+    .sheet .close {
+        position: absolute; top: 10px; right: 10px; width: 34px; height: 34px; border-radius: 50%;
+        border: 1px solid var(--border); background: var(--bg-secondary); color: var(--text-primary);
+        font-size: 1rem; cursor: pointer;
+    }
+    .sheet .meta { color: var(--text-secondary); font-size: 0.88rem; margin-bottom: 10px; }
+    .lanes { display: flex; gap: 6px; margin-bottom: 10px; }
+    .lane-btn {
+        flex: 1; display: flex; align-items: center; justify-content: center; gap: 6px;
+        padding: 8px 4px; border-radius: 10px; border: 1px solid var(--border);
+        background: var(--bg-secondary); color: var(--text-primary); font-size: 0.85rem; cursor: pointer; font-family: inherit;
+    }
+    .lane-btn.on { border-color: #ffd671; box-shadow: inset 0 0 0 1px #ffd671; }
+    .pay-btn {
+        display: flex; align-items: center; justify-content: center; gap: 6px; width: 100%;
+        padding: 12px; margin-top: 8px; border-radius: 12px; border: none; cursor: pointer;
+        background: #27ae60; color: #fff; font-size: 1.02rem; font-weight: bold; font-family: inherit;
+    }
+    .pay-btn:hover { background: #2ecc71; }
+    @media (orientation: landscape) and (min-width: 640px) {
+        .sheet { left: auto; right: 0; width: 360px; max-height: 70vh; max-height: 70dvh; margin: 0; }
+    }
+    @media (orientation: landscape) and (max-height: 500px) {
+        .sheet { width: 300px; max-height: 85dvh; }
+    }
+
+    .menu {
+        position: fixed; top: 56px; right: 10px; z-index: 70; display: none;
+        background: var(--bg-card); border: 1px solid var(--border); border-radius: 12px;
+        box-shadow: 0 8px 30px rgba(0,0,0,0.5); min-width: 210px; overflow: hidden;
+    }
+    .menu.open { display: block; }
+    .menu button {
+        display: block; width: 100%; text-align: left; padding: 13px 16px; font-size: 1rem;
+        background: none; border: none; border-bottom: 1px solid var(--border); color: var(--text-primary); cursor: pointer; font-family: inherit;
+    }
+    .menu button:last-child { border-bottom: none; }
+    .menu button:hover { background: var(--bg-secondary); }
+
+    .toast {
+        position: fixed; top: 64px; left: 50%; transform: translateX(-50%) translateY(-10px);
+        background: rgba(20,24,40,0.96); border: 1px solid var(--border); color: #fff;
+        padding: 10px 18px; border-radius: 999px; font-weight: bold; font-size: 0.98rem;
+        z-index: 90; opacity: 0; pointer-events: none; transition: opacity 0.2s, transform 0.2s;
+        box-shadow: 0 6px 24px rgba(0,0,0,0.5); white-space: nowrap; max-width: 92vw; overflow: hidden; text-overflow: ellipsis;
+    }
+    .toast.show { opacity: 1; transform: translateX(-50%) translateY(0); }
+
+    /* Map SVG */
+    .map-svg .city .cdot { fill: #1d1d1d; stroke: #fbf6e6; stroke-width: 3; }
+    .map-svg .city .ring { fill: none; stroke: #ffd200; stroke-width: 6; animation: pulse 1.4s ease-in-out infinite; }
+    .map-svg .city text {
+        font-size: var(--lbl, 15px); font-weight: 800; fill: #1b1b1b;
+        paint-order: stroke; stroke: #fbf3dd; stroke-width: 0.3em; stroke-linejoin: round;
+        pointer-events: none;
+    }
+    .map-svg .city.focus text { fill: #6b4400; }
+    .map-svg .sg { stroke: #2d2d2d; stroke-width: 1.3; }
+    .map-svg .sg.own { stroke: #070707; stroke-width: 2.4; }
+    .map-svg .lane.closed { opacity: 0.2; }
+    .map-svg .lane.dim { opacity: 0.18; }
+    .map-svg .lane.sel .sg { stroke: #fff; stroke-width: 3.2; }
+    .map-svg .lane.recent .sg { animation: glow 1s ease-in-out infinite alternate; }
+    .map-svg .tline { stroke: #ffd200; stroke-width: 5; stroke-dasharray: 12 9; fill: none; opacity: 0.9; stroke-linecap: round; }
+    .map-svg .tline.weak { opacity: 0.45; stroke-width: 3.5; }
+    @keyframes pulse { 0%, 100% { stroke-opacity: 1; } 50% { stroke-opacity: 0.35; } }
+    @keyframes glow { from { stroke: #070707; } to { stroke: #fff; } }
+
+    /* Final results */
+    #screen-over { flex-direction: column; min-height: 100vh; min-height: 100dvh; }
+    #screen-over .map-wrap { height: 50vh; height: 50dvh; min-height: 240px; }
+    .over-body { padding: 14px 12px 30px; max-width: 760px; width: 100%; margin: 0 auto; }
+    .winner { text-align: center; font-size: 1.6rem; font-weight: bold; margin: 6px 0 12px; }
+    .results { width: 100%; border-collapse: collapse; font-size: 0.92rem; }
+    .results th { color: var(--text-secondary); font-weight: 600; font-size: 0.75rem; text-transform: uppercase; padding: 6px 4px; text-align: right; }
+    .results th:nth-child(2), .results td:nth-child(2) { text-align: left; }
+    .results td { padding: 9px 4px; border-top: 1px solid var(--border); text-align: right; white-space: nowrap; }
+    .results td.tot { font-weight: 900; font-size: 1.05rem; }
+    .results tr.prow { cursor: pointer; }
+    .results tr.tix td { border-top: none; padding-top: 0; text-align: left; white-space: normal; }
+    .neg { color: #ff8a8a; } .posv { color: #7be3a0; }
+
+    /* TV display */
+    body.tv { overflow: hidden; }
+    #screen-tv { height: 100vh; flex-direction: row; }
+    #screen-tv .map-wrap { flex: 1; height: auto; align-self: stretch; }
+    .tv-side {
+        width: clamp(300px, 24vw, 460px); flex: 0 0 auto; background: var(--bg-secondary);
+        border-left: 1px solid var(--border); padding: 16px; display: flex; flex-direction: column; gap: 12px; overflow: hidden;
+        font-size: clamp(14px, 1.05vw, 20px);
+    }
+    .tv-turn { font-size: 1.4em; font-weight: bold; display: flex; align-items: center; gap: 10px; }
+    .tv-side .plist li { font-size: 1em; padding: 0.45em 0.3em; }
+    .tv-side .plist .st { font-size: 0.85em; }
+    .tv-side .market { grid-template-columns: repeat(6, 1fr); }
+    .tv-side .card { font-size: 0.65em; }
+    .tv-side .log li { font-size: 0.9em; }
+    .tv-code { color: var(--text-secondary); font-size: 0.9em; }
+    .tv-code b { color: #ffd671; letter-spacing: 2px; }
+    #screen-tv-lobby { flex-direction: column; align-items: center; justify-content: center; min-height: 100vh; padding: 30px; text-align: center; }
+    #screen-tv-lobby .room-code { font-size: clamp(3rem, 9vw, 7rem); }
+    #screen-tv-lobby .player-list { min-width: 320px; text-align: left; font-size: 1.3rem; }
+</style>
+</head>
+<body>
+<button id="refresh-btn" class="refresh-btn" onclick="refreshPage()" title="Refresh connection">🔄</button>
+<div class="app">
+    <a class="back-link" href="../../index.html">&larr; Arcade</a>
+    <h1>Rail Routes</h1>
+    <div class="subtitle">Claim railways across North America &middot; 2&ndash;8 players on their own phones</div>
+
+    <!-- ENTRY -->
+    <div id="screen-entry" class="screen active">
+        <div class="tabs">
+            <button class="tab active" id="tab-create" onclick="switchTab('create')">Host</button>
+            <button class="tab" id="tab-join" onclick="switchTab('join')">Join</button>
+            <button class="tab" id="tab-tv" onclick="switchTab('tv')">TV Display</button>
+        </div>
+        <div id="panel-create" class="panel">
+            <label>Your name</label>
+            <input type="text" id="host-name" placeholder="Conductor" maxlength="14">
+            <button class="btn go" onclick="createGame()">Create Room 🚂</button>
+        </div>
+        <div id="panel-join" class="panel" style="display:none">
+            <label>Your name</label>
+            <input type="text" id="guest-name" placeholder="Conductor" maxlength="14">
+            <label>Room code</label>
+            <input type="text" id="room-code-input" placeholder="e.g. ABX7QK" maxlength="12" autocapitalize="characters">
+            <button class="btn go" onclick="joinGame()">Join Room</button>
+        </div>
+        <div id="panel-tv" class="panel" style="display:none">
+            <p>Open this on a TV or laptop to show the whole board to the room. It doesn't take a seat.</p>
+            <label>Room code</label>
+            <input type="text" id="tv-room-code-input" placeholder="e.g. ABX7QK" maxlength="12" autocapitalize="characters">
+            <button class="btn action" onclick="joinTvDisplay()">Connect Display 📺</button>
+        </div>
+        <div class="status" id="entry-status"></div>
+        <div class="panel">
+            <h3>How to play</h3>
+            <ul>
+                <li>2&ndash;8 players, each on their own phone. A TV display is optional.</li>
+                <li>On your turn do <b>one</b> thing: <b>draw 2 train cards</b> (a face-up locomotive counts as both), <b>claim a route</b> by paying cards that match its color and length, or <b>draw 3 destination tickets</b> and keep at least 1.</li>
+                <li>Locomotives are wild. Gray routes take any one color.</li>
+                <li>Routes score 1, 2, 4, 7, 10, 15 points for 1&ndash;6 trains.</li>
+                <li>Double and triple tracks: 2&ndash;3 players can use one track per route, 4&ndash;5 players two, 6&ndash;8 players all three. You can't own two tracks of the same route.</li>
+                <li>When someone ends a turn with 2 or fewer trains, everyone gets one final turn.</li>
+                <li>Finished tickets add their points, unfinished ones subtract them. The longest continuous railway earns +10.</li>
+            </ul>
+        </div>
+    </div>
+
+    <!-- LOBBY -->
+    <div id="screen-lobby" class="screen">
+        <div class="panel">
+            <h3>Room code</h3>
+            <div class="room-code" id="lobby-room-code"></div>
+            <div class="row">
+                <button class="btn secondary small" onclick="copyRoomCode()">Copy Code</button>
+                <button class="btn secondary small" onclick="copyJoinLink()">Join Link</button>
+                <button class="btn secondary small" onclick="copyTvLink()">TV Link</button>
+            </div>
+        </div>
+        <div class="panel">
+            <h3>Conductors (<span id="lobby-count">0</span>/8)</h3>
+            <ul class="player-list" id="lobby-players"></ul>
+        </div>
+        <div class="panel">
+            <h3>Trains per player</h3>
+            <div class="seg" id="lobby-trains"></div>
+            <div class="hint" id="lobby-trains-hint"></div>
+        </div>
+        <div id="lobby-host-panel" style="display:none">
+            <button class="btn go" id="btn-start" onclick="startMatch()" disabled>All aboard! (need 2&ndash;8 players)</button>
+        </div>
+        <div class="note" id="lobby-guest-note" style="display:none">Waiting for the host to start the game...</div>
+        <button class="btn secondary small" onclick="confirmLeave()">Leave Room</button>
+        <div class="status" id="lobby-status"></div>
+    </div>
+
+    <!-- HOST DISCONNECTED -->
+    <div id="screen-host-lost" class="screen">
+        <div class="panel" style="margin-top:24px">
+            <h3>📡 Lost contact with the host</h3>
+            <p>The host's connection dropped. You can take over with the last known game state, or wait for them to come back and reconnect.</p>
+        </div>
+        <button class="btn" id="btn-take-over" onclick="takeOverAsHost()">👑 Take Over as Host</button>
+        <button class="btn secondary" onclick="tryReconnectGuest()">Try Reconnect</button>
+        <button class="btn secondary" onclick="leaveGame()">Leave Game</button>
+        <div class="status" id="host-lost-status"></div>
+    </div>
+</div>
+
+<!-- GAME (full-bleed) -->
+<div id="screen-game" class="screen fs">
+    <div class="topbar">
+        <span class="turn-dot" id="turn-dot"></span>
+        <div class="turn-text">
+            <div class="turn-title" id="turn-title"></div>
+            <div class="turn-sub" id="turn-sub"></div>
+        </div>
+        <div class="me-stats" id="me-stats"></div>
+        <button class="icon-btn" onclick="toggleMenu(event)" title="Menu">☰</button>
+    </div>
+    <div id="game-banner" class="banner" style="display:none"></div>
+    <div class="game-body">
+        <div id="game-map" class="map-wrap"></div>
+        <div class="side">
+            <div class="section-label">Train cards <span id="deck-info"></span></div>
+            <div class="market" id="market"></div>
+            <div class="action-box" id="action-box"></div>
+            <div class="section-label">Your hand <span id="hand-info"></span></div>
+            <div class="hand" id="hand"></div>
+            <div class="tabs small">
+                <button class="tab active" id="stab-tickets" onclick="setSideTab('tickets')">🎫 Tickets</button>
+                <button class="tab" id="stab-players" onclick="setSideTab('players')">👥 Players</button>
+                <button class="tab" id="stab-log" onclick="setSideTab('log')">📜 Log</button>
+            </div>
+            <div id="side-content"></div>
+        </div>
+    </div>
+</div>
+
+<!-- GAME OVER (full-bleed) -->
+<div id="screen-over" class="screen fs">
+    <div id="over-map" class="map-wrap"></div>
+    <div class="over-body">
+        <div class="winner" id="over-winner"></div>
+        <table class="results" id="over-results"></table>
+        <div class="hint" style="text-align:center">Tap a player to see their tickets.</div>
+        <div id="over-host-panel" style="display:none">
+            <button class="btn go" onclick="playAgain()">Back to Lobby</button>
+        </div>
+        <div class="note" id="over-guest-note" style="display:none;margin-top:12px">Waiting for the host to start a new game...</div>
+        <button class="btn secondary small" onclick="confirmLeave()">Leave Room</button>
+    </div>
+</div>
+
+<!-- TV DISPLAY (full-bleed) -->
+<div id="screen-tv-lobby" class="screen fs">
+    <div class="subtitle" style="font-size:1.3rem">Rail Routes &middot; join on your phone with code</div>
+    <div class="room-code" id="tv-lobby-code"></div>
+    <div class="subtitle" id="tv-lobby-url"></div>
+    <ul class="player-list" id="tv-lobby-players"></ul>
+</div>
+<div id="screen-tv" class="screen fs">
+    <div id="tv-map" class="map-wrap"></div>
+    <div class="tv-side" id="tv-side"></div>
+</div>
+
+<div id="menu" class="menu"></div>
+<div id="route-sheet" class="sheet"></div>
+<div id="ticket-sheet" class="sheet"></div>
+<div id="toast" class="toast"></div>
+
+<script>
+// ============================================================
+// CONSTANTS
+// ============================================================
+const PEER_PREFIX = 'railroutes-davria-';
+const MAX_PLAYERS = 8;
+const GRACE_MS = 30000;             // disconnected player's window before their turn passes
+const HEARTBEAT_INTERVAL_MS = 3000;
+const HEARTBEAT_TIMEOUT_MS = 12000;
+
+const PLAYER_COLORS = ['#e53935', '#1e88e5', '#43a047', '#fdd835', '#8e24aa', '#fb8c00', '#00acc1', '#f06292'];
+const CARD_COLORS = ['red', 'orange', 'yellow', 'green', 'blue', 'purple', 'white', 'black'];
+const CARD_TYPES = CARD_COLORS.concat(['loco']);
+const COLOR_HEX = {
+    red: '#d63a3a', orange: '#ef8a22', yellow: '#f2d02c', green: '#3faa4a', blue: '#2f6fd6',
+    purple: '#b05cc7', white: '#f4f4f0', black: '#2a2a2a', gray: '#9aa0a6',
+};
+const COLOR_NAME = {
+    red: 'Red', orange: 'Orange', yellow: 'Yellow', green: 'Green', blue: 'Blue',
+    purple: 'Purple', white: 'White', black: 'Black', gray: 'Gray', loco: 'Locomotive',
+};
+const COLOR_CODE = { R: 'red', O: 'orange', Y: 'yellow', G: 'green', B: 'blue', P: 'purple', W: 'white', K: 'black', X: 'gray' };
+const ROUTE_POINTS = [0, 1, 2, 4, 7, 10, 15];
+const LONGEST_BONUS = 10;
+const TRAIN_OPTIONS = [0, 30, 35, 40, 45, 50]; // 0 = auto by player count
+
+// ============================================================
+// MAP DATA — North America. Lengths/colors were balanced offline so
+// eight players have room: ~580 track spaces with every lane open.
+// ============================================================
+const CITY_DATA = {
+    'Vancouver': [49.28, -123.12], 'Seattle': [47.61, -122.33], 'Portland': [45.52, -122.68],
+    'San Francisco': [37.77, -122.42], 'Reno': [39.53, -119.81], 'Los Angeles': [34.05, -118.24],
+    'San Diego': [32.72, -117.16], 'Las Vegas': [36.17, -115.14], 'Phoenix': [33.45, -112.07],
+    'El Paso': [31.76, -106.49], 'Santa Fe': [35.69, -105.94], 'Salt Lake City': [40.76, -111.89],
+    'Boise': [43.62, -116.20], 'Spokane': [47.66, -117.43], 'Calgary': [51.05, -114.07],
+    'Helena': [46.59, -112.04], 'Billings': [45.78, -108.50], 'Denver': [39.74, -104.99],
+    'Rapid City': [44.08, -103.23], 'Regina': [50.45, -104.61], 'Winnipeg': [49.90, -97.14],
+    'Fargo': [46.88, -96.79], 'Minneapolis': [44.98, -93.27], 'Duluth': [46.79, -92.10],
+    'Omaha': [41.26, -95.93], 'Kansas City': [39.10, -94.58], 'Oklahoma City': [35.47, -97.52],
+    'Dallas': [32.78, -96.80], 'Houston': [29.76, -95.37], 'San Antonio': [29.42, -98.49],
+    'Little Rock': [34.75, -92.29], 'Memphis': [35.15, -90.05], 'New Orleans': [29.95, -90.07],
+    'St. Louis': [38.63, -90.20], 'Chicago': [41.88, -87.63], 'Detroit': [42.33, -83.05],
+    'Sault Ste. Marie': [46.52, -84.35], 'Toronto': [43.65, -79.38], 'Montreal': [45.50, -73.57],
+    'Boston': [42.36, -71.06], 'New York': [40.71, -74.01], 'Washington': [38.91, -77.04],
+    'Pittsburgh': [40.44, -79.99], 'Cincinnati': [39.10, -84.51], 'Nashville': [36.16, -86.78],
+    'Atlanta': [33.75, -84.39], 'Raleigh': [35.78, -78.64], 'Charleston': [32.78, -79.93],
+    'Jacksonville': [30.33, -81.66], 'Miami': [25.76, -80.19], 'Monterrey': [25.69, -100.32],
+    'Thunder Bay': [48.38, -89.25],
+};
+// Label placement relative to the city dot: [dx, dy, text-anchor]. Chosen to
+// keep labels off the track; cities not listed sit centered below their dot.
+const LABEL_POS = {
+    'Vancouver': [-14, 6, 'end'], 'Portland': [-14, 6, 'end'], 'San Francisco': [-14, 6, 'end'],
+    'Seattle': [-14, 6, 'end'], 'Reno': [-10, -12, 'end'], 'Los Angeles': [-10, 22, 'end'],
+    'Spokane': [10, -12, 'start'], 'Boise': [14, 6, 'start'], 'Las Vegas': [14, 6, 'start'],
+    'Calgary': [0, -15, 'middle'], 'Helena': [10, -12, 'start'], 'Salt Lake City': [10, -12, 'start'],
+    'El Paso': [-10, 22, 'end'], 'Santa Fe': [-10, -12, 'end'], 'Denver': [-10, 22, 'end'],
+    'Regina': [0, -15, 'middle'], 'Rapid City': [-14, 6, 'end'], 'San Antonio': [-14, 6, 'end'],
+    'Oklahoma City': [10, -12, 'start'], 'Winnipeg': [10, -12, 'start'], 'Dallas': [14, 6, 'start'],
+    'Fargo': [10, -12, 'start'], 'Omaha': [-10, -12, 'end'], 'Houston': [10, 22, 'start'],
+    'Kansas City': [10, -12, 'start'], 'Minneapolis': [-10, 22, 'end'], 'Little Rock': [-10, 22, 'end'],
+    'Duluth': [0, -15, 'middle'], 'St. Louis': [10, 22, 'start'], 'New Orleans': [10, 22, 'start'],
+    'Memphis': [10, 22, 'start'], 'Thunder Bay': [10, -12, 'start'], 'Chicago': [10, -12, 'start'],
+    'Nashville': [10, -12, 'start'], 'Cincinnati': [10, 22, 'start'], 'Atlanta': [-14, 6, 'end'],
+    'Sault Ste. Marie': [-10, 22, 'end'], 'Detroit': [0, -15, 'middle'], 'Jacksonville': [14, 6, 'start'],
+    'Pittsburgh': [10, -12, 'start'], 'Toronto': [10, 22, 'start'], 'Raleigh': [10, 22, 'start'],
+    'Washington': [10, 22, 'start'], 'New York': [10, 22, 'start'], 'Montreal': [10, -12, 'start'],
+    'Boston': [14, 6, 'start'],
+};
+
+// [cityA, cityB, length, lane colors (one letter per parallel track)]
+const ROUTE_DATA = [
+    ['Vancouver', 'Seattle', 1, 'KX'],
+    ['Vancouver', 'Calgary', 6, 'O'],
+    ['Seattle', 'Portland', 2, 'XO'],
+    ['Seattle', 'Spokane', 3, 'PB'],
+    ['Portland', 'Boise', 4, 'X'],
+    ['Portland', 'San Francisco', 6, 'WG'],
+    ['Spokane', 'Calgary', 3, 'Y'],
+    ['Spokane', 'Helena', 3, 'W'],
+    ['Spokane', 'Boise', 3, 'O'],
+    ['Calgary', 'Helena', 4, 'X'],
+    ['Calgary', 'Regina', 6, 'R'],
+    ['San Francisco', 'Reno', 2, 'OB'],
+    ['San Francisco', 'Los Angeles', 4, 'XRK'],
+    ['Los Angeles', 'San Diego', 1, 'PW'],
+    ['Los Angeles', 'Las Vegas', 2, 'GO'],
+    ['Los Angeles', 'Phoenix', 4, 'Y'],
+    ['San Diego', 'Phoenix', 3, 'G'],
+    ['Reno', 'Boise', 4, 'X'],
+    ['Reno', 'Salt Lake City', 5, 'RY'],
+    ['Reno', 'Las Vegas', 4, 'P'],
+    ['Las Vegas', 'Salt Lake City', 4, 'X'],
+    ['Las Vegas', 'Phoenix', 3, 'X'],
+    ['Phoenix', 'Santa Fe', 4, 'B'],
+    ['Phoenix', 'El Paso', 4, 'XO'],
+    ['Boise', 'Salt Lake City', 3, 'PK'],
+    ['Boise', 'Helena', 3, 'Y'],
+    ['Helena', 'Billings', 2, 'RP'],
+    ['Helena', 'Salt Lake City', 5, 'B'],
+    ['Billings', 'Regina', 4, 'W'],
+    ['Billings', 'Rapid City', 3, 'B'],
+    ['Salt Lake City', 'Denver', 4, 'GWO'],
+    ['Denver', 'Santa Fe', 3, 'XX'],
+    ['Denver', 'Rapid City', 4, 'R'],
+    ['Denver', 'Omaha', 6, 'YK'],
+    ['Denver', 'Kansas City', 6, 'BP'],
+    ['Denver', 'Oklahoma City', 6, 'X'],
+    ['Santa Fe', 'El Paso', 3, 'RY'],
+    ['Santa Fe', 'Oklahoma City', 5, 'K'],
+    ['El Paso', 'Dallas', 6, 'G'],
+    ['El Paso', 'San Antonio', 5, 'P'],
+    ['El Paso', 'Monterrey', 6, 'W'],
+    ['Regina', 'Winnipeg', 4, 'XY'],
+    ['Rapid City', 'Fargo', 4, 'K'],
+    ['Rapid City', 'Omaha', 5, 'X'],
+    ['Winnipeg', 'Fargo', 2, 'X'],
+    ['Winnipeg', 'Thunder Bay', 5, 'B'],
+    ['Fargo', 'Minneapolis', 3, 'OX'],
+    ['Fargo', 'Duluth', 3, 'G'],
+    ['Thunder Bay', 'Duluth', 2, 'X'],
+    ['Thunder Bay', 'Sault Ste. Marie', 3, 'W'],
+    ['Duluth', 'Minneapolis', 2, 'YKR'],
+    ['Duluth', 'Chicago', 5, 'PX'],
+    ['Minneapolis', 'Omaha', 3, 'PX'],
+    ['Minneapolis', 'Chicago', 4, 'BG'],
+    ['Omaha', 'Kansas City', 2, 'XGW'],
+    ['Omaha', 'Chicago', 5, 'WR'],
+    ['Kansas City', 'St. Louis', 3, 'XRK'],
+    ['Kansas City', 'Oklahoma City', 3, 'OG'],
+    ['Oklahoma City', 'Dallas', 2, 'YXR'],
+    ['Oklahoma City', 'Little Rock', 3, 'B'],
+    ['Dallas', 'Houston', 3, 'WPB'],
+    ['Dallas', 'San Antonio', 3, 'XO'],
+    ['Dallas', 'Little Rock', 3, 'R'],
+    ['Houston', 'San Antonio', 2, 'XG'],
+    ['Houston', 'New Orleans', 3, 'GR'],
+    ['San Antonio', 'Monterrey', 3, 'YK'],
+    ['Houston', 'Monterrey', 4, 'X'],
+    ['Little Rock', 'Memphis', 1, 'KO'],
+    ['Little Rock', 'St. Louis', 3, 'W'],
+    ['Memphis', 'St. Louis', 3, 'XY'],
+    ['Memphis', 'New Orleans', 4, 'PB'],
+    ['Memphis', 'Nashville', 2, 'XW'],
+    ['New Orleans', 'Atlanta', 5, 'YK'],
+    ['New Orleans', 'Jacksonville', 5, 'O'],
+    ['New Orleans', 'Miami', 6, 'X'],
+    ['St. Louis', 'Chicago', 3, 'OXB'],
+    ['St. Louis', 'Nashville', 3, 'P'],
+    ['St. Louis', 'Cincinnati', 3, 'GX'],
+    ['Chicago', 'Detroit', 3, 'KYX'],
+    ['Chicago', 'Cincinnati', 3, 'WP'],
+    ['Detroit', 'Sault Ste. Marie', 3, 'B'],
+    ['Detroit', 'Toronto', 2, 'PG'],
+    ['Detroit', 'Pittsburgh', 2, 'OX'],
+    ['Detroit', 'Cincinnati', 3, 'R'],
+    ['Sault Ste. Marie', 'Toronto', 4, 'X'],
+    ['Sault Ste. Marie', 'Montreal', 6, 'O'],
+    ['Toronto', 'Montreal', 4, 'RY'],
+    ['Toronto', 'Pittsburgh', 3, 'X'],
+    ['Montreal', 'Boston', 3, 'GW'],
+    ['Montreal', 'New York', 4, 'PX'],
+    ['Boston', 'New York', 2, 'BYR'],
+    ['New York', 'Pittsburgh', 4, 'KW'],
+    ['New York', 'Washington', 2, 'GXB'],
+    ['Pittsburgh', 'Washington', 2, 'RW'],
+    ['Pittsburgh', 'Cincinnati', 3, 'YX'],
+    ['Cincinnati', 'Nashville', 3, 'KB'],
+    ['Cincinnati', 'Washington', 4, 'O'],
+    ['Washington', 'Raleigh', 3, 'PKX'],
+    ['Nashville', 'Atlanta', 2, 'XP'],
+    ['Nashville', 'Raleigh', 5, 'G'],
+    ['Atlanta', 'Raleigh', 4, 'XR'],
+    ['Atlanta', 'Charleston', 3, 'O'],
+    ['Atlanta', 'Jacksonville', 3, 'W'],
+    ['Raleigh', 'Charleston', 2, 'YB'],
+    ['Charleston', 'Jacksonville', 2, 'X'],
+    ['Jacksonville', 'Miami', 4, 'GK'],
+];
+// One long ticket is dealt to each player at the start (unkept ones leave the game).
+const LONG_TICKETS = [
+    ['Fargo', 'Boston', 17], ['San Francisco', 'Kansas City', 17], ['Rapid City', 'Jacksonville', 18],
+    ['Las Vegas', 'Nashville', 18], ['Spokane', 'St. Louis', 18], ['Regina', 'Little Rock', 19],
+    ['El Paso', 'Calgary', 19], ['Santa Fe', 'New York', 20], ['Phoenix', 'Charleston', 20],
+    ['Los Angeles', 'Duluth', 21], ['Boise', 'New Orleans', 21], ['Reno', 'Cincinnati', 21],
+    ['Portland', 'Houston', 22], ['San Diego', 'Detroit', 24], ['Winnipeg', 'Miami', 24],
+    ['Seattle', 'Toronto', 26],
+];
+const TICKETS = [
+    ['Toronto', 'Washington', 5], ['Duluth', 'Omaha', 5], ['Duluth', 'Sault Ste. Marie', 5],
+    ['El Paso', 'San Antonio', 5], ['Boise', 'Billings', 5], ['Salt Lake City', 'Helena', 5],
+    ['Montreal', 'Washington', 6], ['New Orleans', 'Nashville', 6], ['Detroit', 'Nashville', 6],
+    ['New Orleans', 'Miami', 6], ['Helena', 'Regina', 6], ['Denver', 'Kansas City', 6],
+    ['San Diego', 'Salt Lake City', 7], ['Vancouver', 'Boise', 7], ['Atlanta', 'Miami', 7],
+    ['Cincinnati', 'Raleigh', 7], ['New York', 'Charleston', 7], ['Toronto', 'New York', 7],
+    ['Chicago', 'Washington', 7], ['Winnipeg', 'Omaha', 8], ['Portland', 'Reno', 8],
+    ['Little Rock', 'Raleigh', 8], ['El Paso', 'Oklahoma City', 8], ['Pittsburgh', 'Thunder Bay', 8],
+    ['Little Rock', 'Jacksonville', 8], ['Fargo', 'Kansas City', 8], ['Oklahoma City', 'New Orleans', 8],
+    ['Houston', 'Atlanta', 8], ['Sault Ste. Marie', 'Nashville', 9], ['Houston', 'Miami', 9],
+    ['Reno', 'Denver', 9], ['Vancouver', 'San Francisco', 9], ['New Orleans', 'Cincinnati', 9],
+    ['Denver', 'Little Rock', 9], ['Spokane', 'Regina', 9], ['Nashville', 'Miami', 9],
+    ['Montreal', 'Raleigh', 9], ['Billings', 'Minneapolis', 10], ['Santa Fe', 'Houston', 10],
+    ['Rapid City', 'Chicago', 10], ['Rapid City', 'Oklahoma City', 10], ['Calgary', 'Winnipeg', 10],
+    ['Memphis', 'Toronto', 10], ['San Francisco', 'Denver', 11], ['Vancouver', 'Reno', 11],
+    ['Kansas City', 'Raleigh', 11], ['Portland', 'Las Vegas', 11], ['Duluth', 'Little Rock', 11],
+    ['Boston', 'Atlanta', 11], ['Detroit', 'Jacksonville', 11], ['Santa Fe', 'St. Louis', 11],
+    ['Calgary', 'Fargo', 12], ['Seattle', 'Los Angeles', 12], ['San Diego', 'San Antonio', 12],
+    ['Rapid City', 'Sault Ste. Marie', 12], ['Jacksonville', 'Monterrey', 12], ['Reno', 'Rapid City', 12],
+    ['Oklahoma City', 'Pittsburgh', 12], ['Boston', 'Thunder Bay', 12], ['Fargo', 'Toronto', 12],
+    ['Fargo', 'Dallas', 13], ['El Paso', 'Billings', 13], ['San Diego', 'Monterrey', 13],
+    ['Omaha', 'Jacksonville', 13], ['Salt Lake City', 'Minneapolis', 13], ['Minneapolis', 'Houston', 13],
+    ['San Diego', 'Billings', 14], ['Atlanta', 'Thunder Bay', 14], ['Las Vegas', 'Omaha', 14],
+    ['Kansas City', 'Boston', 14], ['Salt Lake City', 'Memphis', 14], ['Santa Fe', 'Regina', 14],
+];
+
+// Coastline, lakes and borders as [lat, lon] — coarse on purpose (board-game look)
+const LAND = [
+    [60, -140], [60, -55], [47, -60], [45.0, -66.9], [44.4, -68.2], [43.6, -70.2], [42.6, -70.6],
+    [42.35, -70.95], [42.05, -70.1], [41.65, -69.95], [41.55, -70.65], [41.45, -71.4], [41.07, -71.85],
+    [40.62, -73.0], [40.55, -73.95], [40.45, -74.0], [40.0, -74.05], [39.35, -74.45], [38.93, -74.92],
+    [38.45, -75.05], [37.9, -75.35], [37.15, -75.95], [36.9, -76.0], [36.0, -75.65], [35.25, -75.5],
+    [34.65, -76.55], [34.2, -77.8], [33.85, -78.55], [33.2, -79.2], [32.75, -79.85], [32.05, -80.85],
+    [31.2, -81.3], [30.35, -81.4], [29.2, -81.0], [28.45, -80.55], [27.2, -80.2], [26.1, -80.1],
+    [25.35, -80.35], [25.15, -81.05], [25.85, -81.7], [26.7, -82.2], [27.75, -82.75], [28.85, -82.7],
+    [29.85, -83.6], [29.95, -84.35], [29.65, -85.3], [30.35, -86.5], [30.25, -87.6], [30.4, -88.6],
+    [30.25, -89.6], [29.2, -89.3], [29.25, -90.6], [29.55, -91.8], [29.7, -93.0], [29.65, -94.0],
+    [29.3, -94.8], [28.65, -95.8], [28.05, -96.95], [27.6, -97.25], [26.85, -97.45], [26.0, -97.2],
+    [25.0, -97.45], [24.0, -97.75], [22.5, -97.85], [20, -97.5], [20, -105.5], [23.2, -106.4],
+    [24.5, -107.6], [25.6, -109.1], [26.9, -109.9], [27.9, -110.9], [28.9, -112.1], [29.9, -112.7],
+    [30.8, -113.1], [31.5, -113.9], [31.8, -114.75], [31.0, -114.8], [29.9, -114.4], [28.9, -113.4],
+    [27.4, -112.4], [26.0, -111.3], [24.6, -110.6], [24.1, -110.3], [22.8, -109.8], [22.8, -110.2],
+    [24.5, -111.6], [24.8, -112.2], [26.3, -113.1], [27.2, -114.2], [27.85, -115.05], [28.0, -114.1],
+    [28.9, -114.5], [29.9, -115.7], [30.9, -116.3], [31.85, -116.65], [32.53, -117.12], [32.7, -117.25],
+    [33.2, -117.4], [33.7, -118.2], [34.0, -118.55], [34.1, -119.2], [34.45, -120.45], [35.1, -120.65],
+    [35.65, -121.25], [36.6, -121.95], [37.15, -122.4], [37.75, -122.52], [38.3, -123.05], [38.95, -123.75],
+    [40.45, -124.4], [41.8, -124.25], [43.4, -124.35], [44.8, -124.05], [46.25, -124.05], [47.4, -124.35],
+    [48.4, -124.75], [48.9, -125.6], [49.6, -126.7], [50.4, -128.0], [52.0, -128.3], [53.5, -130],
+];
+const LAKES = [
+    // Superior
+    [[46.75, -92.05], [47.5, -90.6], [48.3, -89.1], [48.8, -87.5], [48.6, -86.3], [47.9, -84.9], [46.9, -84.6],
+     [46.55, -84.55], [46.5, -85.5], [46.7, -86.5], [46.45, -87.4], [46.9, -88.4], [47.4, -87.9], [46.8, -89.0],
+     [46.6, -90.4], [46.7, -91.5]],
+    // Michigan
+    [[45.8, -85.0], [45.9, -86.4], [45.6, -87.0], [44.5, -87.5], [43.0, -87.9], [42.0, -87.62], [41.65, -87.3],
+     [41.75, -86.8], [42.6, -86.25], [43.7, -86.5], [44.8, -86.0], [45.3, -85.4]],
+    // Huron
+    [[45.8, -84.4], [46.2, -83.6], [46.0, -81.2], [44.6, -80.0], [45.0, -81.3], [43.3, -81.7], [43.0, -82.4],
+     [43.9, -83.0], [43.6, -83.9], [44.6, -83.3], [45.4, -83.5]],
+    // Erie
+    [[42.88, -78.9], [42.3, -79.8], [42.0, -81.0], [41.5, -81.7], [41.4, -82.7], [41.7, -83.45], [42.0, -83.1],
+     [42.6, -81.5], [42.8, -80.2]],
+    // Ontario
+    [[43.62, -79.42], [43.3, -79.8], [43.2, -79.0], [43.3, -77.5], [43.5, -76.2], [44.1, -76.4], [44.0, -77.5],
+     [43.9, -78.5]],
+    // James Bay
+    [[54.5, -82.5], [52.6, -82.2], [51.25, -80.6], [51.4, -79.2], [52.4, -78.7], [54.5, -79.0]],
+];
+const BORDERS = [
+    [[49.0, -123.3], [49.0, -95.15], [49.35, -95.15], [48.6, -93.4], [48.0, -89.6], [47.3, -88.0], [46.5, -84.4],
+     [45.6, -82.5], [43.0, -82.4], [42.3, -83.1], [42.4, -81.0], [42.9, -79.0], [43.6, -78.0], [44.1, -76.3],
+     [45.0, -74.7], [45.0, -71.5], [46.4, -70.0], [47.45, -69.2], [47.1, -67.8], [45.6, -67.4], [45.1, -67.0]],
+    [[32.53, -117.12], [32.72, -114.72], [31.33, -111.07], [31.33, -108.2], [31.78, -108.2], [31.78, -106.53],
+     [30.6, -105.0], [29.6, -104.4], [28.97, -103.3], [29.75, -102.0], [29.37, -100.9], [28.7, -100.5],
+     [27.5, -99.5], [26.2, -98.3], [25.95, -97.15]],
+];
+
+// ============================================================
+// MAP GEOMETRY (derived)
+// ============================================================
+// The board runs a little past the city area on each side so edge labels
+// (Vancouver, San Francisco, Boston) keep sea behind them at any zoom.
+const MAP_X = -70, MAP_W = 1740, MAP_H = 1000;
+const MAP_BOX = { x: -50, y: 30, w: 1700, h: 950 };   // what "fit" frames
+const KX = Math.cos(40 * Math.PI / 180);
+function project(lat, lon) { return [(lon + 127) * KX * 34.5 + 30, (52.5 - lat) * 34.5 + 20]; }
+const CITIES = Object.keys(CITY_DATA);
+const CITY_IDX = {};
+CITIES.forEach((n, i) => { CITY_IDX[n] = i; });
+const CITY_XY = CITIES.map(n => project(CITY_DATA[n][0], CITY_DATA[n][1]));
+const ROUTES = ROUTE_DATA.map(([a, b, len, codes], i) => ({
+    i, a: CITY_IDX[a], b: CITY_IDX[b], len, lanes: codes.split('').map(c => COLOR_CODE[c]),
+}));
+const ALL_TICKETS = TICKETS.map(([a, b, pts]) => ({ a: CITY_IDX[a], b: CITY_IDX[b], pts, long: false }))
+    .concat(LONG_TICKETS.map(([a, b, pts]) => ({ a: CITY_IDX[a], b: CITY_IDX[b], pts, long: true })));
+
+const CITY_R = 9, LANE_GAP = 12, CAR_W = 10, CAR_GAP = 4, CAR_MAX = 34;
+const LANE_GEOM = ROUTES.map(route => route.lanes.map((_, l) => {
+    const [ax, ay] = CITY_XY[route.a], [bx, by] = CITY_XY[route.b];
+    const dx = bx - ax, dy = by - ay, d = Math.hypot(dx, dy);
+    const ux = dx / d, uy = dy / d, nx = -uy, ny = ux;
+    const off = (l - (route.lanes.length - 1) / 2) * LANE_GAP;
+    const avail = d - 2 * (CITY_R + 4);
+    const carL = Math.min(CAR_MAX, (avail - CAR_GAP * (route.len - 1)) / route.len);
+    const total = carL * route.len + CAR_GAP * (route.len - 1);
+    const start = (d - total) / 2;
+    const cars = [];
+    for (let k = 0; k < route.len; k++) {
+        const t = start + k * (carL + CAR_GAP) + carL / 2;
+        cars.push([ax + ux * t + nx * off, ay + uy * t + ny * off]);
+    }
+    return {
+        x1: ax + nx * off, y1: ay + ny * off, x2: bx + nx * off, y2: by + ny * off,
+        d, carL, cars, ang: Math.atan2(dy, dx) * 180 / Math.PI,
+    };
+}));
+
+function geoPath(points, close) {
+    return 'M' + points.map(([lat, lon]) => project(lat, lon).map(v => v.toFixed(1)).join(',')).join('L') + (close ? 'Z' : '');
+}
+let mapInstanceCount = 0;
+function landSvg(uid) {
+    return `<defs><clipPath id="mapclip-${uid}"><rect x="${MAP_X}" y="0" width="${MAP_W}" height="${MAP_H}" rx="22"/></clipPath></defs>` +
+        `<rect x="${MAP_X}" y="0" width="${MAP_W}" height="${MAP_H}" rx="22" style="fill:var(--sea)"/>` +
+        `<g clip-path="url(#mapclip-${uid})">` +
+        `<path d="${geoPath(LAND, true)}" style="fill:var(--land)" stroke="#b9a77c" stroke-width="2.5" stroke-linejoin="round"/>` +
+        LAKES.map(l => `<path d="${geoPath(l, true)}" style="fill:var(--sea)" stroke="#b9a77c" stroke-width="2" stroke-linejoin="round"/>`).join('') +
+        BORDERS.map(b => `<path d="${geoPath(b, false)}" fill="none" stroke="#a8946a" stroke-width="2" stroke-dasharray="10 7" stroke-linejoin="round"/>`).join('') +
+        `</g>`;
+}
+
+// ============================================================
+// SHARED HELPERS
+// ============================================================
+function escapeHtml(s) {
+    return String(s).replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+}
+function shuffle(arr) {
+    for (let i = arr.length - 1; i > 0; i--) {
+        const j = Math.floor(Math.random() * (i + 1));
+        [arr[i], arr[j]] = [arr[j], arr[i]];
+    }
+    return arr;
+}
+function routeName(r) { return `${CITIES[ROUTES[r].a]}–${CITIES[ROUTES[r].b]}`; }
+function ticketName(t) { const tk = ALL_TICKETS[t]; return `${CITIES[tk.a]} → ${CITIES[tk.b]}`; }
+function emptyHand() { const h = {}; CARD_TYPES.forEach(c => { h[c] = 0; }); return h; }
+function handTotal(h) { return CARD_TYPES.reduce((s, c) => s + (h[c] || 0), 0); }
+function defaultTrains(n) { return n <= 5 ? 45 : n === 6 ? 40 : 35; }
+function maxLanesFor(n) { return n <= 3 ? 1 : n <= 5 ? 2 : 3; }
+function segDist(px, py, x1, y1, x2, y2) {
+    const dx = x2 - x1, dy = y2 - y1;
+    const t = Math.max(0, Math.min(1, ((px - x1) * dx + (py - y1) * dy) / (dx * dx + dy * dy)));
+    return { dist: Math.hypot(px - x1 - t * dx, py - y1 - t * dy), t };
+}
+
+// Union-find over one player's claimed routes → "are these two cities connected?"
+function connectivity(claims, idx) {
+    const parent = CITIES.map((_, k) => k);
+    const find = x => { while (parent[x] !== x) { parent[x] = parent[parent[x]]; x = parent[x]; } return x; };
+    claims.forEach((lanes, r) => {
+        if (!lanes.includes(idx)) return;
+        const a = find(ROUTES[r].a), b = find(ROUTES[r].b);
+        if (a !== b) parent[a] = b;
+    });
+    return (x, y) => find(x) === find(y);
+}
+// Longest continuous trail (no route used twice; cities may repeat)
+function longestPath(claims, idx) {
+    const edges = [];
+    claims.forEach((lanes, r) => { if (lanes.includes(idx)) edges.push(ROUTES[r]); });
+    if (!edges.length) return 0;
+    const adj = {};
+    edges.forEach((e, k) => { (adj[e.a] = adj[e.a] || []).push(k); (adj[e.b] = adj[e.b] || []).push(k); });
+    const used = new Array(edges.length).fill(false);
+    let best = 0;
+    function dfs(v, total) {
+        if (total > best) best = total;
+        for (const k of adj[v]) {
+            if (used[k]) continue;
+            used[k] = true;
+            const e = edges[k];
+            dfs(e.a === v ? e.b : e.a, total + e.len);
+            used[k] = false;
+        }
+    }
+    Object.keys(adj).forEach(v => dfs(+v, 0));
+    return best;
+}
+
+// ============================================================
+// STATE
+// ============================================================
+let isHost = false;
+let isTvDisplay = false;
+let peer = null;
+let roomCode = '';
+let myName = '';
+let hostConn = null;              // guest → host
+const guestConns = new Map();     // host: peerId → conn
+const displayIds = new Set();     // host: peerIds of TV displays
+
+// Host-side
+let lobbyPlayers = [];            // [{id:'host'|peerId, name, connected}]
+let settings = { trains: 0 };
+let G = null;
+let graceTimer = null;
+
+// Client-side
+let V = null;
+let actionPending = false;
+let prevMyTurn = false;
+let gameMap = null, overMap = null, tvMap = null;
+let uiSel = null;                 // {r, l} route lane in the sheet
+let colorFilter = null;
+let focusTickets = new Set();
+let ticketSel = new Set();
+let ticketSheetHidden = false;
+let pendingKey = '';
+let sideTab = 'tickets';
+let overOpen = new Set();
+let tvConnected = false, tvReconnectTimer = null;
+
+// ============================================================
+// UI HELPERS
+// ============================================================
+const AWAKE_SCREENS = new Set(['screen-game', 'screen-tv']);
+const REFRESH_SCREENS = new Set(['screen-lobby', 'screen-over', 'screen-host-lost']);
+const FULL_SCREENS = new Set(['screen-game', 'screen-over', 'screen-tv', 'screen-tv-lobby']);
+
+function showScreen(id) {
+    const cur = document.querySelector('.screen.active');
+    if (cur && cur.id === id) return;
+    document.querySelectorAll('.screen').forEach(s => s.classList.remove('active'));
+    document.getElementById(id).classList.add('active');
+    document.body.classList.toggle('fullbleed', FULL_SCREENS.has(id));
+    window.scrollTo(0, 0);
+    if (AWAKE_SCREENS.has(id)) requestWakeLock();
+    else releaseWakeLock();
+    document.getElementById('refresh-btn').classList.toggle('visible', REFRESH_SCREENS.has(id) && !isTvDisplay);
+    if (id !== 'screen-game') closeSheets();
+}
+function refreshPage() { window.location.reload(); }
+function setStatus(id, text) {
+    const el = document.getElementById(id);
+    if (el) el.textContent = text;
+}
+function switchTab(which) {
+    ['create', 'join', 'tv'].forEach(t => {
+        document.getElementById('tab-' + t).classList.toggle('active', which === t);
+        document.getElementById('panel-' + t).style.display = which === t ? '' : 'none';
+    });
+}
+function normalizeRoomCode(v) { return (v || '').trim().toUpperCase().replace(/[^A-Z0-9]/g, ''); }
+function genRoomCode() {
+    const chars = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
+    let s = '';
+    for (let i = 0; i < 6; i++) s += chars[Math.floor(Math.random() * chars.length)];
+    return s;
+}
+function baseUrl() { return window.location.origin + window.location.pathname; }
+function copyText(text, okMsg) {
+    try { navigator.clipboard.writeText(text); setStatus('lobby-status', okMsg); }
+    catch (e) { setStatus('lobby-status', text); }
+}
+function copyRoomCode() { if (roomCode) copyText(roomCode, 'Code copied!'); }
+function copyJoinLink() { if (roomCode) copyText(baseUrl() + '?room=' + roomCode, 'Join link copied!'); }
+function copyTvLink() { if (roomCode) copyText(baseUrl() + '?room=' + roomCode + '&tv=1', 'TV link copied — open it on the TV.'); }
+function vibrate(pattern) { try { if (navigator.vibrate) navigator.vibrate(pattern); } catch (e) {} }
+let toastTimer = null;
+function showToast(text, ms) {
+    const el = document.getElementById('toast');
+    el.textContent = text;
+    el.classList.add('show');
+    clearTimeout(toastTimer);
+    toastTimer = setTimeout(() => el.classList.remove('show'), ms || 2200);
+}
+
+// ============================================================
+// WAKE LOCK
+// ============================================================
+let wakeLock = null;
+async function requestWakeLock() {
+    try {
+        if ('wakeLock' in navigator && !wakeLock) {
+            wakeLock = await navigator.wakeLock.request('screen');
+            wakeLock.addEventListener('release', () => { wakeLock = null; });
+        }
+    } catch (e) { /* not critical */ }
+}
+function releaseWakeLock() {
+    if (wakeLock) { try { wakeLock.release(); } catch (e) {} wakeLock = null; }
+}
+document.addEventListener('visibilitychange', () => {
+    if (document.visibilityState === 'visible' && !wakeLock) {
+        const active = document.querySelector('.screen.active');
+        if (active && AWAKE_SCREENS.has(active.id)) requestWakeLock();
+    }
+});
+
+// ============================================================
+// SESSION STORAGE FOR AUTO-RECONNECT
+// ============================================================
+const SESSION_KEY = 'railroutes-session';
+const AUTOSAVE_KEY = 'railroutes-autosave';
+const HOST_BACKUP_KEY = 'railroutes-host-backup';
+
+function saveSession() {
+    try { sessionStorage.setItem(SESSION_KEY, JSON.stringify({ isHost, roomCode, myName })); } catch (e) {}
+}
+function clearSession() {
+    try { sessionStorage.removeItem(SESSION_KEY); sessionStorage.removeItem(AUTOSAVE_KEY); } catch (e) {}
+}
+function getSession() {
+    try { const raw = sessionStorage.getItem(SESSION_KEY); return raw ? JSON.parse(raw) : null; }
+    catch (e) { return null; }
+}
+function autoSaveState() {
+    if (!isHost) return;
+    try { sessionStorage.setItem(AUTOSAVE_KEY, JSON.stringify({ roomCode, lobbyPlayers, settings, G })); } catch (e) {}
+}
+
+// ============================================================
+// HEARTBEAT
+// ============================================================
+let heartbeatInterval = null;
+let lastHeartbeat = 0;
+let heartbeatWatchdog = null;
+const guestLastSeen = new Map();  // host: peerId → last message time (guests answer pings)
+
+function startHostHeartbeat() {
+    stopHeartbeat();
+    heartbeatInterval = setInterval(() => {
+        const now = Date.now();
+        for (const [id, conn] of [...guestConns]) {
+            // A phone that just closes the page never fires 'close' — drop it once
+            // it stops answering pings, so its turn can time out instead of stalling.
+            if (now - (guestLastSeen.get(id) || now) > HEARTBEAT_TIMEOUT_MS) {
+                guestConns.delete(id);
+                guestLastSeen.delete(id);
+                try { conn.close(); } catch (e) {}
+                onGuestLost(id);
+                continue;
+            }
+            try { conn.send({ type: 'ping', t: now }); } catch (e) {}
+        }
+    }, HEARTBEAT_INTERVAL_MS);
+}
+function startGuestWatchdog() {
+    stopHeartbeat();
+    lastHeartbeat = Date.now();
+    heartbeatWatchdog = setInterval(() => {
+        if (isHost) return;
+        if (Date.now() - lastHeartbeat > HEARTBEAT_TIMEOUT_MS) {
+            stopHeartbeat();
+            if (isTvDisplay) { tvConnected = false; scheduleTvReconnect(); }
+            else handleHostDisconnect();
+        }
+    }, 2000);
+}
+function stopHeartbeat() {
+    if (heartbeatInterval) { clearInterval(heartbeatInterval); heartbeatInterval = null; }
+    if (heartbeatWatchdog) { clearInterval(heartbeatWatchdog); heartbeatWatchdog = null; }
+}
+
+// ============================================================
+// PEERJS - HOST
+// ============================================================
+function initHostPeer(onOpen, onError) {
+    peer = new Peer(PEER_PREFIX + roomCode, { debug: 1 });
+    peer.on('open', onOpen);
+    peer.on('connection', conn => {
+        conn.on('open', () => { guestConns.set(conn.peer, conn); guestLastSeen.set(conn.peer, Date.now()); });
+        conn.on('data', data => { guestLastSeen.set(conn.peer, Date.now()); handleGuestMessage(conn, data); });
+        conn.on('close', () => {
+            if (guestConns.get(conn.peer) !== conn) return; // already dropped by the heartbeat
+            guestConns.delete(conn.peer);
+            guestLastSeen.delete(conn.peer);
+            onGuestLost(conn.peer);
+        });
+        conn.on('error', e => console.warn('conn error', e));
+    });
+    peer.on('error', onError);
+}
+
+function createGame() {
+    myName = (document.getElementById('host-name').value || 'Host').trim().slice(0, 14) || 'Host';
+    try { localStorage.setItem('railroutes-name', myName); } catch (e) {}
+    isHost = true;
+    isTvDisplay = false;
+    roomCode = genRoomCode();
+    setStatus('entry-status', 'Creating room...');
+    initHostPeer(() => {
+        lobbyPlayers = [{ id: 'host', name: myName, connected: true }];
+        G = null;
+        saveSession();
+        startHostHeartbeat();
+        broadcastLobby();
+    }, err => {
+        console.error(err);
+        if (err.type === 'unavailable-id') {
+            setTimeout(() => { try { peer.destroy(); } catch (e) {} createGame(); }, 400);
+        } else {
+            setStatus('entry-status', 'Error: ' + err.type);
+        }
+    });
+}
+
+function handleGuestMessage(conn, msg) {
+    if (!isHost || !msg) return;
+    switch (msg.type) {
+        case 'display':
+            displayIds.add(conn.peer);
+            sendDisplayState(conn.peer);
+            break;
+        case 'join': {
+            const name = (msg.name || 'Player').trim().slice(0, 14) || 'Player';
+            const hostP = lobbyPlayers.find(p => p.id === 'host');
+            if (hostP && hostP.name.toLowerCase() === name.toLowerCase()) {
+                conn.send({ type: 'reject', reason: 'That name is taken — pick another.' });
+                return;
+            }
+            // Returning player (by name) reclaims their seat
+            const existing = lobbyPlayers.find(p => p.id !== 'host' && p.name.toLowerCase() === name.toLowerCase());
+            if (existing) {
+                if (existing.id !== conn.peer) {
+                    const old = guestConns.get(existing.id);
+                    if (old) { try { old.close(); } catch (e) {} }
+                    guestConns.delete(existing.id);
+                }
+                existing.id = conn.peer;
+                existing.connected = true;
+                if (G) {
+                    const gp = G.players.find(p => p.name.toLowerCase() === name.toLowerCase());
+                    if (gp) {
+                        gp.id = conn.peer;
+                        gp.connected = true;
+                        addLog(`📡 ${gp.name} is back online.`);
+                        if (G.phase === 'play' && G.players[G.turn] === gp) armGraceIfNeeded();
+                        broadcastViews();
+                    } else {
+                        conn.send({ type: 'reject', reason: 'A game is underway — join after it ends.' });
+                    }
+                } else {
+                    broadcastLobby();
+                }
+                return;
+            }
+            if (G) {
+                conn.send({ type: 'reject', reason: 'A game is underway — join after it ends.' });
+                return;
+            }
+            if (lobbyPlayers.length >= MAX_PLAYERS) {
+                conn.send({ type: 'reject', reason: 'Room is full (8 players max).' });
+                return;
+            }
+            lobbyPlayers.push({ id: conn.peer, name, connected: true });
+            broadcastLobby();
+            break;
+        }
+        case 'action': {
+            if (!G) return;
+            const idx = G.players.findIndex(p => p.id === conn.peer);
+            if (idx >= 0) handleAction(idx, msg);
+            break;
+        }
+    }
+}
+
+function onGuestLost(peerId) {
+    if (displayIds.has(peerId)) { displayIds.delete(peerId); return; }
+    const lp = lobbyPlayers.find(p => p.id === peerId);
+    if (lp) lp.connected = false;
+    if (G) {
+        const gp = G.players.find(p => p.id === peerId);
+        if (gp && gp.connected) {
+            gp.connected = false;
+            addLog(`📡 Lost contact with ${gp.name}...`);
+            if (G.phase === 'play' && G.players[G.turn] === gp) armGraceIfNeeded();
+            broadcastViews();
+        }
+    } else if (lp) {
+        lobbyPlayers = lobbyPlayers.filter(p => p !== lp);
+        broadcastLobby();
+    }
+}
+
+function sendTo(playerId, msg) {
+    if (playerId === 'host') {
+        // Clone so the host's UI never holds references into live game state
+        if (isHost) handleHostMessage(JSON.parse(JSON.stringify(msg)));
+        return;
+    }
+    const conn = guestConns.get(playerId);
+    if (conn) { try { conn.send(msg); } catch (e) {} }
+}
+function sendToDisplays(msg) {
+    for (const id of displayIds) {
+        const conn = guestConns.get(id);
+        if (conn) { try { conn.send(msg); } catch (e) {} }
+    }
+}
+function lobbyDisplayMsg() {
+    return {
+        type: 'tvLobby', roomCode,
+        players: lobbyPlayers.map(p => ({ name: p.name, connected: p.connected })),
+    };
+}
+function sendDisplayState(id) {
+    const conn = guestConns.get(id);
+    if (!conn) return;
+    const msg = G ? Object.assign({ type: 'tvView', youIdx: -1 }, publicState()) : lobbyDisplayMsg();
+    try { conn.send(msg); } catch (e) {}
+}
+
+function broadcastLobby() {
+    const base = {
+        type: 'view', phase: 'lobby', roomCode, settings,
+        players: lobbyPlayers.map(p => ({ name: p.name, connected: p.connected })),
+    };
+    lobbyPlayers.forEach((p, i) => {
+        if (p.connected) sendTo(p.id, Object.assign({ youIdx: i }, base));
+    });
+    sendToDisplays(lobbyDisplayMsg());
+    sendBackupToGuests();
+    autoSaveState();
+}
+
+function sendBackupToGuests() {
+    // Full-state backup so any guest can take over hosting if the host drops.
+    const msg = { type: 'host_state_backup', backup: { roomCode, lobbyPlayers, settings, G } };
+    for (const [id, conn] of guestConns) {
+        if (displayIds.has(id)) continue;
+        try { conn.send(msg); } catch (e) {}
+    }
+}
+
+// ============================================================
+// PEERJS - GUEST
+// ============================================================
+function connectToHost(onSuccess, onFail) {
+    peer = new Peer({ debug: 1 });
+    peer.on('open', () => {
+        const conn = peer.connect(PEER_PREFIX + roomCode, { reliable: true });
+        hostConn = conn;
+        conn.on('open', () => {
+            conn.send({ type: 'join', name: myName });
+            saveSession();
+            startGuestWatchdog();
+            onSuccess();
+        });
+        conn.on('data', data => { if (hostConn === conn) handleHostMessage(data); });
+        conn.on('close', () => {
+            if (hostConn !== conn) return; // a replaced connection closing late
+            stopHeartbeat();
+            handleHostDisconnect();
+        });
+        conn.on('error', () => onFail('Connection error'));
+    });
+    peer.on('error', err => {
+        console.error(err);
+        onFail(err.type === 'peer-unavailable' ? 'Room not found — check the code.' : 'Error: ' + err.type);
+    });
+}
+
+function joinGame() {
+    const code = normalizeRoomCode(document.getElementById('room-code-input').value);
+    if (code.length < 4 || code.length > 12) { setStatus('entry-status', 'Enter a valid room code'); return; }
+    myName = (document.getElementById('guest-name').value || 'Player').trim().slice(0, 14) || 'Player';
+    try { localStorage.setItem('railroutes-name', myName); } catch (e) {}
+    isHost = false;
+    isTvDisplay = false;
+    roomCode = code;
+    setStatus('entry-status', 'Connecting...');
+    connectToHost(() => setStatus('entry-status', 'Connected!'), m => setStatus('entry-status', m));
+}
+
+function handleHostMessage(msg) {
+    lastHeartbeat = Date.now();
+    switch (msg.type) {
+        case 'view':
+            updateFromView(msg);
+            break;
+        case 'error':
+            actionPending = false;
+            showToast('⚠️ ' + msg.text, 3000);
+            if (V) renderCurrent();
+            break;
+        case 'host_state_backup':
+            try { sessionStorage.setItem(HOST_BACKUP_KEY, JSON.stringify(msg.backup)); } catch (e) {}
+            break;
+        case 'reject': {
+            clearSession();
+            stopHeartbeat();
+            setStatus('entry-status', msg.reason);
+            showScreen('screen-entry');
+            const conn = hostConn;
+            hostConn = null; // detach first so its close doesn't look like a lost host
+            try { if (conn) conn.close(); } catch (e) {}
+            break;
+        }
+        case 'ping':
+            // Answer so the host knows this phone is still here
+            if (!isHost && hostConn) { try { hostConn.send({ type: 'pong' }); } catch (e) {} }
+            break;
+    }
+}
+
+// ============================================================
+// TV DISPLAY
+// ============================================================
+function joinTvDisplay(codeOverride) {
+    const code = normalizeRoomCode(codeOverride || document.getElementById('tv-room-code-input').value);
+    if (code.length < 4 || code.length > 12) { setStatus('entry-status', 'Enter a valid room code'); return; }
+    isHost = false;
+    isTvDisplay = true;
+    roomCode = code;
+    document.body.classList.add('tv');
+    setStatus('entry-status', 'Connecting display...');
+    beginTvConnection();
+}
+function beginTvConnection() {
+    if (!isTvDisplay) return;
+    if (tvReconnectTimer) { clearTimeout(tvReconnectTimer); tvReconnectTimer = null; }
+    const oldConn = hostConn, oldPeer = peer;
+    hostConn = null; peer = null; tvConnected = false;
+    try { if (oldConn) oldConn.close(); } catch (e) {}
+    try { if (oldPeer) oldPeer.destroy(); } catch (e) {}
+    peer = new Peer({ debug: 1 });
+    peer.on('open', () => {
+        const conn = peer.connect(PEER_PREFIX + roomCode, { reliable: true });
+        hostConn = conn;
+        conn.on('open', () => {
+            tvConnected = true;
+            conn.send({ type: 'display' });
+            startGuestWatchdog();
+            setStatus('entry-status', 'Display connected!');
+            try { history.replaceState(null, '', window.location.pathname + '?room=' + roomCode + '&tv=1'); } catch (e) {}
+        });
+        conn.on('data', data => handleTvMessage(data));
+        conn.on('close', () => {
+            if (hostConn !== conn) return;
+            tvConnected = false;
+            stopHeartbeat();
+            scheduleTvReconnect();
+        });
+    });
+    peer.on('error', err => {
+        tvConnected = false;
+        setStatus('entry-status', (err.type === 'peer-unavailable' ? 'Room not found.' : 'Error: ' + err.type) + ' Retrying...');
+        scheduleTvReconnect();
+    });
+}
+function scheduleTvReconnect() {
+    if (!isTvDisplay || tvConnected || tvReconnectTimer) return;
+    tvReconnectTimer = setTimeout(() => { tvReconnectTimer = null; beginTvConnection(); }, 3000);
+}
+function handleTvMessage(msg) {
+    lastHeartbeat = Date.now();
+    if (msg.type === 'ping') {
+        if (hostConn) { try { hostConn.send({ type: 'pong' }); } catch (e) {} }
+    } else if (msg.type === 'tvLobby') {
+        V = null;
+        renderTvLobby(msg);
+        showScreen('screen-tv-lobby');
+    } else if (msg.type === 'tvView') {
+        V = msg;
+        showScreen('screen-tv');
+        renderTv(msg);
+    }
+}
+
+// ============================================================
+// RECONNECT / HOST RECOVERY
+// ============================================================
+function reconnectAsHost(session) {
+    isHost = true;
+    myName = session.myName || 'Host';
+    roomCode = session.roomCode;
+    let saved = null;
+    try { const raw = sessionStorage.getItem(AUTOSAVE_KEY); saved = raw ? JSON.parse(raw) : null; }
+    catch (e) { saved = null; }
+    if (!saved || !Array.isArray(saved.lobbyPlayers)) { clearSession(); return; }
+    lobbyPlayers = saved.lobbyPlayers;
+    settings = saved.settings || { trains: 0 };
+    G = saved.G || null;
+    lobbyPlayers.forEach(p => { p.connected = p.id === 'host'; });
+    if (G) G.players.forEach(p => { p.connected = p.id === 'host'; });
+
+    setStatus('entry-status', 'Reclaiming room...');
+    const timeout = setTimeout(() => {
+        setStatus('entry-status', 'Reconnection failed — please start a new game.');
+        clearSession();
+        try { if (peer) peer.destroy(); } catch (e) {}
+        peer = null;
+        showScreen('screen-entry');
+    }, 12000);
+
+    initHostPeer(() => {
+        clearTimeout(timeout);
+        saveSession();
+        startHostHeartbeat();
+        if (G) {
+            if (G.phase === 'play') { addLog('📡 Host back online — waiting for players to reconnect...'); armGraceIfNeeded(); }
+            broadcastViews();
+        } else {
+            broadcastLobby();
+        }
+    }, err => {
+        clearTimeout(timeout);
+        console.error(err);
+        setStatus('entry-status', 'Reconnection failed: ' + err.type);
+        clearSession();
+        showScreen('screen-entry');
+    });
+}
+
+function reconnectAsGuest(session, fromLostScreen) {
+    isHost = false;
+    myName = session.myName || 'Player';
+    roomCode = session.roomCode;
+    const statusId = fromLostScreen ? 'host-lost-status' : 'entry-status';
+    setStatus(statusId, 'Reconnecting...');
+    try { if (hostConn) hostConn.close(); } catch (e) {}
+    try { if (peer) peer.destroy(); } catch (e) {}
+    hostConn = null;
+    peer = null;
+    const timeout = setTimeout(() => fail('Reconnection failed — the host may be gone.'), 12000);
+    let failed = false;
+    function fail(msg) {
+        if (failed) return;
+        failed = true;
+        clearTimeout(timeout);
+        setStatus(statusId, msg);
+        if (!fromLostScreen) {
+            clearSession();
+            try { if (peer) peer.destroy(); } catch (e) {}
+            peer = null;
+            showScreen('screen-entry');
+        }
+    }
+    connectToHost(() => { clearTimeout(timeout); setStatus(statusId, 'Reconnected!'); }, fail);
+}
+
+function handleHostDisconnect() {
+    if (isHost || isTvDisplay) return;
+    const already = document.querySelector('.screen.active').id === 'screen-host-lost';
+    setStatus('host-lost-status', '');
+    const btn = document.getElementById('btn-take-over');
+    if (btn) btn.disabled = false;
+    showScreen('screen-host-lost');
+    // Often it's just this phone that dropped (screen lock, network blip) — try
+    // rejoining once on our own before asking anyone to take over.
+    if (!already) tryReconnectGuest();
+}
+function tryReconnectGuest() {
+    const session = getSession();
+    if (!session || !session.roomCode) { leaveGame(); return; }
+    reconnectAsGuest(session, true);
+}
+function leaveGame() {
+    stopHeartbeat();
+    clearGraceTimer();
+    if (tvReconnectTimer) { clearTimeout(tvReconnectTimer); tvReconnectTimer = null; }
+    try { if (hostConn) hostConn.close(); } catch (e) {}
+    try { if (peer) peer.destroy(); } catch (e) {}
+    hostConn = null;
+    peer = null;
+    guestConns.clear();
+    displayIds.clear();
+    G = null; V = null;
+    isHost = false; isTvDisplay = false; tvConnected = false;
+    document.body.classList.remove('tv');
+    clearSession();
+    try { sessionStorage.removeItem(HOST_BACKUP_KEY); } catch (e) {}
+    try { history.replaceState(null, '', window.location.pathname); } catch (e) {}
+    setStatus('entry-status', 'Left the room');
+    showScreen('screen-entry');
+}
+function confirmLeave() {
+    const msg = isHost
+        ? 'Leave the room? You are the host — the others can take over from their phones.'
+        : 'Leave this room?';
+    if (window.confirm(msg)) leaveGame();
+}
+
+function takeOverAsHost() {
+    let backup = null;
+    try { const raw = sessionStorage.getItem(HOST_BACKUP_KEY); backup = raw ? JSON.parse(raw) : null; }
+    catch (e) { backup = null; }
+    if (!backup || !Array.isArray(backup.lobbyPlayers)) {
+        setStatus('host-lost-status', 'No backup available — cannot take over.');
+        setTimeout(leaveGame, 1500);
+        return;
+    }
+    const btn = document.getElementById('btn-take-over');
+    if (btn) btn.disabled = true;
+    setStatus('host-lost-status', 'Claiming room as new host...');
+    stopHeartbeat();
+    try { if (hostConn) hostConn.close(); } catch (e) {}
+    try { if (peer) peer.destroy(); } catch (e) {}
+    hostConn = null;
+    peer = null;
+    guestConns.clear();
+    displayIds.clear();
+
+    isHost = true;
+    roomCode = backup.roomCode || roomCode;
+    lobbyPlayers = backup.lobbyPlayers;
+    settings = backup.settings || { trains: 0 };
+    G = backup.G || null;
+
+    // The old host is gone: demote their entry, promote ours (matched by name).
+    const promote = arr => {
+        const old = arr.find(p => p.id === 'host');
+        if (old) { old.id = 'lost-host'; old.connected = false; }
+        const mine = arr.find(p => p.name && p.name.toLowerCase() === myName.toLowerCase());
+        if (mine) { mine.id = 'host'; mine.connected = true; }
+        arr.forEach(p => { if (p.id !== 'host') p.connected = false; });
+    };
+    promote(lobbyPlayers);
+    if (G) promote(G.players);
+    else lobbyPlayers = lobbyPlayers.filter(p => p.id !== 'lost-host');
+    if (!lobbyPlayers.some(p => p.id === 'host')) lobbyPlayers.push({ id: 'host', name: myName, connected: true });
+
+    initHostPeer(() => {
+        saveSession();
+        startHostHeartbeat();
+        if (G) {
+            addLog(`👑 ${myName} took over as host.`);
+            if (G.phase === 'play') armGraceIfNeeded();
+            broadcastViews();
+        } else {
+            broadcastLobby();
+        }
+    }, err => {
+        console.error(err);
+        isHost = false;
+        if (btn) btn.disabled = false;
+        setStatus('host-lost-status', err.type === 'unavailable-id'
+            ? 'Room still claimed — the host may be back. Try Reconnect instead.'
+            : 'Takeover failed: ' + err.type);
+    });
+}
+
+// ============================================================
+// HOST - GAME LOGIC
+// ============================================================
+function addLog(msg) {
+    if (!G) return;
+    G.log.unshift(msg);
+    if (G.log.length > 60) G.log.length = 60;
+}
+function setTrains(v) {
+    if (!isHost || G) return;
+    settings.trains = v;
+    broadcastLobby();
+}
+function makeDeck(n) {
+    const per = n <= 5 ? 12 : 12 + 2 * (n - 5);
+    const deck = [];
+    for (const c of CARD_COLORS) for (let i = 0; i < per; i++) deck.push(c);
+    for (let i = 0; i < per + 2; i++) deck.push('loco');
+    return shuffle(deck);
+}
+function drawCard() {
+    if (!G.deck.length && G.discard.length) {
+        G.deck = shuffle(G.discard);
+        G.discard = [];
+        addLog('🔀 The discards were shuffled into a new deck.');
+    }
+    return G.deck.length ? G.deck.pop() : null;
+}
+function refillMarket() {
+    for (let i = 0; i < 5; i++) if (!G.market[i]) G.market[i] = drawCard();
+    // Three face-up locomotives: wipe and redeal (a few tries, in case the deck is loco-heavy)
+    for (let tries = 0; tries < 3 && G.market.filter(c => c === 'loco').length >= 3; tries++) {
+        G.market.forEach(c => { if (c) G.discard.push(c); });
+        G.market = [null, null, null, null, null];
+        for (let i = 0; i < 5; i++) G.market[i] = drawCard();
+        addLog('🌈 Three locomotives face-up — the market was redealt.');
+    }
+}
+function canDrawAny() {
+    return G.deck.length + G.discard.length > 0 || G.market.some(c => c);
+}
+function canDrawSecond() {
+    return G.deck.length + G.discard.length > 0 || G.market.some(c => c && c !== 'loco');
+}
+
+function startMatch() {
+    if (!isHost || G) return;
+    const roster = lobbyPlayers.filter(p => p.connected);
+    if (roster.length < 2 || roster.length > MAX_PLAYERS) return;
+    clearGraceTimer();
+    const n = roster.length;
+    const trains = settings.trains || defaultTrains(n);
+    const first = Math.floor(Math.random() * n);
+    G = {
+        phase: 'setup',
+        players: roster.map((p, i) => ({
+            id: p.id, name: p.name, color: PLAYER_COLORS[i], connected: true,
+            hand: emptyHand(), tickets: [], pending: null, minKeep: 0,
+            trains, score: 0, longest: 0,
+        })),
+        deck: makeDeck(n), discard: [], market: [null, null, null, null, null],
+        ticketDeck: shuffle(TICKETS.map((_, i) => i)),
+        longDeck: shuffle(LONG_TICKETS.map((_, i) => TICKETS.length + i)),
+        claims: ROUTES.map(r => r.lanes.map(() => -1)),
+        maxLanes: maxLanesFor(n), trainsStart: trains,
+        turn: first, firstPlayer: first, turnStep: 'start', turnDraws: [],
+        round: 1, finalTurnsLeft: -1, last: null, log: [],
+        paused: false, graceUntil: 0, graceLeftMs: 0, results: null,
+    };
+    for (const p of G.players) for (let k = 0; k < 4; k++) p.hand[drawCard()]++;
+    refillMarket();
+    for (const p of G.players) {
+        p.pending = [G.longDeck.pop(), G.ticketDeck.pop(), G.ticketDeck.pop(), G.ticketDeck.pop()];
+        p.minKeep = 2;
+    }
+    addLog(`🚉 ${n} conductors, ${trains} trains each. Choose your destination tickets!`);
+    broadcastViews();
+}
+
+function beginPlay() {
+    G.phase = 'play';
+    G.turnStep = 'start';
+    addLog(`🟢 All tickets chosen — ${G.players[G.turn].name} goes first.`);
+    armGraceIfNeeded();
+}
+
+// Actions arrive here from guests (and the host's own UI). Errors go back to the actor.
+function handleAction(idx, msg) {
+    const err = hostApplyAction(idx, msg);
+    if (err) sendTo(G.players[idx].id, { type: 'error', text: err });
+    else broadcastViews();
+}
+
+function hostApplyAction(idx, msg) {
+    if (!G || !G.players[idx]) return 'No game is running.';
+    if (msg.action === 'keepTickets') return actKeepTickets(idx, msg.keep);
+    if (G.phase !== 'play') return 'Not right now.';
+    if (G.paused) return 'The game is paused.';
+    if (idx !== G.turn) return "It's not your turn.";
+    switch (msg.action) {
+        case 'drawFace': return actDrawFace(idx, msg.slot | 0);
+        case 'drawDeck': return actDrawDeck(idx);
+        case 'claim': return actClaim(idx, msg.route | 0, msg.lane | 0, msg.color, msg.locos | 0);
+        case 'drawTickets': return actDrawTickets(idx);
+        case 'pass': return actPass(idx);
+    }
+    return 'Unknown action.';
+}
+
+function actDrawFace(idx, slot) {
+    if (G.turnStep !== 'start' && G.turnStep !== 'drew1') return 'You cannot draw cards now.';
+    const card = G.market[slot];
+    if (!card) return 'That slot is empty.';
+    if (card === 'loco' && G.turnStep === 'drew1') return 'A face-up locomotive can only be your first card.';
+    G.players[idx].hand[card]++;
+    G.market[slot] = drawCard();
+    refillMarket();
+    G.turnDraws.push(card);
+    afterCardDraw(idx, card === 'loco');
+    return null;
+}
+function actDrawDeck(idx) {
+    if (G.turnStep !== 'start' && G.turnStep !== 'drew1') return 'You cannot draw cards now.';
+    const card = drawCard();
+    if (!card) return 'The deck is empty.';
+    G.players[idx].hand[card]++;
+    G.turnDraws.push(null);
+    refillMarket();
+    afterCardDraw(idx, false);
+    return null;
+}
+function afterCardDraw(idx, endsTurn) {
+    if (endsTurn || G.turnStep === 'drew1' || !canDrawSecond()) finishDrawTurn(idx);
+    else G.turnStep = 'drew1';
+}
+function describeDraws(draws) {
+    if (!draws.length) return 'nothing';
+    return draws.map(c => c ? (c === 'loco' ? 'a face-up Locomotive' : COLOR_NAME[c]) : 'a deck card').join(' + ');
+}
+function finishDrawTurn(idx) {
+    addLog(`🃏 ${G.players[idx].name} took ${describeDraws(G.turnDraws)}.`);
+    G.last = { type: 'draw', player: idx };
+    endTurn();
+}
+
+function claimProblem(idx, r, lane) {
+    const route = ROUTES[r];
+    if (!route || lane < 0 || lane >= route.lanes.length) return 'Unknown route.';
+    const claims = G.claims[r];
+    if (claims[lane] !== -1) return 'That track is already taken.';
+    if (claims.includes(idx)) return 'You already own a track on this route.';
+    if (claims.filter(c => c !== -1).length >= G.maxLanes) {
+        return `With ${G.players.length} players only ${G.maxLanes} track${G.maxLanes > 1 ? 's' : ''} per route can be used.`;
+    }
+    if (G.players[idx].trains < route.len) return 'Not enough trains left.';
+    return null;
+}
+function actClaim(idx, r, lane, color, locos) {
+    if (G.turnStep !== 'start') return 'Finish drawing cards first.';
+    const problem = claimProblem(idx, r, lane);
+    if (problem) return problem;
+    const route = ROUTES[r];
+    const p = G.players[idx];
+    const laneColor = route.lanes[lane];
+    if (locos < 0 || locos > route.len) return 'Invalid payment.';
+    const need = route.len - locos;
+    if (need > 0) {
+        if (!CARD_COLORS.includes(color)) return 'Pick a card color.';
+        if (laneColor !== 'gray' && color !== laneColor) return `This track needs ${COLOR_NAME[laneColor]} cards.`;
+        if (p.hand[color] < need) return `You need ${need} ${COLOR_NAME[color]} cards.`;
+    }
+    if (p.hand.loco < locos) return 'Not enough locomotives.';
+    if (need > 0) { p.hand[color] -= need; for (let i = 0; i < need; i++) G.discard.push(color); }
+    p.hand.loco -= locos;
+    for (let i = 0; i < locos; i++) G.discard.push('loco');
+    G.claims[r][lane] = idx;
+    p.trains -= route.len;
+    p.score += ROUTE_POINTS[route.len];
+    p.longest = longestPath(G.claims, idx);
+    G.last = { type: 'claim', player: idx, route: r, lane };
+    addLog(`🚂 ${p.name} claimed ${routeName(r)} (${route.len}) for +${ROUTE_POINTS[route.len]}.`);
+    // Refill the market if it ran dry earlier and the discard now has cards
+    refillMarket();
+    endTurn();
+    return null;
+}
+
+function actDrawTickets(idx) {
+    if (G.turnStep !== 'start') return 'Finish drawing cards first.';
+    if (!G.ticketDeck.length) return 'No destination tickets left.';
+    const p = G.players[idx];
+    p.pending = [];
+    for (let i = 0; i < 3 && G.ticketDeck.length; i++) p.pending.push(G.ticketDeck.pop());
+    p.minKeep = 1;
+    G.turnStep = 'tickets';
+    G.last = { type: 'tickets', player: idx };
+    return null;
+}
+
+function actKeepTickets(idx, keepRaw) {
+    const p = G.players[idx];
+    if (!p.pending) return 'You have no tickets to choose from.';
+    if (G.phase === 'play' && (idx !== G.turn || G.turnStep !== 'tickets')) return 'Not right now.';
+    if (G.phase !== 'setup' && G.phase !== 'play') return 'Not right now.';
+    if (G.phase === 'play' && G.paused) return 'The game is paused.';
+    const keep = [...new Set(Array.isArray(keepRaw) ? keepRaw.map(Number) : [])].filter(t => p.pending.includes(t));
+    if (keep.length < p.minKeep) return `Keep at least ${p.minKeep} ticket${p.minKeep > 1 ? 's' : ''}.`;
+    applyTicketChoice(p, keep);
+    if (G.phase === 'setup') {
+        addLog(`✅ ${p.name} kept ${keep.length} ticket${keep.length > 1 ? 's' : ''}.`);
+        if (G.players.every(q => !q.pending)) beginPlay();
+    } else {
+        addLog(`🎫 ${p.name} kept ${keep.length} new ticket${keep.length > 1 ? 's' : ''}.`);
+        endTurn();
+    }
+    return null;
+}
+function applyTicketChoice(p, keep) {
+    p.tickets.push(...keep);
+    // Returned regular tickets go to the bottom of the deck; returned long ones leave the game
+    for (const t of p.pending) {
+        if (!keep.includes(t) && !ALL_TICKETS[t].long) G.ticketDeck.unshift(t);
+    }
+    p.pending = null;
+    p.minKeep = 0;
+}
+// Keep the cheapest tickets (used for offline players / host override)
+function autoKeep(p) {
+    const sorted = p.pending.slice().sort((a, b) => ALL_TICKETS[a].pts - ALL_TICKETS[b].pts);
+    applyTicketChoice(p, sorted.slice(0, Math.max(1, p.minKeep)));
+}
+function hostAutoPickSetup() {
+    if (!isHost || !G || G.phase !== 'setup') return;
+    const waiting = G.players.filter(p => p.pending);
+    if (!waiting.length) return;
+    if (!window.confirm(`Auto-pick tickets for ${waiting.map(p => p.name).join(', ')}? They keep their 2 cheapest.`)) return;
+    waiting.forEach(p => { autoKeep(p); addLog(`🤖 Tickets auto-picked for ${p.name}.`); });
+    beginPlay();
+    broadcastViews();
+}
+
+function actPass(idx) {
+    if (G.turnStep !== 'start') return 'Not right now.';
+    if (canDrawAny() || G.ticketDeck.length) return 'You can still draw — passing is only allowed when nothing is left.';
+    addLog(`⏭️ ${G.players[idx].name} passed.`);
+    G.last = { type: 'pass', player: idx };
+    endTurn();
+    return null;
+}
+
+function endTurn() {
+    const n = G.players.length;
+    const p = G.players[G.turn];
+    G.turnDraws = [];
+    if (G.finalTurnsLeft > 0) {
+        G.finalTurnsLeft--;
+        if (G.finalTurnsLeft === 0) { finishGame(); return; }
+    } else if (G.finalTurnsLeft < 0 && p.trains <= 2) {
+        G.finalTurnsLeft = n;
+        addLog(`🔔 ${p.name} is down to ${p.trains} train${p.trains === 1 ? '' : 's'} — everyone gets one final turn!`);
+    }
+    G.turn = (G.turn + 1) % n;
+    if (G.turn === G.firstPlayer) G.round++;
+    G.turnStep = 'start';
+    armGraceIfNeeded();
+}
+
+function finishGame() {
+    clearGraceTimer();
+    G.phase = 'over';
+    const lengths = G.players.map((_, i) => longestPath(G.claims, i));
+    const best = Math.max(...lengths);
+    G.results = G.players.map((p, i) => {
+        const connected = connectivity(G.claims, i);
+        const tickets = p.tickets.map(t => ({ t, done: connected(ALL_TICKETS[t].a, ALL_TICKETS[t].b) }));
+        const plus = tickets.filter(x => x.done).reduce((s, x) => s + ALL_TICKETS[x.t].pts, 0);
+        const minus = tickets.filter(x => !x.done).reduce((s, x) => s + ALL_TICKETS[x.t].pts, 0);
+        const bonus = best > 0 && lengths[i] === best ? LONGEST_BONUS : 0;
+        return {
+            idx: i, routePts: p.score, plus, minus, longest: lengths[i], bonus,
+            completed: tickets.filter(x => x.done).length, tickets,
+            total: p.score + plus - minus + bonus,
+        };
+    });
+    G.results.sort((a, b) => b.total - a.total || b.completed - a.completed || b.longest - a.longest);
+    const w = G.results[0];
+    addLog(`🏁 Game over! ${G.players[w.idx].name} wins with ${w.total} points.`);
+    G.last = null;
+}
+
+// --- Grace window for disconnected players ---
+function clearGraceTimer() {
+    if (graceTimer) { clearTimeout(graceTimer); graceTimer = null; }
+}
+function armGraceIfNeeded() {
+    clearGraceTimer();
+    if (!G || G.phase !== 'play') return;
+    const p = G.players[G.turn];
+    if (!p.connected) {
+        if (G.paused) {
+            if (!G.graceLeftMs) G.graceLeftMs = GRACE_MS;
+            G.graceUntil = 0;
+        } else {
+            G.graceUntil = Date.now() + GRACE_MS;
+            graceTimer = setTimeout(onGraceExpired, GRACE_MS);
+        }
+    } else {
+        G.graceUntil = 0;
+        G.graceLeftMs = 0;
+    }
+}
+function onGraceExpired() {
+    graceTimer = null;
+    if (!G || G.phase !== 'play' || G.paused) return;
+    const idx = G.turn;
+    const p = G.players[idx];
+    if (p.connected) return;
+    G.graceUntil = 0;
+    if (G.turnStep === 'tickets' && p.pending) {
+        autoKeep(p);
+        addLog(`⏱️ ${p.name} is still offline — kept their cheapest new ticket.`);
+        endTurn();
+    } else if (G.turnStep === 'drew1') {
+        addLog(`⏱️ ${p.name} is still offline — their turn ends.`);
+        finishDrawTurn(idx);
+    } else {
+        addLog(`⏱️ ${p.name} is still offline — their turn is skipped.`);
+        G.turnDraws = [];
+        endTurn();
+    }
+    broadcastViews();
+}
+
+function pauseGame() {
+    if (!isHost || !G || G.phase !== 'play' || G.paused) return;
+    G.paused = true;
+    if (G.graceUntil) { G.graceLeftMs = Math.max(0, G.graceUntil - Date.now()); G.graceUntil = 0; }
+    clearGraceTimer();
+    addLog(`⏸️ ${myName} paused the game.`);
+    broadcastViews();
+}
+function resumeGame() {
+    if (!isHost || !G || G.phase !== 'play' || !G.paused) return;
+    G.paused = false;
+    addLog('▶️ Game resumed.');
+    const p = G.players[G.turn];
+    if (!p.connected) {
+        const ms = G.graceLeftMs > 0 ? G.graceLeftMs : GRACE_MS;
+        G.graceUntil = Date.now() + ms;
+        graceTimer = setTimeout(onGraceExpired, ms);
+    }
+    G.graceLeftMs = 0;
+    broadcastViews();
+}
+
+function publicState() {
+    return {
+        phase: G.phase, roomCode, round: G.round, turn: G.turn, turnStep: G.turnStep,
+        paused: !!G.paused,
+        graceMs: G.graceUntil ? Math.max(0, G.graceUntil - Date.now()) : 0,
+        pausedGraceS: G.paused && G.graceLeftMs > 0 ? Math.ceil(G.graceLeftMs / 1000) : 0,
+        finalTurnsLeft: G.finalTurnsLeft, maxLanes: G.maxLanes, trainsStart: G.trainsStart,
+        players: G.players.map(p => ({
+            name: p.name, color: p.color, connected: p.connected, trains: p.trains,
+            cards: handTotal(p.hand), tickets: p.tickets.length, score: p.score,
+            longest: p.longest, choosing: !!p.pending,
+        })),
+        market: G.market, deckCount: G.deck.length, discardCount: G.discard.length,
+        ticketCount: G.ticketDeck.length, claims: G.claims, last: G.last,
+        turnDraws: G.turnDraws, log: G.log.slice(0, 30),
+        results: G.phase === 'over' ? G.results : null,
+    };
+}
+function buildView(idx, pub) {
+    const p = G.players[idx];
+    const connected = connectivity(G.claims, idx);
+    return Object.assign({ type: 'view', youIdx: idx }, pub, {
+        hand: p.hand,
+        myTickets: p.tickets.map(t => ({ t, done: connected(ALL_TICKETS[t].a, ALL_TICKETS[t].b) })),
+        pending: p.pending, minKeep: p.minKeep,
+    });
+}
+function broadcastViews() {
+    const pub = publicState();
+    G.players.forEach((p, i) => { if (p.connected) sendTo(p.id, buildView(i, pub)); });
+    if (displayIds.size) sendToDisplays(Object.assign({ type: 'tvView', youIdx: -1 }, pub));
+    sendBackupToGuests();
+    autoSaveState();
+}
+function playAgain() {
+    if (!isHost) return;
+    clearGraceTimer();
+    lobbyPlayers = lobbyPlayers.filter(p => p.connected);
+    G = null;
+    broadcastLobby();
+}
+
+// ============================================================
+// MAP VIEW (pan / pinch / wheel zoom, tap to pick a route)
+// ============================================================
+function createMap(container, opts) {
+    const uid = ++mapInstanceCount;
+    const interactive = !!(opts && opts.interactive);
+    container.innerHTML =
+        `<svg class="map-svg" xmlns="http://www.w3.org/2000/svg"><g class="vp">${landSvg(uid)}` +
+        `<g class="l-routes"></g><g class="l-over"></g><g class="l-cities"></g></g></svg>` +
+        (interactive ? `<div class="map-ctrls"><button data-z="in" title="Zoom in">+</button>` +
+            `<button data-z="out" title="Zoom out">−</button><button data-z="fit" title="Fit map">⤢</button></div>` : '');
+    const svg = container.querySelector('svg');
+    const vp = svg.querySelector('.vp');
+    const lRoutes = svg.querySelector('.l-routes'), lOver = svg.querySelector('.l-over'), lCities = svg.querySelector('.l-cities');
+    let s = 1, tx = 0, ty = 0, minS = 0.05, userZoomed = false;
+    const MAX_S = 3.5;
+
+    function apply() {
+        vp.setAttribute('transform', `translate(${tx.toFixed(1)} ${ty.toFixed(1)}) scale(${s.toFixed(4)})`);
+        // Labels grow when zoomed out so they stay legible-ish, shrink back when zoomed in
+        const lbl = Math.max(15, Math.min(30, 10.5 / s));
+        svg.style.setProperty('--lbl', lbl.toFixed(1) + 'px');
+    }
+    function size() { return [container.clientWidth, container.clientHeight]; }
+    // Default view shows the whole map — except on tall (portrait) screens, where it
+    // fills the height so labels stay readable and you swipe sideways. `whole` forces
+    // the full map and sticks until the next manual fit.
+    function fit(whole) {
+        const [w, h] = size();
+        if (!w || !h) return;
+        const contain = Math.min(w / MAP_BOX.w, h / MAP_BOX.h);
+        s = !whole && interactive && w < h ? Math.min(h / MAP_BOX.h, 2.2 * w / MAP_BOX.w) : contain;
+        minS = contain * 0.85;
+        tx = (w - MAP_BOX.w * s) / 2 - MAP_BOX.x * s;
+        ty = (h - MAP_BOX.h * s) / 2 - MAP_BOX.y * s;
+        userZoomed = !!whole;
+        apply();
+    }
+    function clampAxis(t, view, lo, hi) {
+        const a = lo * s, b = hi * s, span = b - a;
+        if (span <= view) return Math.min(Math.max(t, -a), view - b);
+        return Math.min(Math.max(t, view - b), -a);
+    }
+    function clampPan() {
+        const [w, h] = size();
+        tx = clampAxis(tx, w, MAP_BOX.x - 40, MAP_BOX.x + MAP_BOX.w + 40);
+        ty = clampAxis(ty, h, MAP_BOX.y - 40, MAP_BOX.y + MAP_BOX.h + 40);
+    }
+    function zoomAt(f, cx, cy) {
+        const ns = Math.max(minS, Math.min(MAX_S, s * f));
+        if (ns === s) return;
+        tx = cx - (cx - tx) * (ns / s);
+        ty = cy - (cy - ty) * (ns / s);
+        s = ns;
+        userZoomed = true;
+        clampPan();
+        apply();
+    }
+    function toMap(clientX, clientY) {
+        const r = svg.getBoundingClientRect();
+        return [(clientX - r.left - tx) / s, (clientY - r.top - ty) / s];
+    }
+    function pickLane(mx, my) {
+        const thr = Math.max(9, 20 / s);
+        let best = null, bd = thr;
+        ROUTES.forEach(route => route.lanes.forEach((_, l) => {
+            const g = LANE_GEOM[route.i][l];
+            const { dist, t } = segDist(mx, my, g.x1, g.y1, g.x2, g.y2);
+            const along = t * g.d;
+            if (along < CITY_R || along > g.d - CITY_R) return; // too close to a city dot
+            if (dist < bd) { bd = dist; best = { r: route.i, l }; }
+        }));
+        return best;
+    }
+
+    if (interactive) {
+        const pts = new Map();
+        let down = null, lastTap = 0;
+        svg.addEventListener('pointerdown', e => {
+            try { svg.setPointerCapture(e.pointerId); } catch (err) {}
+            pts.set(e.pointerId, [e.clientX, e.clientY]);
+            if (pts.size === 1) down = { x: e.clientX, y: e.clientY, t: Date.now(), moved: false };
+            else if (down) down.moved = true;
+        });
+        svg.addEventListener('pointermove', e => {
+            if (!pts.has(e.pointerId)) return;
+            const prev = pts.get(e.pointerId);
+            if (pts.size === 1) {
+                if (down && !down.moved && Math.hypot(e.clientX - down.x, e.clientY - down.y) > 8) down.moved = true;
+                if (down && down.moved) {
+                    tx += e.clientX - prev[0];
+                    ty += e.clientY - prev[1];
+                    userZoomed = true;
+                    clampPan();
+                    apply();
+                }
+            } else if (pts.size === 2) {
+                const ids = [...pts.keys()];
+                const other = pts.get(ids[0] === e.pointerId ? ids[1] : ids[0]);
+                const r = svg.getBoundingClientRect();
+                const d0 = Math.hypot(prev[0] - other[0], prev[1] - other[1]);
+                const d1 = Math.hypot(e.clientX - other[0], e.clientY - other[1]);
+                const m0x = (prev[0] + other[0]) / 2 - r.left, m0y = (prev[1] + other[1]) / 2 - r.top;
+                const m1x = (e.clientX + other[0]) / 2 - r.left, m1y = (e.clientY + other[1]) / 2 - r.top;
+                tx += m1x - m0x;
+                ty += m1y - m0y;
+                if (d0 > 0) zoomAt(d1 / d0, m1x, m1y);
+                else { clampPan(); apply(); }
+            }
+            pts.set(e.pointerId, [e.clientX, e.clientY]);
+        });
+        const end = e => {
+            if (!pts.has(e.pointerId)) return;
+            pts.delete(e.pointerId);
+            if (pts.size === 0 && down && !down.moved && e.type === 'pointerup' && Date.now() - down.t < 600) {
+                const [mx, my] = toMap(e.clientX, e.clientY);
+                const hit = pickLane(mx, my);
+                if (hit) { if (opts.onRoute) opts.onRoute(hit); }
+                else {
+                    const now = Date.now();
+                    if (now - lastTap < 350) {
+                        const r = svg.getBoundingClientRect();
+                        zoomAt(2, e.clientX - r.left, e.clientY - r.top);
+                        lastTap = 0;
+                    } else {
+                        lastTap = now;
+                        if (opts.onEmpty) opts.onEmpty();
+                    }
+                }
+            }
+            if (pts.size === 0) down = null;
+        };
+        svg.addEventListener('pointerup', end);
+        svg.addEventListener('pointercancel', end);
+        svg.addEventListener('wheel', e => {
+            e.preventDefault();
+            const r = svg.getBoundingClientRect();
+            zoomAt(Math.exp(-e.deltaY * 0.0015), e.clientX - r.left, e.clientY - r.top);
+        }, { passive: false });
+        container.querySelectorAll('.map-ctrls button').forEach(b => {
+            b.addEventListener('click', () => {
+                const [w, h] = size();
+                if (b.dataset.z === 'in') zoomAt(1.6, w / 2, h / 2);
+                else if (b.dataset.z === 'out') zoomAt(1 / 1.6, w / 2, h / 2);
+                else fit(true);
+            });
+        });
+    }
+
+    if (window.ResizeObserver) {
+        new ResizeObserver(() => { if (!userZoomed) fit(); else { clampPan(); apply(); } }).observe(container);
+    }
+    fit();
+
+    function render(view, o) {
+        o = o || {};
+        lRoutes.innerHTML = routesSvg(view, o);
+        lOver.innerHTML = overlaySvg(o.focus || []);
+        lCities.innerHTML = citiesSvg(o.focus || []);
+        if (!userZoomed) fit();
+    }
+    return { render, fit };
+}
+
+function routesSvg(view, o) {
+    const claims = view ? view.claims : null;
+    const players = view ? view.players : [];
+    const maxLanes = view ? view.maxLanes : 3;
+    const recent = view && view.last && view.last.type === 'claim' ? view.last : null;
+    let out = '';
+    for (const route of ROUTES) {
+        const taken = claims ? claims[route.i].filter(c => c >= 0).length : 0;
+        route.lanes.forEach((col, l) => {
+            const g = LANE_GEOM[route.i][l];
+            const owner = claims ? claims[route.i][l] : -1;
+            const cls = ['lane'];
+            if (owner < 0 && taken >= maxLanes) cls.push('closed');
+            else if (o.colorFilter && owner < 0 && col !== o.colorFilter && col !== 'gray') cls.push('dim');
+            if (o.sel && o.sel.r === route.i && o.sel.l === l) cls.push('sel');
+            if (recent && recent.route === route.i && recent.lane === l) cls.push('recent');
+            const fill = owner >= 0 ? players[owner].color : COLOR_HEX[col];
+            const h = owner >= 0 ? CAR_W + 3 : CAR_W; // placed trains sit a little fatter than open track
+            out += `<g class="${cls.join(' ')}">`;
+            for (const [cx, cy] of g.cars) {
+                out += `<rect class="sg${owner >= 0 ? ' own' : ''}" x="${(-g.carL / 2).toFixed(1)}" y="${-h / 2}" ` +
+                    `width="${g.carL.toFixed(1)}" height="${h}" rx="3" fill="${fill}" ` +
+                    `transform="translate(${cx.toFixed(1)} ${cy.toFixed(1)}) rotate(${g.ang.toFixed(1)})"/>`;
+                if (owner >= 0) out += `<circle cx="${cx.toFixed(1)}" cy="${cy.toFixed(1)}" r="2.3" fill="#fff" opacity="0.9"/>`;
+            }
+            out += '</g>';
+        });
+    }
+    return out;
+}
+function overlaySvg(focus) {
+    return focus.map(f => {
+        const tk = ALL_TICKETS[f.t];
+        const [x1, y1] = CITY_XY[tk.a], [x2, y2] = CITY_XY[tk.b];
+        return `<line class="tline${f.strong ? '' : ' weak'}" x1="${x1.toFixed(1)}" y1="${y1.toFixed(1)}" x2="${x2.toFixed(1)}" y2="${y2.toFixed(1)}"/>`;
+    }).join('');
+}
+function citiesSvg(focus) {
+    const hot = new Set();
+    focus.forEach(f => { hot.add(ALL_TICKETS[f.t].a); hot.add(ALL_TICKETS[f.t].b); });
+    return CITIES.map((name, i) => {
+        const [x, y] = CITY_XY[i];
+        const [dx, dy, anchor] = LABEL_POS[name] || [0, 25, 'middle'];
+        const isHot = hot.has(i);
+        return `<g class="city${isHot ? ' focus' : ''}">` +
+            (isHot ? `<circle class="ring" cx="${x.toFixed(1)}" cy="${y.toFixed(1)}" r="17"/>` : '') +
+            `<circle class="cdot" cx="${x.toFixed(1)}" cy="${y.toFixed(1)}" r="${CITY_R}"/>` +
+            `<text x="${(x + dx).toFixed(1)}" y="${(y + dy).toFixed(1)}" text-anchor="${anchor}">${escapeHtml(name)}</text></g>`;
+    }).join('');
+}
+
+// ============================================================
+// CLIENT - RENDERING
+// ============================================================
+function updateFromView(view) {
+    const prev = V;
+    actionPending = false;
+    stopGraceCountdown();
+    V = view;
+    if (view.phase === 'lobby') {
+        prevMyTurn = false;
+        uiSel = null; colorFilter = null; focusTickets = new Set(); pendingKey = ''; overOpen = new Set();
+        renderLobby(view);
+        showScreen('screen-lobby');
+        return;
+    }
+    if (view.phase === 'over') {
+        prevMyTurn = false;
+        showScreen('screen-over');
+        renderOver(view);
+        return;
+    }
+    const myTurn = view.phase === 'play' && view.turn === view.youIdx;
+    if (myTurn && !prevMyTurn) { vibrate([90, 60, 90]); showToast('🚂 Your turn!'); }
+    prevMyTurn = myTurn;
+    let gained = [];
+    if (prev && prev.hand && (prev.phase === 'play' || prev.phase === 'setup')) {
+        gained = CARD_TYPES.filter(c => view.hand[c] > prev.hand[c]);
+        const names = [];
+        gained.forEach(c => { for (let k = 0; k < view.hand[c] - prev.hand[c]; k++) names.push(COLOR_NAME[c]); });
+        if (names.length) showToast('You drew: ' + names.join(', '));
+    }
+    const key = view.pending ? view.pending.join(',') : '';
+    if (key !== pendingKey) { pendingKey = key; ticketSel = new Set(); ticketSheetHidden = false; }
+    showScreen('screen-game');
+    renderGame(view, gained);
+}
+function renderCurrent() {
+    if (!V) return;
+    if (isTvDisplay) renderTv(V);
+    else if (V.phase === 'setup' || V.phase === 'play') renderGame(V, []);
+}
+
+function renderLobby(view) {
+    document.getElementById('lobby-room-code').textContent = view.roomCode;
+    document.getElementById('lobby-count').textContent = view.players.length;
+    document.getElementById('lobby-host-panel').style.display = isHost ? '' : 'none';
+    document.getElementById('lobby-guest-note').style.display = isHost ? 'none' : '';
+    const list = document.getElementById('lobby-players');
+    list.innerHTML = view.players.map((p, i) =>
+        `<li><span class="dot" style="background:${PLAYER_COLORS[i]}"></span>${escapeHtml(p.name)}` +
+        `${i === view.youIdx ? ' <span style="color:var(--text-secondary)">(you)</span>' : ''}` +
+        `<span class="tag">${i === 0 ? 'host' : (p.connected ? 'ready' : 'offline')}</span></li>`).join('');
+    const n = view.players.filter(p => p.connected).length;
+    const cur = (view.settings && view.settings.trains) || 0;
+    document.getElementById('lobby-trains').innerHTML = TRAIN_OPTIONS.map(v =>
+        `<button class="${v === cur ? 'on' : ''}" ${isHost ? `onclick="setTrains(${v})"` : 'disabled'}>${v === 0 ? 'Auto' : v}</button>`).join('');
+    const eff = cur || defaultTrains(Math.max(2, n));
+    const lanes = maxLanesFor(Math.max(2, n));
+    document.getElementById('lobby-trains-hint').textContent =
+        `${eff} trains each${cur ? '' : ' (auto for ' + n + ' players)'} · ${lanes} track${lanes > 1 ? 's' : ''} usable per route`;
+    if (isHost) {
+        const btn = document.getElementById('btn-start');
+        btn.disabled = n < 2 || n > MAX_PLAYERS;
+        btn.textContent = n < 2 ? 'All aboard! (need 2–8 players)' : `All aboard with ${n} players! 🚂`;
+    }
+}
+
+function myTurnNow(view) {
+    return view.phase === 'play' && view.turn === view.youIdx && !view.paused;
+}
+function cardFace(c) {
+    return c === 'loco' ? '<span class="ico">🚂</span>Wild' : COLOR_NAME[c];
+}
+
+function renderGame(view, gained) {
+    const me = view.players[view.youIdx];
+    const turnP = view.players[view.turn];
+    const myTurn = myTurnNow(view);
+
+    // Top bar
+    document.getElementById('turn-dot').style.background = view.phase === 'setup' ? '#ffd671' : turnP.color;
+    let title, sub;
+    if (view.phase === 'setup') {
+        title = view.pending ? '🎫 Choose your tickets' : '🎫 Waiting for tickets';
+        sub = `${turnP.name} will go first`;
+    } else if (view.turn === view.youIdx) {
+        title = 'Your turn';
+        sub = view.turnStep === 'drew1' ? 'Draw one more card'
+            : view.turnStep === 'tickets' ? 'Choose tickets to keep'
+            : 'Draw cards, claim a route, or take tickets';
+    } else {
+        title = `${turnP.name}'s turn`;
+        sub = view.log[0] || `Round ${view.round}`;
+    }
+    document.getElementById('turn-title').textContent = title;
+    document.getElementById('turn-sub').textContent = sub;
+    document.getElementById('me-stats').innerHTML = `🚂 ${me.trains}<br>⭐ ${me.score}`;
+    const banner = document.getElementById('game-banner');
+    if (view.paused) {
+        banner.className = 'banner paused';
+        banner.textContent = isHost ? '⏸️ Game paused — resume from the menu' : '⏸️ Game paused by the host';
+        banner.style.display = '';
+    } else if (view.finalTurnsLeft > 0) {
+        banner.className = 'banner';
+        banner.textContent = `🔔 Final round — ${view.finalTurnsLeft} turn${view.finalTurnsLeft > 1 ? 's' : ''} left`;
+        banner.style.display = '';
+    } else {
+        banner.style.display = 'none';
+    }
+
+    if (!gameMap) gameMap = createMap(document.getElementById('game-map'), {
+        interactive: true,
+        onRoute: hit => openRouteSheet(hit),
+        onEmpty: () => { if (uiSel) closeRouteSheet(); },
+    });
+    gameMap.render(view, mapOpts(view));
+
+    renderMarket(view, myTurn);
+    renderActionBox(view, myTurn);
+    renderHand(view, gained || []);
+    renderSide(view);
+    if (uiSel) renderRouteSheet();
+    renderTicketSheet();
+    if (document.getElementById('menu').classList.contains('open')) renderMenu();
+}
+
+function mapOpts(view) {
+    const focus = [];
+    if (view && view.pending && !ticketSheetHidden) {
+        view.pending.forEach(t => focus.push({ t, strong: ticketSel.has(t) }));
+    }
+    focusTickets.forEach(t => { if (!focus.some(f => f.t === t)) focus.push({ t, strong: true }); });
+    return { sel: uiSel, colorFilter, focus };
+}
+function refreshMap() { if (gameMap && V) gameMap.render(V, mapOpts(V)); }
+
+function renderMarket(view, myTurn) {
+    const can = myTurn && !actionPending && (view.turnStep === 'start' || view.turnStep === 'drew1');
+    let html = view.market.map((c, i) => {
+        if (!c) return '<div class="card empty"></div>';
+        const ok = can && !(c === 'loco' && view.turnStep === 'drew1');
+        return `<button class="card c-${c}${ok ? ' can' : ''}" ${ok ? '' : 'disabled'} onclick="drawFace(${i})">${cardFace(c)}</button>`;
+    }).join('');
+    const deckOk = can && view.deckCount + view.discardCount > 0;
+    html += `<button class="card deck${deckOk ? ' can' : ''}" ${deckOk ? '' : 'disabled'} onclick="drawDeck()" aria-label="Draw from the deck"><span>Deck</span><b>${view.deckCount}</b></button>`;
+    document.getElementById('market').innerHTML = html;
+    document.getElementById('deck-info').textContent = `${view.discardCount} discarded · ${view.ticketCount} tickets left`;
+}
+
+function renderActionBox(view, myTurn) {
+    const box = document.getElementById('action-box');
+    const turnP = view.players[view.turn];
+    if (view.phase === 'setup') {
+        if (view.pending) {
+            box.innerHTML = `<div class="note mine">Pick at least ${view.minKeep} destination tickets to keep.</div>` +
+                (ticketSheetHidden ? '<button class="btn action small" onclick="showTicketSheet()">🎫 Show my ticket choices</button>' : '');
+        } else {
+            const waiting = view.players.filter(p => p.choosing).map(p => escapeHtml(p.name));
+            box.innerHTML = `<div class="note">Waiting for <b>${waiting.join(', ') || '...'}</b> to choose tickets.</div>` +
+                (isHost ? '<button class="btn secondary small" onclick="hostAutoPickSetup()">🤖 Auto-pick for anyone still waiting</button>' : '');
+        }
+        return;
+    }
+    if (view.paused) {
+        let msg = isHost ? '⏸️ Game paused.' : '⏸️ Game paused by the host.';
+        if (view.pausedGraceS > 0) msg += ` ${escapeHtml(turnP.name)} gets ${view.pausedGraceS}s to reconnect once it resumes.`;
+        box.innerHTML = `<div class="note">${msg}</div>`;
+        return;
+    }
+    if (view.turn !== view.youIdx) {
+        if (view.graceMs > 0) {
+            box.innerHTML = `<div class="note">📡 ${escapeHtml(turnP.name)} is offline — their turn passes in <b id="grace-count"></b>s...</div>`;
+            startGraceCountdown(view.graceMs);
+        } else {
+            let msg = `Waiting for <b>${escapeHtml(turnP.name)}</b>...`;
+            if (view.turnStep === 'drew1' && view.turnDraws.length) msg = `<b>${escapeHtml(turnP.name)}</b> took ${describeDraws(view.turnDraws)} and is drawing again...`;
+            if (view.turnStep === 'tickets') msg = `<b>${escapeHtml(turnP.name)}</b> is choosing destination tickets...`;
+            box.innerHTML = `<div class="note">${msg}</div>`;
+        }
+        return;
+    }
+    if (actionPending) { box.innerHTML = '<div class="note">Sending...</div>'; return; }
+    if (view.turnStep === 'drew1') {
+        box.innerHTML = '<div class="note mine">Take <b>one more</b> card — the deck or a face-up color (not a locomotive).</div>';
+    } else if (view.turnStep === 'tickets') {
+        box.innerHTML = `<div class="note mine">Keep at least ${view.minKeep} of your new tickets.</div>` +
+            (ticketSheetHidden ? '<button class="btn action small" onclick="showTicketSheet()">🎫 Show ticket choices</button>' : '');
+    } else {
+        const canPass = view.deckCount + view.discardCount === 0 && !view.market.some(c => c) && view.ticketCount === 0;
+        box.innerHTML = '<div class="note mine">Take 2 cards above, <b>tap a route</b> on the map to claim it, or draw tickets.</div>' +
+            `<button class="btn action small" ${view.ticketCount ? '' : 'disabled'} onclick="drawTickets()">🎫 Draw destination tickets (${view.ticketCount} left)</button>` +
+            (canPass ? '<button class="btn secondary small" onclick="sendPass()">⏭️ Pass</button>' : '');
+    }
+}
+
+function renderHand(view, gained) {
+    const total = handTotal(view.hand);
+    document.getElementById('hand-info').textContent = `${total} card${total === 1 ? '' : 's'} · tap a color to highlight its routes`;
+    document.getElementById('hand').innerHTML = CARD_TYPES.map(c => {
+        const n = view.hand[c] || 0;
+        const cls = ['hchip', 'c-' + c];
+        if (!n) cls.push('zero');
+        if (colorFilter === c) cls.push('filter');
+        if (gained.includes(c)) cls.push('bump');
+        return `<button class="${cls.join(' ')}" onclick="toggleColorFilter('${c}')" title="${COLOR_NAME[c]}">${n}</button>`;
+    }).join('');
+}
+function toggleColorFilter(c) {
+    if (c === 'loco') { colorFilter = null; }
+    else colorFilter = colorFilter === c ? null : c;
+    if (V) { renderHand(V, []); refreshMap(); }
+}
+
+function setSideTab(t) {
+    sideTab = t;
+    ['tickets', 'players', 'log'].forEach(x => document.getElementById('stab-' + x).classList.toggle('active', x === t));
+    if (V) renderSide(V);
+}
+function renderSide(view) {
+    const el = document.getElementById('side-content');
+    if (sideTab === 'tickets') {
+        if (!view.myTickets.length) {
+            el.innerHTML = '<div class="note">No tickets kept yet.</div>';
+            return;
+        }
+        const done = view.myTickets.filter(x => x.done);
+        const pts = view.myTickets.reduce((s, x) => s + (x.done ? 1 : -1) * ALL_TICKETS[x.t].pts, 0);
+        el.innerHTML = `<div class="tsum">${done.length}/${view.myTickets.length} connected · tickets worth ${pts >= 0 ? '+' : ''}${pts} right now · tap to show on map</div>` +
+            view.myTickets.map(x => ticketBtn(x.t, {
+                done: x.done, focus: focusTickets.has(x.t), onclick: `toggleFocusTicket(${x.t})`,
+            })).join('');
+    } else if (sideTab === 'players') {
+        el.innerHTML = playerListHtml(view);
+    } else {
+        el.innerHTML = `<ul class="log">${view.log.map(l => `<li>${escapeHtml(l)}</li>`).join('')}</ul>`;
+    }
+}
+function ticketBtn(t, o) {
+    const tk = ALL_TICKETS[t];
+    const cls = ['ticket'];
+    if (tk.long) cls.push('long');
+    if (o.done) cls.push('done');
+    if (o.failed) cls.push('failed');
+    if (o.focus) cls.push('focus');
+    if (o.sel) cls.push('sel');
+    if (o.selectable) cls.push('selectable');
+    const chk = o.done || o.sel ? '✓' : o.failed ? '✕' : '';
+    return `<button class="${cls.join(' ')}" ${o.onclick ? `onclick="${o.onclick}"` : ''}>` +
+        `<span class="chk">${chk}</span><span>${escapeHtml(ticketName(t))}${tk.long ? ' <small>(long)</small>' : ''}</span>` +
+        `<span class="pts">${tk.pts}</span></button>`;
+}
+function playerListHtml(view) {
+    const best = Math.max(0, ...view.players.map(p => p.longest));
+    return '<ul class="plist">' + view.players.map((p, i) => {
+        const tags = [];
+        if (best > 0 && p.longest === best) tags.push('🏅');
+        if (!p.connected) tags.push('📡');
+        if (view.phase === 'setup' && p.choosing) tags.push('🎫…');
+        return `<li class="${view.phase === 'play' && view.turn === i ? 'turn' : ''}">` +
+            `<span class="dot" style="background:${p.color}"></span>` +
+            `<span class="nm">${view.phase === 'play' && view.turn === i ? '▶ ' : ''}${escapeHtml(p.name)}${i === view.youIdx ? ' (you)' : ''} ${tags.join(' ')}</span>` +
+            `<span class="st">🚂${p.trains} 🃏${p.cards} 🎫${p.tickets} ➰${p.longest}</span>` +
+            `<span class="sc">${p.score}</span></li>`;
+    }).join('') + '</ul>';
+}
+function toggleFocusTicket(t) {
+    if (focusTickets.has(t)) focusTickets.delete(t); else focusTickets.add(t);
+    if (V) { renderSide(V); refreshMap(); }
+}
+
+// --- Route sheet (info + claim) ---
+function openRouteSheet(hit) {
+    uiSel = hit;
+    closeMenu();
+    renderRouteSheet();
+    refreshMap();
+}
+function closeRouteSheet() {
+    uiSel = null;
+    document.getElementById('route-sheet').classList.remove('open');
+    refreshMap();
+}
+function selectLane(l) { if (uiSel) { uiSel.l = l; renderRouteSheet(); refreshMap(); } }
+function paymentOptions(hand, laneColor, len) {
+    const opts = [];
+    const colors = laneColor === 'gray' ? CARD_COLORS : [laneColor];
+    for (const c of colors) {
+        const minL = Math.max(0, len - hand[c]);
+        if (minL > hand.loco || minL >= len) continue;
+        const maxL = laneColor === 'gray' ? minL : Math.min(hand.loco, len - 1);
+        for (let L = minL; L <= maxL; L++) opts.push({ color: c, locos: L });
+    }
+    opts.sort((a, b) => a.locos - b.locos || hand[b.color] - hand[a.color]);
+    if (hand.loco >= len) opts.push({ color: null, locos: len });
+    return opts;
+}
+function renderRouteSheet() {
+    const sheet = document.getElementById('route-sheet');
+    if (!uiSel || !V || !V.claims) { sheet.classList.remove('open'); return; }
+    const view = V, route = ROUTES[uiSel.r], l = uiSel.l;
+    const claims = view.claims[route.i];
+    const taken = claims.filter(c => c >= 0).length;
+    let html = `<button class="close" onclick="closeRouteSheet()">✕</button>` +
+        `<h3>${escapeHtml(routeName(route.i))}</h3>` +
+        `<div class="meta">${route.len} train${route.len > 1 ? 's' : ''} · +${ROUTE_POINTS[route.len]} points` +
+        `${route.lanes.length > 1 ? ` · ${route.lanes.length} tracks, ${Math.min(view.maxLanes, route.lanes.length)} usable` : ''}</div>`;
+    if (route.lanes.length > 1) {
+        html += '<div class="lanes">' + route.lanes.map((col, k) => {
+            const o = claims[k];
+            const state = o >= 0 ? escapeHtml(view.players[o].name) : (taken >= view.maxLanes ? 'closed' : 'open');
+            return `<button class="lane-btn${k === l ? ' on' : ''}" onclick="selectLane(${k})">` +
+                `<span class="mini c-${col}"></span>${COLOR_NAME[col]} · ${state}</button>`;
+        }).join('') + '</div>';
+    }
+    const col = route.lanes[l];
+    const owner = claims[l];
+    const me = view.players[view.youIdx];
+    let body = '';
+    if (owner >= 0) {
+        body = `<div class="note">Claimed by <b style="color:${view.players[owner].color}">${escapeHtml(view.players[owner].name)}</b>.</div>`;
+    } else if (taken >= view.maxLanes) {
+        body = `<div class="note">This track is closed — with ${view.players.length} players only ${view.maxLanes} track${view.maxLanes > 1 ? 's' : ''} per route can be used.</div>`;
+    } else if (claims.includes(view.youIdx)) {
+        body = '<div class="note">You already own a track on this route.</div>';
+    } else {
+        const needTxt = `${route.len} ${col === 'gray' ? 'cards of any one color' : COLOR_NAME[col] + ' card' + (route.len > 1 ? 's' : '')}`;
+        const opts = paymentOptions(view.hand, col, route.len);
+        const canAct = myTurnNow(view) && view.turnStep === 'start' && !actionPending;
+        if (me.trains < route.len) {
+            body = `<div class="note">Needs ${route.len} trains — you only have ${me.trains} left.</div>`;
+        } else if (!opts.length) {
+            body = `<div class="note">Needs ${needTxt}. You have ` +
+                (col === 'gray' ? `at most ${Math.max(...CARD_COLORS.map(c => view.hand[c]))} of one color` : `${view.hand[col]} ${COLOR_NAME[col]}`) +
+                ` + ${view.hand.loco} locomotive${view.hand.loco === 1 ? '' : 's'}.</div>`;
+        } else if (!canAct) {
+            body = `<div class="note">Needs ${needTxt}. You can afford it — claim it on your turn.</div>`;
+        } else {
+            body = `<div class="meta">Needs ${needTxt}. Pay with:</div>` + opts.slice(0, 8).map((o, k) => {
+                const parts = [], words = [];
+                if (o.color && route.len - o.locos > 0) {
+                    parts.push(`<span class="mini c-${o.color}"></span>×${route.len - o.locos}`);
+                    words.push(`${route.len - o.locos} ${COLOR_NAME[o.color]}`);
+                }
+                if (o.locos) {
+                    parts.push(`<span class="mini c-loco"></span>×${o.locos}`);
+                    words.push(`${o.locos} Locomotive${o.locos > 1 ? 's' : ''}`);
+                }
+                return `<button class="pay-btn" aria-label="Claim with ${words.join(' and ')}" onclick="claimWith(${k})">Claim — ${parts.join(' + ')}</button>`;
+            }).join('');
+            renderRouteSheet.opts = opts;
+        }
+    }
+    sheet.innerHTML = html + body;
+    sheet.classList.add('open');
+}
+function claimWith(k) {
+    const opts = renderRouteSheet.opts || [];
+    const o = opts[k];
+    if (!o || !uiSel) return;
+    const sel = uiSel;
+    closeRouteSheet();
+    sendAction({ action: 'claim', route: sel.r, lane: sel.l, color: o.color, locos: o.locos });
+}
+
+// --- Ticket choice sheet ---
+function renderTicketSheet() {
+    const sheet = document.getElementById('ticket-sheet');
+    const view = V;
+    const show = view && view.pending && !ticketSheetHidden &&
+        (view.phase === 'setup' || (view.phase === 'play' && view.turn === view.youIdx && view.turnStep === 'tickets'));
+    if (!show) { sheet.classList.remove('open'); return; }
+    const n = ticketSel.size;
+    sheet.innerHTML = `<button class="close" onclick="hideTicketSheet()" title="Hide to look at the map">▾</button>` +
+        `<h3>${view.phase === 'setup' ? 'Your starting tickets' : 'New destination tickets'}</h3>` +
+        `<div class="meta">Keep at least ${view.minKeep}. Connect both cities with your trains by the end, or lose the points. ` +
+        `${view.phase === 'setup' ? 'Long tickets you return leave the game.' : 'Returned tickets go to the bottom of the pile.'}</div>` +
+        view.pending.map(t => ticketBtn(t, { sel: ticketSel.has(t), selectable: true, onclick: `toggleTicketSel(${t})` })).join('') +
+        `<button class="btn go small" ${n >= view.minKeep && !actionPending ? '' : 'disabled'} onclick="sendKeepTickets()">` +
+        `${n >= view.minKeep ? `Keep ${n} ticket${n > 1 ? 's' : ''}` : `Select at least ${view.minKeep}`}</button>`;
+    sheet.classList.add('open');
+}
+function toggleTicketSel(t) {
+    if (ticketSel.has(t)) ticketSel.delete(t); else ticketSel.add(t);
+    renderTicketSheet();
+    refreshMap();
+}
+function hideTicketSheet() {
+    ticketSheetHidden = true;
+    if (V) renderGame(V, []);
+}
+function showTicketSheet() {
+    ticketSheetHidden = false;
+    if (uiSel) closeRouteSheet();
+    if (V) renderGame(V, []);
+}
+function closeSheets() {
+    uiSel = null;
+    document.getElementById('route-sheet').classList.remove('open');
+    document.getElementById('ticket-sheet').classList.remove('open');
+    closeMenu();
+}
+
+// --- Menu ---
+function toggleMenu(e) {
+    if (e) e.stopPropagation();
+    const m = document.getElementById('menu');
+    if (m.classList.contains('open')) { closeMenu(); return; }
+    renderMenu();
+    m.classList.add('open');
+}
+function closeMenu() { document.getElementById('menu').classList.remove('open'); }
+function renderMenu() {
+    const m = document.getElementById('menu');
+    let html = `<button onclick="closeMenu(); if (gameMap) gameMap.fit(true)">🗺️ Show whole map</button>` +
+        `<button onclick="refreshPage()">🔄 Refresh connection</button>`;
+    if (isHost && V && V.phase === 'play') {
+        html += V.paused ? `<button onclick="closeMenu(); resumeGame()">▶️ Resume game</button>`
+            : `<button onclick="closeMenu(); pauseGame()">⏸️ Pause game</button>`;
+    }
+    html += `<button onclick="closeMenu(); confirmLeave()">🚪 Leave room</button>`;
+    m.innerHTML = html;
+}
+document.addEventListener('click', e => {
+    const m = document.getElementById('menu');
+    if (m.classList.contains('open') && !m.contains(e.target)) closeMenu();
+});
+
+// Live countdown for the reconnect grace window
+let graceInterval = null;
+function startGraceCountdown(ms) {
+    stopGraceCountdown();
+    const endAt = Date.now() + ms;
+    const tick = () => {
+        const el = document.getElementById('grace-count');
+        if (!el) { stopGraceCountdown(); return; }
+        el.textContent = Math.max(0, Math.ceil((endAt - Date.now()) / 1000));
+    };
+    tick();
+    graceInterval = setInterval(tick, 250);
+}
+function stopGraceCountdown() {
+    if (graceInterval) { clearInterval(graceInterval); graceInterval = null; }
+}
+
+// --- Final results ---
+function resultsTableHtml(view, expandable) {
+    let html = '<tr><th>#</th><th>Player</th><th>Routes</th><th>Tickets</th><th>Longest</th><th>Total</th></tr>';
+    view.results.forEach((r, rank) => {
+        const p = view.players[r.idx];
+        html += `<tr class="prow" ${expandable ? `onclick="toggleOverRow(${r.idx})"` : ''}>` +
+            `<td>${rank + 1}</td>` +
+            `<td><span class="dot" style="display:inline-block;vertical-align:middle;background:${p.color}"></span> ${escapeHtml(p.name)}${r.idx === view.youIdx ? ' (you)' : ''}</td>` +
+            `<td>${r.routePts}</td>` +
+            `<td><span class="posv">+${r.plus}</span> <span class="neg">−${r.minus}</span></td>` +
+            `<td>${r.longest}${r.bonus ? ' <b>+' + r.bonus + '</b>' : ''}</td>` +
+            `<td class="tot">${r.total}</td></tr>`;
+        if (expandable && overOpen.has(r.idx)) {
+            html += `<tr class="tix"><td></td><td colspan="5">` +
+                (r.tickets.length ? r.tickets.map(x => ticketBtn(x.t, { done: x.done, failed: !x.done })).join('') : '<div class="note">No tickets.</div>') +
+                `</td></tr>`;
+        }
+    });
+    return html;
+}
+function toggleOverRow(i) {
+    if (overOpen.has(i)) overOpen.delete(i); else overOpen.add(i);
+    if (V && V.phase === 'over') renderOver(V);
+}
+function renderOver(view) {
+    const w = view.results[0];
+    const el = document.getElementById('over-winner');
+    el.textContent = w.idx === view.youIdx ? `🏆 You win with ${w.total} points!` : `🏆 ${view.players[w.idx].name} wins with ${w.total} points!`;
+    el.style.color = view.players[w.idx].color;
+    document.getElementById('over-results').innerHTML = resultsTableHtml(view, true);
+    document.getElementById('over-host-panel').style.display = isHost ? '' : 'none';
+    document.getElementById('over-guest-note').style.display = isHost ? 'none' : '';
+    if (!overMap) overMap = createMap(document.getElementById('over-map'), { interactive: true });
+    overMap.render(view, {});
+}
+
+// --- TV display ---
+function renderTvLobby(msg) {
+    document.getElementById('tv-lobby-code').textContent = msg.roomCode;
+    document.getElementById('tv-lobby-url').textContent = baseUrl().replace(/^https?:\/\//, '');
+    document.getElementById('tv-lobby-players').innerHTML = (msg.players || []).map((p, i) =>
+        `<li><span class="dot" style="background:${PLAYER_COLORS[i]}"></span>${escapeHtml(p.name)}` +
+        `<span class="tag">${p.connected ? 'ready' : 'offline'}</span></li>`).join('') ||
+        '<li style="color:var(--text-secondary)">Waiting for players...</li>';
+}
+function renderTv(view) {
+    if (!tvMap) tvMap = createMap(document.getElementById('tv-map'), { interactive: false });
+    tvMap.render(view, {});
+    const side = document.getElementById('tv-side');
+    const turnP = view.players[view.turn];
+    let head;
+    if (view.phase === 'over') {
+        const w = view.results[0];
+        head = `<div class="tv-turn">🏆 ${escapeHtml(view.players[w.idx].name)} wins!</div>`;
+    } else if (view.phase === 'setup') {
+        head = `<div class="tv-turn">🎫 Choosing tickets...</div>`;
+    } else {
+        head = `<div class="tv-turn"><span class="turn-dot" style="background:${turnP.color}"></span>${escapeHtml(turnP.name)}'s turn</div>`;
+    }
+    let extra = '';
+    if (view.paused) extra = '<div class="banner paused" style="border-radius:8px">⏸️ Paused</div>';
+    else if (view.finalTurnsLeft > 0) extra = `<div class="banner" style="border-radius:8px">🔔 Final round — ${view.finalTurnsLeft} turn${view.finalTurnsLeft > 1 ? 's' : ''} left</div>`;
+    let body;
+    if (view.phase === 'over') {
+        body = `<table class="results">${resultsTableHtml(view, false)}</table>`;
+    } else {
+        body = playerListHtml(view) +
+            `<div class="section-label">Face-up cards <span>${view.deckCount} in deck · ${view.ticketCount} tickets</span></div>` +
+            `<div class="market">${view.market.map(c => c ? `<div class="card c-${c}">${cardFace(c)}</div>` : '<div class="card empty"></div>').join('')}` +
+            `<div class="card deck"><span>Deck</span><b>${view.deckCount}</b></div></div>` +
+            `<ul class="log">${view.log.slice(0, 7).map(l => `<li>${escapeHtml(l)}</li>`).join('')}</ul>`;
+    }
+    side.innerHTML = `<div class="tv-code">Room <b>${escapeHtml(view.roomCode || roomCode)}</b></div>` + head + extra + body;
+}
+
+// ============================================================
+// CLIENT - ACTIONS
+// ============================================================
+function sendAction(msg) {
+    if (actionPending || !V) return;
+    actionPending = true;
+    if (isHost) {
+        handleAction(G.players.findIndex(p => p.id === 'host'), msg);
+        // handleAction re-renders through broadcastViews; clear pending if it errored
+        actionPending = false;
+    } else {
+        try { hostConn.send(Object.assign({ type: 'action' }, msg)); }
+        catch (e) { actionPending = false; showToast('⚠️ Not connected'); }
+        renderCurrent();
+    }
+}
+function drawFace(slot) { sendAction({ action: 'drawFace', slot }); }
+function drawDeck() { sendAction({ action: 'drawDeck' }); }
+function drawTickets() { sendAction({ action: 'drawTickets' }); }
+function sendPass() { sendAction({ action: 'pass' }); }
+function sendKeepTickets() {
+    if (!V || !V.pending) return;
+    sendAction({ action: 'keepTickets', keep: [...ticketSel] });
+}
+
+// ============================================================
+// INIT — auto-reconnect from a saved session, or prefill ?room=
+// ============================================================
+(function init() {
+    try {
+        const saved = localStorage.getItem('railroutes-name');
+        if (saved) { document.getElementById('host-name').value = saved; document.getElementById('guest-name').value = saved; }
+    } catch (e) {}
+    const params = new URLSearchParams(window.location.search);
+    const code = normalizeRoomCode(params.get('room'));
+    if (params.get('tv') === '1' && code.length >= 4) {
+        switchTab('tv');
+        document.getElementById('tv-room-code-input').value = code;
+        joinTvDisplay(code);
+        return;
+    }
+    const session = getSession();
+    if (session && session.roomCode) {
+        if (session.isHost) reconnectAsHost(session);
+        else reconnectAsGuest(session, false);
+        return;
+    }
+    if (code.length >= 4 && code.length <= 12) {
+        switchTab('join');
+        document.getElementById('room-code-input').value = code;
+    }
+})();
+</script>
+</body>
+</html>

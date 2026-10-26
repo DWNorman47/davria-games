@@ -128,6 +128,60 @@ nav {
     line-height: 1.4;
 }
 
+/* Work-in-progress games (collapsed by default) */
+.wip-section {
+    margin-top: 2.5rem;
+}
+
+.wip-section summary {
+    display: flex;
+    align-items: center;
+    gap: 0.6rem;
+    cursor: pointer;
+    list-style: none;
+    font-size: 1.1rem;
+    font-weight: 600;
+    color: var(--text-secondary);
+    padding: 0.75rem 1rem;
+    background: var(--bg-secondary);
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    transition: color 0.2s, border-color 0.2s;
+}
+
+.wip-section summary::-webkit-details-marker {
+    display: none;
+}
+
+.wip-section summary::before {
+    content: '▸';
+    color: var(--accent);
+    transition: transform 0.2s;
+}
+
+.wip-section[open] summary::before {
+    transform: rotate(90deg);
+}
+
+.wip-section summary:hover {
+    color: var(--text-primary);
+    border-color: var(--accent);
+}
+
+.wip-count {
+    margin-left: auto;
+    font-size: 0.85rem;
+    font-weight: 400;
+}
+
+.wip-section .game-grid {
+    margin-top: 1.5rem;
+}
+
+.wip-section .game-card {
+    opacity: 0.85;
+}
+
 /* About */
 .about-section {
     padding: 2rem;
